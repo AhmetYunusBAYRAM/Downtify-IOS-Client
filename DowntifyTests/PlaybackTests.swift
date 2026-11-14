@@ -5,6 +5,29 @@ import XCTest
 @testable import Downtify
 
 final class PlaybackTests: XCTestCase {
+    func testChangingNetworkLimitStartsWaitingWorkAndDoesNotCancelActiveWork() async throws {
+        let coordinator = NetworkOperationCoordinator(limit: 1)
+        let first = try await coordinator.acquire(priority: .background)
+        let secondTask = Task { try await coordinator.acquire(priority: .background) }
+        while await coordinator.queuedOperationCount == 0 { await Task.yield() }
+        await coordinator.setLimit(2)
+        let second = try await secondTask.value
+        var snapshot = await coordinator.snapshot()
+        XCTAssertEqual(snapshot.active, 2)
+        XCTAssertEqual(snapshot.maximum, 2)
+
+        await coordinator.setLimit(1)
+        let thirdTask = Task { try await coordinator.acquire(priority: .userFacing) }
+        while await coordinator.queuedOperationCount == 0 { await Task.yield() }
+        await coordinator.release(first)
+        snapshot = await coordinator.snapshot()
+        XCTAssertEqual(snapshot.active, 1)
+        XCTAssertEqual(snapshot.queued, 1)
+        await coordinator.release(second)
+        let third = try await thirdTask.value
+        await coordinator.release(third)
+    }
+
     func testNetworkCoordinatorPrioritizesForegroundWork() async throws {
         let coordinator = NetworkOperationCoordinator(limit: 1)
         let gate = NetworkTestGate()
@@ -604,6 +627,47 @@ final class PlaybackTests: XCTestCase {
             AVAudioSessionRouteChangeReasonKey: AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue
         ])
         XCTAssertEqual(events, ["began", "resume", "disconnected"])
+    }
+
+    func testAudioThroughputIgnoresProbesAndSeparatesServers() async throws {
+        let monitor = PlaybackThroughput()
+        let first = try XCTUnwrap(URL(string: "https://one.example"))
+        let second = try XCTUnwrap(URL(string: "https://two.example"))
+        await monitor.record(bytes: 2, seconds: 1, server: first)
+        let probeRate = await monitor.rate(for: first)
+        XCTAssertNil(probeRate)
+        await monitor.record(bytes: 100_000, seconds: 2, server: first)
+        let measured = await monitor.rate(for: first)
+        let other = await monitor.rate(for: second)
+        XCTAssertEqual(measured, 50_000)
+        XCTAssertNil(other)
+        await monitor.reset()
+        let reset = await monitor.rate(for: first)
+        XCTAssertNil(reset)
+    }
+
+    func testAdaptiveStartupBufferRespondsToDeliveryRateAndBoundsSize() {
+        let length: Int64 = 10_000_000
+        let fast = AdaptiveStartupBuffer.targetBytes(length: length, duration: 100, bytesPerSecond: 1_000_000)
+        let slow = AdaptiveStartupBuffer.targetBytes(length: length, duration: 100, bytesPerSecond: 50_000)
+        XCTAssertEqual(fast, 500_000)
+        XCTAssertEqual(slow, 2_000_000)
+        XCTAssertGreaterThan(slow, fast)
+        XCTAssertEqual(AdaptiveStartupBuffer.targetBytes(length: length, duration: 0, bytesPerSecond: nil), 0)
+        XCTAssertEqual(AdaptiveStartupBuffer.targetBytes(length: 1_000, duration: 1, bytesPerSecond: nil), 1_000)
+    }
+
+    func testStartupPreparationReusesTheFetchedAudio() async throws {
+        let transport = StreamTestTransport([.info(), .range("0-1/8", bytes: [1, 2]),
+                                             .range("0-7/8", bytes: Array(1...8))])
+        let resolver = PlaybackStreamResolver(transport: transport, cache: PlaybackCache())
+        let stream = try await resolver.resolve(track: track("song"), quality: .original, session: deviceSession())
+        let prepare = try XCTUnwrap(stream.prepare)
+        try await prepare()
+        let bytes = try await stream.read(3...5)
+        XCTAssertEqual(bytes, Data([4, 5, 6]))
+        let requests = await transport.requests
+        XCTAssertEqual(requests.count, 3)
     }
 
     func testReadAheadBytesAreReusedOnlyWithinTheValidatedAccountAndQuality() async throws {
