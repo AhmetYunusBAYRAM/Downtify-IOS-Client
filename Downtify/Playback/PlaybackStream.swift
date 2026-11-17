@@ -74,9 +74,11 @@ struct PlaybackStream: Sendable {
     let fileURL: URL?
     let directURL: URL?
     let read: @Sendable (ClosedRange<Int64>) async throws -> Data
+    let prepare: (@Sendable () async throws -> Void)?
 
     init(contentType: String, fileExtension: String, length: Int64, quality: PlaybackQuality,
          availableQualities: [PlaybackQuality], fileURL: URL? = nil, directURL: URL? = nil,
+         prepare: (@Sendable () async throws -> Void)? = nil,
          read: @escaping @Sendable (ClosedRange<Int64>) async throws -> Data) {
         self.contentType = contentType
         self.fileExtension = fileExtension
@@ -86,6 +88,48 @@ struct PlaybackStream: Sendable {
         self.fileURL = fileURL
         self.directURL = directURL
         self.read = read
+        self.prepare = prepare
+    }
+}
+
+/// Recent effective delivery rate, including request latency and contention. Only real
+/// audio responses contribute; cache hits and the two-byte format probe do not.
+actor PlaybackThroughput {
+    static let shared = PlaybackThroughput()
+    private var samples: [URL: (rate: Double, at: TimeInterval)] = [:]
+
+    func record(bytes: Int, seconds: TimeInterval, server: URL) {
+        guard bytes >= 32_768, seconds > 0, seconds.isFinite else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        let rate = Double(bytes) / seconds
+        let previous = samples[server].flatMap { now - $0.at < 60 ? $0.rate : nil }
+        samples[server] = (previous.map { min(rate, $0 * 1.5) * 0.4 + $0 * 0.6 } ?? rate, now)
+    }
+
+    func rate(for server: URL) -> Double? {
+        guard let sample = samples[server], ProcessInfo.processInfo.systemUptime - sample.at < 60 else { return nil }
+        return sample.rate
+    }
+
+    func latestRate() -> Double? {
+        guard let sample = samples.values.max(by: { $0.at < $1.at }),
+              ProcessInfo.processInfo.systemUptime - sample.at < 60 else { return nil }
+        return sample.rate
+    }
+
+    func reset() { samples.removeAll() }
+}
+
+struct AdaptiveStartupBuffer {
+    // Bound both memory and extra startup delay. Byte-to-time estimates are
+    // approximate for variable-bitrate media and don't guarantee playable time.
+    static let maximumBytes: Int64 = 2 * 1024 * 1024
+    static func targetBytes(length: Int64, duration: TimeInterval, bytesPerSecond: Double?) -> Int64 {
+        guard length > 0, duration.isFinite, duration > 0 else { return 0 }
+        let mediaRate = Double(length) / duration
+        let ratio = bytesPerSecond.flatMap { $0 > 0 && $0.isFinite ? mediaRate / $0 : nil } ?? 1
+        let seconds = min(30, max(5, 10 * ratio))
+        return min(length, maximumBytes, max(1, Int64(min(Double(maximumBytes), mediaRate * seconds))))
     }
 }
 
@@ -165,8 +209,11 @@ struct PlaybackStreamResolver: PlaybackStreamResolving {
                   current.validator == response.validator, current.servedOriginal == response.servedOriginal else { throw PlaybackFailure.invalidStream }
             return data
         }
+        let prepare = startupPreparation(cache: useBlockCache ? cache : nil, representation: representation,
+                                         duration: track.duration, server: address.baseURL, fetch: fetch)
         return PlaybackStream(contentType: type.uti, fileExtension: type.ext, length: response.length,
-                              quality: response.servedOriginal ? .original : quality, availableQualities: choices) { range in
+                              quality: response.servedOriginal ? .original : quality, availableQualities: choices,
+                              prepare: prepare) { range in
             guard range.lowerBound >= 0, range.upperBound < response.length else { throw PlaybackFailure.invalidStream }
             if useBlockCache, let cache {
                 return try await cache.read(range, representation: representation, fetch: fetch)
@@ -204,11 +251,30 @@ struct PlaybackStreamResolver: PlaybackStreamResolving {
                   current.validator == response.validator, current.servedOriginal == response.servedOriginal else { throw PlaybackFailure.invalidStream }
             return data
         }
+        let prepare = startupPreparation(cache: useBlockCache ? cache : nil, representation: representation,
+                                         duration: duration, server: address.baseURL, fetch: fetch)
         return PlaybackStream(contentType: type.uti, fileExtension: type.ext, length: response.length,
-                              quality: .original, availableQualities: choices) { range in
+                              quality: .original, availableQualities: choices, prepare: prepare) { range in
             guard range.lowerBound >= 0, range.upperBound < response.length else { throw PlaybackFailure.invalidStream }
             if useBlockCache, let cache { return try await cache.read(range, representation: representation, fetch: fetch) }
             return try await fetch(range)
+        }
+    }
+
+    private func startupPreparation(cache: PlaybackCache?, representation: PlaybackCache.Representation,
+                                    duration: TimeInterval, server: URL,
+                                    fetch: @escaping @Sendable (ClosedRange<Int64>) async throws -> Data)
+        -> (@Sendable () async throws -> Void)? {
+        guard let cache, duration.isFinite, duration > 0 else { return nil }
+        return {
+            let firstEnd = min(representation.length, PlaybackCache.blockSize) - 1
+            _ = try await cache.read(0...firstEnd, representation: representation, fetch: fetch)
+            let rate = await PlaybackThroughput.shared.rate(for: server)
+            let target = AdaptiveStartupBuffer.targetBytes(length: representation.length, duration: duration,
+                                                            bytesPerSecond: rate)
+            if target > firstEnd + 1 {
+                _ = try await cache.read((firstEnd + 1)...(target - 1), representation: representation, fetch: fetch)
+            }
         }
     }
 
@@ -324,7 +390,9 @@ struct RangeSource {
         request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
         request.setValue(validator, forHTTPHeaderField: "If-Range")
 
+        let started = ProcessInfo.processInfo.systemUptime
         let (data, response) = try await client.sendWithResponse(request, to: address)
+        let elapsed = ProcessInfo.processInfo.systemUptime - started
         guard response.statusCode == 206,
               let header = response.value(forHTTPHeaderField: "Content-Range"),
               header.hasPrefix("bytes "),
@@ -337,6 +405,7 @@ struct RangeSource {
               Int64(data.count) == end - requested.lowerBound + 1 else {
             throw PlaybackFailure.invalidStream
         }
+        await PlaybackThroughput.shared.record(bytes: data.count, seconds: elapsed, server: address.baseURL)
         let mime = response.mimeType?.lowercased() ?? ""
         let tag = response.value(forHTTPHeaderField: "ETag").flatMap { $0.hasPrefix("W/") ? nil : $0 }
         let information = Information(length: length, mediaType: mime, validator: tag,

@@ -19,6 +19,7 @@ struct LibraryHomeView: View {
     @AppStorage("library.grid") private var grid = true
     @AppStorage("downtify.language") private var language = "system"
     @AppStorage("debug.networkOverlay.enabled") private var networkOverlayEnabled = false
+    @AppStorage(NetworkOperationCoordinator.limitDefaultsKey) private var networkOperationLimit = NetworkOperationCoordinator.defaultLimit
     @State private var category = Category.albums
     @State private var searchText = ""
     @State private var showingSignOutConfirmation = false
@@ -116,6 +117,10 @@ struct LibraryHomeView: View {
                         }
                     }
                     Section("Diagnostics") {
+                        Stepper("Concurrent network requests: \(networkOperationLimit)", value: $networkOperationLimit,
+                                in: NetworkOperationCoordinator.allowedLimits)
+                        Text("Limits simultaneous network activity, including offline downloads. Changes apply immediately.")
+                            .font(.footnote).foregroundStyle(.secondary)
                         Toggle("Network debug overlay", isOn: $networkOverlayEnabled)
                         Text("Shows active and waiting network work, playback queue depth, and offline transfer state.")
                             .font(.footnote).foregroundStyle(.secondary)
@@ -129,6 +134,9 @@ struct LibraryHomeView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback) }
             .tabItem { Label("More", systemImage: "ellipsis") }.tag(Tab.more)
+        }
+        .onChange(of: networkOperationLimit) { _, value in
+            Task { await NetworkOperationCoordinator.shared.setLimit(value) }
         }
         .confirmationDialog("Sign out of \(server.name)?", isPresented: $showingSignOutConfirmation, titleVisibility: .visible) {
             Button("Sign out", role: .destructive) {
@@ -519,7 +527,8 @@ struct LibraryHomeView: View {
 struct NetworkDebugOverlay: View {
     @ObservedObject var playback: PlaybackController
     @EnvironmentObject private var downloads: OfflineDownloads
-    @State private var network = NetworkOperationSnapshot(active: 0, maximum: 2, queued: 0,
+    @State private var audioDeliveryRate: Double?
+    @State private var network = NetworkOperationSnapshot(active: 0, maximum: NetworkOperationCoordinator.defaultLimit, queued: 0,
                                                           foregroundActive: 0, backgroundActive: 0,
                                                           foregroundQueued: 0, backgroundQueued: 0,
                                                           recentFailures: [])
@@ -532,6 +541,9 @@ struct NetworkDebugOverlay: View {
             Text("FG \(network.foregroundActive) (+\(network.foregroundQueued))  BG \(network.backgroundActive) (+\(network.backgroundQueued))")
             Text("AHEAD \(playback.queue.upcomingCount)  ·  DL \(activeTransfers) active / \(pausedTransfers) paused")
             Text("PLAY  \(playbackStatus)")
+            if let audioDeliveryRate {
+                Text("AUDIO  \(audioDeliveryRate * 8 / 1_000_000, specifier: "%.2f") Mbps effective")
+            }
             if !network.recentFailures.isEmpty {
                 Divider().overlay(.secondary.opacity(0.25))
                 Text("RECENT FAILURES · SAVED")
@@ -553,6 +565,7 @@ struct NetworkDebugOverlay: View {
         .task {
             while !Task.isCancelled {
                 network = await NetworkOperationCoordinator.shared.snapshot()
+                audioDeliveryRate = await PlaybackThroughput.shared.latestRate()
                 try? await Task.sleep(for: .milliseconds(500))
             }
         }
