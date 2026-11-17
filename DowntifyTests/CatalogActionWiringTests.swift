@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import XCTest
 @testable import Downtify
@@ -60,6 +61,99 @@ final class CatalogActionWiringTests: XCTestCase {
         XCTAssertFalse(ServerDownloadQueue.isYouTubeMusicAlbumURL(""))
     }
 
+    func testLibraryMatchedCatalogRowIgnoresServerStateWhenInLibrary() {
+        for server in [ServerDownloadActionState.idle, .failed("x"), .outcomeUnknown] {
+            XCTAssertEqual(ServerDownloadActionState.catalogRow(server: server, inLibrary: true), .accepted)
+        }
+    }
+
+    func testCatalogRowKeepsServerStateWhenNotInLibrary() {
+        let states: [ServerDownloadActionState] = [
+            .idle, .submitting, .queued(jobID: "job-1"), .queued(jobID: nil), .accepted,
+            .partiallyAccepted(successful: 1, expected: 2), .outcomeUnknown, .failed("x")
+        ]
+        for server in states {
+            XCTAssertEqual(ServerDownloadActionState.catalogRow(server: server, inLibrary: false), server)
+        }
+    }
+
+    func testLibraryMatchedCatalogRowShowsInLibraryPresentation() {
+        let state = ServerDownloadActionState.catalogRow(server: .idle, inLibrary: true)
+        let presentation = MediaActionPresentation.library(state, itemTitle: "T")
+        XCTAssertEqual(presentation.title, "In Library")
+        XCTAssertEqual(presentation.systemImage, "checkmark.circle.fill")
+        XCTAssertFalse(presentation.isEnabled)
+    }
+
+    func testRequestPublishesSubmittingThenQueuedState() async throws {
+        let (gate, release) = AsyncStream<Void>.makeStream()
+        let transport = CatalogRouteTransport(routes: Self.queueRoutes, downloadGate: gate)
+        let (updates, continuation) = AsyncStream<DeviceSession?>.makeStream()
+        let model = ServerDownloadPresentationModel(queue: ServerDownloadQueue(transport: transport)) { updates }
+        model.start()
+        continuation.yield(makeSession())
+        await waitUntil { model.session != nil }
+        let song = try decodeSong()
+
+        let log = StateLog()
+        let cancellable = model.objectWillChange.sink { [weak model] in
+            Task { @MainActor in
+                guard let model else { return }
+                log.values.append(model.actionState(for: song))
+            }
+        }
+
+        let request = Task { await model.request(song: song) }
+        await waitUntil { model.actionState(for: song) == .submitting }
+        XCTAssertEqual(model.actionState(for: song), .submitting)
+        release.yield(())
+        await request.value
+        await drainMainActor()
+
+        XCTAssertFalse(log.values.isEmpty)
+        let submitting = try XCTUnwrap(log.values.firstIndex(of: .submitting))
+        let queued = try XCTUnwrap(log.values.firstIndex(of: .queued(jobID: "job-1")))
+        XCTAssertLessThan(submitting, queued)
+        XCTAssertEqual(log.values.last, .queued(jobID: "job-1"))
+        XCTAssertEqual(model.actionState(for: song), .queued(jobID: "job-1"))
+        cancellable.cancel()
+        continuation.finish()
+    }
+
+    func testDuplicateTapWhileSubmittingOrQueuedSendsOneDownloadRequest() async throws {
+        let (gate, release) = AsyncStream<Void>.makeStream()
+        let transport = CatalogRouteTransport(routes: Self.queueRoutes, downloadGate: gate)
+        let (updates, continuation) = AsyncStream<DeviceSession?>.makeStream()
+        let model = ServerDownloadPresentationModel(queue: ServerDownloadQueue(transport: transport)) { updates }
+        model.start()
+        continuation.yield(makeSession())
+        await waitUntil { model.session != nil }
+        let song = try decodeSong()
+
+        let first = Task { await model.request(song: song) }
+        await waitUntil { model.actionState(for: song) == .submitting }
+        await waitUntil { transport.downloadRequestCount == 1 }
+        await model.request(song: song)
+        XCTAssertEqual(transport.downloadRequestCount, 1)
+        XCTAssertEqual(model.actionState(for: song), .submitting)
+
+        release.yield(())
+        await first.value
+        XCTAssertEqual(model.actionState(for: song), .queued(jobID: "job-1"))
+
+        await model.request(song: song)
+        XCTAssertEqual(transport.downloadRequestCount, 1)
+        XCTAssertEqual(model.actionState(for: song), .queued(jobID: "job-1"))
+        continuation.finish()
+    }
+
+    private static let queueRoutes: [String: String] = [
+        "/api/server/info": #"{"product":"Downtify","api_version":1,"server_id":"server"}"#,
+        "/api/download/url": #""job-1""#,
+        "/api/queue": "[]",
+        "/api/queue/state": #"{"paused":false,"state":"idle","active":0}"#
+    ]
+
     private func decodeSong() throws -> CatalogSong {
         try JSONDecoder().decode(CatalogSong.self, from: Data(
             #"{"source":"youtube","song_id":"yt-1","name":"One","artists":["A"],"url":"https://music.youtube.com/watch?v=yt-1"}"#.utf8
@@ -75,17 +169,43 @@ final class CatalogActionWiringTests: XCTestCase {
         let deadline = ContinuousClock.now + .seconds(1)
         while !condition(), ContinuousClock.now < deadline { await Task.yield() }
     }
+
+    private func drainMainActor() async {
+        for _ in 0..<10 { await Task.yield() }
+    }
 }
 
-private final class CatalogRouteTransport: HTTPDataLoading {
-    private let routes: [String: String]
+@MainActor
+private final class StateLog {
+    var values: [ServerDownloadActionState] = []
+}
 
-    init(routes: [String: String]) { self.routes = routes }
+private final class CatalogRouteTransport: HTTPDataLoading, @unchecked Sendable {
+    private let routes: [String: String]
+    private let downloadGate: AsyncStream<Void>?
+    private let lock = NSLock()
+    private var downloadCount = 0
+
+    init(routes: [String: String], downloadGate: AsyncStream<Void>? = nil) {
+        self.routes = routes
+        self.downloadGate = downloadGate
+    }
+
+    var downloadRequestCount: Int {
+        lock.withLock { downloadCount }
+    }
 
     func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         let path = request.url?.path ?? ""
         guard let route = routes.keys.first(where: { path.hasSuffix($0) }), let body = routes[route] else {
             throw APIError.invalidResponse
+        }
+        if route == "/api/download/url" {
+            lock.withLock { downloadCount += 1 }
+            if let downloadGate {
+                var iterator = downloadGate.makeAsyncIterator()
+                _ = await iterator.next()
+            }
         }
         let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
         return (Data(body.utf8), response)
