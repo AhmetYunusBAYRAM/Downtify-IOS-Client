@@ -3,6 +3,28 @@ import XCTest
 @testable import Downtify
 
 final class PlaybackQueueTests: XCTestCase {
+    @MainActor
+    func testRemoveAllSavedQueuesDropsOnlyQueueSnapshots() throws {
+        let suite = "PlaybackQueueTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(Data([1]), forKey: "playback.queue.A")
+        defaults.set(Data([2]), forKey: "playback.queue.B")
+        defaults.set(Data([3]), forKey: "playback.qualities")
+        defaults.set(Data([4]), forKey: "playback.buffering")
+        defaults.set(Data([5]), forKey: "playback.normalization")
+        defaults.set("install-1", forKey: "playback.installID")
+
+        PlaybackStateStore(defaults: defaults).removeAllSavedQueues()
+
+        XCTAssertNil(defaults.object(forKey: "playback.queue.A"))
+        XCTAssertNil(defaults.object(forKey: "playback.queue.B"))
+        XCTAssertEqual(defaults.data(forKey: "playback.qualities"), Data([3]))
+        XCTAssertEqual(defaults.data(forKey: "playback.buffering"), Data([4]))
+        XCTAssertEqual(defaults.data(forKey: "playback.normalization"), Data([5]))
+        XCTAssertEqual(defaults.string(forKey: "playback.installID"), "install-1")
+    }
+
     func testLegacyTrackIDQueueEntryDecodesAndRetainsState() throws {
         let occurrence = UUID(uuidString: "A8C8CA9C-2B3D-4D03-A1F4-35367B4990CD")!
         let legacy = #"{"entries":[{"id":"\#(occurrence.uuidString)","trackID":"library-id"}],"shuffledIDs":["\#(occurrence.uuidString)"],"currentID":"\#(occurrence.uuidString)","position":13.5,"repeatMode":"all","listen":null}"#

@@ -196,6 +196,37 @@ final class OfflineDownloadsTests: XCTestCase {
     }
 
     @MainActor
+    func testRemoveAllDeletesMediaAndManifestThenAcceptsNewDownloads() async throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let ready = record(state: .ready, bytes: 8)
+        let transfer = record(state: .transferring, bytes: 3)
+        try seed([ready, transfer], in: directory)
+        try Data(repeating: 7, count: 8).write(to: directory.appending(path: "\(ready.id.uuidString).mp3"))
+        let downloads = OfflineDownloads(directory: directory, api: PendingPreparation(),
+                                         configuration: { _ in .ephemeral })
+        downloads.setSession(session())
+        XCTAssertEqual(downloads.storedBytes, 8)
+        XCTAssertEqual(downloads.pendingBytes, 5)
+
+        try await downloads.removeAll()
+
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), ["downloads.json"])
+        let manifest = try JSONDecoder().decode([OfflineDownload].self,
+                                                from: Data(contentsOf: directory.appending(path: "downloads.json")))
+        XCTAssertTrue(manifest.isEmpty)
+        XCTAssertTrue(downloads.currentDownloads.isEmpty)
+        XCTAssertEqual(downloads.storedBytes, 0)
+        XCTAssertEqual(downloads.pendingBytes, 0)
+
+        let id = try downloads.enqueue(track())
+        let queued = try XCTUnwrap(downloads.currentDownloads.first)
+        XCTAssertEqual(queued.id, id)
+        XCTAssertEqual(queued.state, .preparing)
+        downloads.cancel(id)
+    }
+
+    @MainActor
     private func waitForFailure(_ id: UUID, in downloads: OfflineDownloads) async throws {
         for _ in 0..<100 {
             if case .failed = downloads.currentDownloads.first(where: { $0.id == id })?.state { return }
