@@ -525,3 +525,5 @@
 "This removes songs added to this device, caches and local library data, freeing about %@. You stay signed in." = "Esto elimina las canciones añadidas a este dispositivo, las cachés y los datos locales de la biblioteca, y libera unos %@. Seguirás con la sesión iniciada.";
 "%lld unsent actions (likes and playlist favorites) will be lost." = "Se perderán %lld acciones sin enviar (me gusta y playlists favoritas).";
 "This can't be undone." = "Esta acción no se puede deshacer.";
+"Switch quality immediately" = "Cambiar la calidad inmediatamente";
+"When off, the current song keeps its quality when possible. The next song uses the new network’s quality." = "Si está desactivado, la canción actual conserva su calidad cuando es posible. La siguiente usa la calidad de la nueva red.";

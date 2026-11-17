@@ -525,3 +525,5 @@
 "This removes songs added to this device, caches and local library data, freeing about %@. You stay signed in." = "Това премахва песните, добавени на това устройство, кешовете и локалните данни на библиотеката и освобождава около %@. Оставате влезли в профила си.";
 "%lld unsent actions (likes and playlist favorites) will be lost." = "%lld неизпратени действия (харесвания и любими плейлисти) ще бъдат загубени.";
 "This can't be undone." = "Това не може да бъде отменено.";
+"Switch quality immediately" = "Незабавна смяна на качеството";
+"When off, the current song keeps its quality when possible. The next song uses the new network’s quality." = "Когато е изключено, текущата песен запазва качеството си, когато е възможно. Следващата песен използва качеството за новата мрежа.";

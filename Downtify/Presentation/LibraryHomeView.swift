@@ -118,15 +118,6 @@ struct LibraryHomeView: View {
                             }
                         }
                     }
-                    Section("Diagnostics") {
-                        Stepper("Concurrent network requests: \(networkOperationLimit)", value: $networkOperationLimit,
-                                in: NetworkOperationCoordinator.allowedLimits)
-                        Text("Limits simultaneous network activity, including offline downloads. Changes apply immediately.")
-                            .font(.footnote).foregroundStyle(.secondary)
-                        Toggle("Network debug overlay", isOn: $networkOverlayEnabled)
-                        Text("Shows active and waiting network work, playback queue depth, and offline transfer state.")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
                     StorageSection(model: storageModel)
                     Section("About") {
                         NavigationLink("About Downtify") { AboutView(version: versionText) }
@@ -155,10 +146,7 @@ struct LibraryHomeView: View {
         } message: { if let signOutError { Text(signOutError) } }
         .overlay(alignment: .topTrailing) {
             if networkOverlayEnabled && tab != .more {
-                NetworkDebugOverlay(playback: playback)
-                    .padding(.top, 54)
-                    .padding(.trailing, 8)
-                    .allowsHitTesting(false)
+                NetworkDebugOverlayContainer(playback: playback)
                     .zIndex(100)
             }
         }
@@ -172,7 +160,7 @@ struct LibraryHomeView: View {
         }
         .sheet(isPresented: $showingSettings) {
             NavigationStack {
-                SettingsView(appearance: $appearance, language: $language)
+                SettingsView(appearance: $appearance, language: $language, networkOperationLimit: $networkOperationLimit, playback: playback)
             }
         }
         .sheet(isPresented: $showingCreatePlaylist, onDismiss: { newPlaylistName = "" }) {
@@ -247,9 +235,6 @@ struct LibraryHomeView: View {
         Menu {
             if let username = server.username {
                 Label("Signed in as \(username)", systemImage: "person.crop.circle")
-            }
-            Picker("Appearance", selection: $appearance) {
-                ForEach(DowntifyAppearance.allCases) { option in Text(option.label).tag(option) }
             }
             Button("Settings", systemImage: "gearshape") { showingSettings = true }
             Button("Refresh library", systemImage: "arrow.clockwise") { Task { await refresh() } }
@@ -551,52 +536,127 @@ struct LibraryHomeView: View {
     }
 }
 
+struct NetworkDebugOverlayContainer: View {
+    @ObservedObject var playback: PlaybackController
+    @AppStorage("debug.networkOverlay.corner") private var corner = "topTrailing"
+    @AppStorage("debug.networkOverlay.size") private var size = "medium"
+
+    private var alignment: Alignment {
+        switch corner {
+        case "topLeading": .topLeading
+        case "centerLeading": .leading
+        case "centerTrailing": .trailing
+        case "bottomLeading": .bottomLeading
+        case "bottomTrailing": .bottomTrailing
+        default: .topTrailing
+        }
+    }
+
+    var body: some View {
+        NetworkDebugOverlay(playback: playback, size: size, corner: $corner, selectedSize: $size)
+            .padding(.horizontal, 8)
+            .padding(.top, corner.hasPrefix("top") ? 54 : 0)
+            .padding(.bottom, corner.hasPrefix("bottom") ? 72 : 0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
+    }
+}
+
 struct NetworkDebugOverlay: View {
     @ObservedObject var playback: PlaybackController
+    let size: String
+    @Binding var corner: String
+    @Binding var selectedSize: String
     @EnvironmentObject private var downloads: OfflineDownloads
     @State private var audioDeliveryRate: Double?
+    @State private var preload = PlaybackPreloadCache.Snapshot()
     @State private var network = NetworkOperationSnapshot(active: 0, maximum: NetworkOperationCoordinator.defaultLimit, queued: 0,
                                                           foregroundActive: 0, backgroundActive: 0,
                                                           foregroundQueued: 0, backgroundQueued: 0,
                                                           recentFailures: [])
 
+    private var width: CGFloat { size == "small" ? 205 : size == "large" ? 315 : 255 }
+    private var fontSize: CGFloat { size == "small" ? 9 : size == "large" ? 12 : 10 }
+
     var body: some View {
         let activeTransfers = downloads.currentDownloads.filter { $0.state == .transferring }.count
         let pausedTransfers = downloads.currentDownloads.filter { $0.state == .paused }.count
         VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text("NETWORK DEBUG").fontWeight(.bold)
+                Spacer(minLength: 4)
+                Menu {
+                    Section("Position") {
+                        positionButton("Top left", value: "topLeading")
+                        positionButton("Top right", value: "topTrailing")
+                        positionButton("Center left", value: "centerLeading")
+                        positionButton("Center right", value: "centerTrailing")
+                        positionButton("Bottom left", value: "bottomLeading")
+                        positionButton("Bottom right", value: "bottomTrailing")
+                    }
+                    Section("Size") {
+                        sizeButton("Small", value: "small")
+                        sizeButton("Medium", value: "medium")
+                        sizeButton("Large", value: "large")
+                    }
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .frame(width: 32, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Move or resize debug overlay")
+            }
             Text("NET  \(network.active)/\(network.maximum)  ·  wait \(network.queued)")
             Text("FG \(network.foregroundActive) (+\(network.foregroundQueued))  BG \(network.backgroundActive) (+\(network.backgroundQueued))")
-            Text("AHEAD \(playback.queue.upcomingCount)  ·  DL \(activeTransfers) active / \(pausedTransfers) paused")
+            Text("QUEUE  \(playback.queue.upcomingCount) upcoming")
+            Text("CACHE  \(preload.readyCount)/\(preload.windowCount) ready  ·  current \(preload.currentReady ? "ready" : "not ready")")
+            if preload.activeCount > 0 {
+                Text("PRELOAD  \(preload.activeCount) active  ·  \(megabytes(preload.downloadedBytes))/\(megabytes(preload.downloadingBytes)) MB")
+            }
+            Text("CACHE SIZE  \(megabytes(preload.storedBytes))/\(megabytes(preload.capacityBytes)) MB")
+            Text("DOWNLOADS  \(activeTransfers) active / \(pausedTransfers) paused")
             Text("PLAY  \(playbackStatus)")
             if let audioDeliveryRate {
                 Text("AUDIO  \(audioDeliveryRate * 8 / 1_000_000, specifier: "%.2f") Mbps effective")
             }
             if !network.recentFailures.isEmpty {
                 Divider().overlay(.secondary.opacity(0.25))
-                Text("RECENT FAILURES · SAVED")
-                    .foregroundStyle(.red)
-                ForEach(Array(network.recentFailures.suffix(3).reversed()), id: \.self) { failure in
-                    Text(failure)
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
+                Text("RECENT FAILURES · SAVED").foregroundStyle(.red)
+                ForEach(Array(network.recentFailures.suffix(size == "small" ? 1 : 3).reversed()), id: \.self) { failure in
+                    Text(failure).foregroundStyle(.primary).lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
-        .font(.system(size: 10, weight: .medium, design: .monospaced))
+        .font(.system(size: fontSize, weight: .medium, design: .monospaced))
         .foregroundStyle(.primary)
         .padding(.horizontal, 9)
         .padding(.vertical, 7)
+        .frame(width: width, alignment: .leading)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9))
         .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(.secondary.opacity(0.25), lineWidth: 0.5))
         .task {
             while !Task.isCancelled {
                 network = await NetworkOperationCoordinator.shared.snapshot()
                 audioDeliveryRate = await PlaybackThroughput.shared.latestRate()
+                preload = await playback.preloadSnapshot()
                 try? await Task.sleep(for: .milliseconds(500))
             }
         }
     }
+
+    private func positionButton(_ title: String, value: String) -> some View {
+        Button { corner = value } label: {
+            if corner == value { Label(title, systemImage: "checkmark") } else { Text(title) }
+        }
+    }
+
+    private func sizeButton(_ title: String, value: String) -> some View {
+        Button { selectedSize = value } label: {
+            if selectedSize == value { Label(title, systemImage: "checkmark") } else { Text(title) }
+        }
+    }
+
+    private func megabytes(_ bytes: Int64) -> String { String(format: "%.1f", Double(bytes) / 1_000_000) }
 
     private var playbackStatus: String {
         switch playback.phase {

@@ -289,6 +289,7 @@ final class PlaybackTests: XCTestCase {
     func testNetworkQualityChangeResumesAtSamePositionAndInterruptionHonorsPause() async throws {
         let fixture = PlaybackFixture()
         await fixture.controller.updateSession(deviceSession()) { [] }
+        fixture.controller.setImmediateQualitySwitch(true)
         let starts = expectation(description: "Initial playback")
         fixture.engine.onPlay = { starts.fulfill() }
         fixture.controller.replaceQueue([track("song")])
@@ -318,6 +319,63 @@ final class PlaybackTests: XCTestCase {
         XCTAssertFalse(fixture.audio.active)
         fixture.audio.onEvent?(.mediaServicesReset)
         XCTAssertEqual(fixture.engine.mediaResets, 1)
+    }
+
+    @MainActor
+    func testInvalidStreamAfterHandoffReloadsAtLastPositionAndStopsRetrying() async throws {
+        let fixture = PlaybackFixture()
+        await fixture.controller.updateSession(deviceSession()) { [] }
+        let starts = expectation(description: "Initial playback")
+        fixture.engine.onPlay = { starts.fulfill() }
+        fixture.controller.replaceQueue([track("song")])
+        await fulfillment(of: [starts], timeout: 3)
+        fixture.engine.onEvent?(.position(23, duration: 100))
+
+        for attempt in 1...2 {
+            let resumes = expectation(description: "Recovery \(attempt)")
+            fixture.engine.onPlay = { resumes.fulfill() }
+            fixture.engine.onEvent?(.failed(.invalidStream))
+            await fulfillment(of: [resumes], timeout: 4)
+        }
+        XCTAssertEqual(fixture.engine.loads, [0, 23, 23])
+        fixture.engine.onEvent?(.failed(.invalidStream))
+        XCTAssertEqual(fixture.controller.phase, .failed(.invalidStream))
+    }
+
+    @MainActor
+    func testDeferredNetworkQualityKeepsCurrentSongAndUsesNewQualityForNext() async throws {
+        let fixture = PlaybackFixture()
+        await fixture.controller.updateSession(deviceSession()) { [] }
+        fixture.controller.setImmediateQualitySwitch(false)
+        let starts = expectation(description: "Current song starts")
+        fixture.engine.onPlay = { starts.fulfill() }
+        fixture.controller.replaceQueue([track("first"), track("second")])
+        await fulfillment(of: [starts], timeout: 3)
+        fixture.engine.onEvent?(.position(23, duration: 100))
+        fixture.network.update?(.cellular)
+        XCTAssertEqual(fixture.engine.loads, [0])
+        XCTAssertEqual(fixture.controller.position, 23)
+        XCTAssertEqual(fixture.controller.phase, .playing)
+
+        let next = expectation(description: "Next song starts")
+        fixture.engine.onPlay = { next.fulfill() }
+        fixture.engine.onEvent?(.ended)
+        await fulfillment(of: [next], timeout: 3)
+        let qualities = await fixture.resolver.qualities
+        XCTAssertEqual(qualities, [.original, fixture.controller.qualityPreferences.cellular])
+    }
+
+    @MainActor
+    func testImmediateQualitySwitchPreferencePersistsAndDefaultsOff() {
+        let name = "DowntifyTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let store = PlaybackStateStore(defaults: defaults)
+        XCTAssertFalse(store.loadImmediateQualitySwitch())
+        store.saveImmediateQualitySwitch(true)
+        XCTAssertTrue(PlaybackStateStore(defaults: defaults).loadImmediateQualitySwitch())
+        store.saveImmediateQualitySwitch(false)
+        XCTAssertFalse(PlaybackStateStore(defaults: defaults).loadImmediateQualitySwitch())
     }
 
     @MainActor
@@ -401,6 +459,7 @@ final class PlaybackTests: XCTestCase {
         try await cache.store(preloadStream(), for: .init(session: session, item: item, quality: .original))
         let resumes = expectation(description: "Local stream resumes")
         fixture.engine.onPlay = { resumes.fulfill() }
+        fixture.controller.setImmediateQualitySwitch(false)
         fixture.network.update?(.unavailable)
         fixture.engine.onEvent?(.failed(.network))
         await fulfillment(of: [resumes], timeout: 3)

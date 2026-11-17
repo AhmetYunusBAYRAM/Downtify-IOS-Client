@@ -525,3 +525,5 @@
 "This removes songs added to this device, caches and local library data, freeing about %@. You stay signed in." = "Bu işlem, bu cihaza eklenen şarkıları, önbellekleri ve yerel kitaplık verilerini kaldırır ve yaklaşık %@ yer açar. Oturumunuz açık kalır.";
 "%lld unsent actions (likes and playlist favorites) will be lost." = "%lld gönderilmemiş eylem (beğenmeler ve favori çalma listeleri) kaybolacak.";
 "This can't be undone." = "Bu işlem geri alınamaz.";
+"Switch quality immediately" = "Kaliteyi hemen değiştir";
+"When off, the current song keeps its quality when possible. The next song uses the new network’s quality." = "Kapalıyken mevcut şarkı mümkün olduğunda kalitesini korur. Sonraki şarkı yeni ağın kalitesini kullanır.";

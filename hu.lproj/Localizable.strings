@@ -525,3 +525,5 @@
 "This removes songs added to this device, caches and local library data, freeing about %@. You stay signed in." = "Ez eltávolítja az ehhez az eszközhöz hozzáadott dalokat, a gyorsítótárakat és a helyi könyvtáradatokat, így nagyjából %@ szabadul fel. Bejelentkezve marad.";
 "%lld unsent actions (likes and playlist favorites) will be lost." = "%lld el nem küldött művelet (kedvelések és kedvenc lejátszási listák) elvész.";
 "This can't be undone." = "Ez a művelet nem vonható vissza.";
+"Switch quality immediately" = "Minőség azonnali váltása";
+"When off, the current song keeps its quality when possible. The next song uses the new network’s quality." = "Kikapcsolva az aktuális szám lehetőség szerint megtartja a minőségét. A következő szám az új hálózat minőségét használja.";

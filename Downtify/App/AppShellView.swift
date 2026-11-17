@@ -257,12 +257,7 @@ private struct NowPlayingView: View {
                 .frame(maxWidth: .infinity)
             }
             if networkOverlayEnabled {
-                NetworkDebugOverlay(playback: playback)
-                    .padding(.top, 54)
-                    .padding(.trailing, DowntifyStyle.Space.regular)
-                    .allowsHitTesting(false)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Network debug statistics")
+                NetworkDebugOverlayContainer(playback: playback)
             }
             }
             .background(palette.background.ignoresSafeArea())

@@ -525,3 +525,5 @@
 "This removes songs added to this device, caches and local library data, freeing about %@. You stay signed in." = "Αυτό αφαιρεί τα τραγούδια που προστέθηκαν σε αυτήν τη συσκευή, την προσωρινή μνήμη και τα τοπικά δεδομένα βιβλιοθήκης, ελευθερώνοντας περίπου %@. Παραμένετε συνδεδεμένοι.";
 "%lld unsent actions (likes and playlist favorites) will be lost." = "%lld μη απεσταλμένες ενέργειες (αγαπημένα τραγούδια και playlist) θα χαθούν.";
 "This can't be undone." = "Αυτό δεν μπορεί να αναιρεθεί.";
+"Switch quality immediately" = "Άμεση αλλαγή ποιότητας";
+"When off, the current song keeps its quality when possible. The next song uses the new network’s quality." = "Όταν είναι απενεργοποιημένο, το τρέχον τραγούδι διατηρεί την ποιότητά του όπου είναι δυνατό. Το επόμενο χρησιμοποιεί την ποιότητα του νέου δικτύου.";

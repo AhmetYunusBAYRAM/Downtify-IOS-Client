@@ -523,3 +523,5 @@
 "This removes songs added to this device, caches and local library data, freeing about %@. You stay signed in." = "This removes songs added to this device, caches and local library data, freeing about %@. You stay signed in.";
 "%lld unsent actions (likes and playlist favorites) will be lost." = "%lld unsent actions (likes and playlist favorites) will be lost.";
 "This can't be undone." = "This can't be undone.";
+"Switch quality immediately" = "Switch quality immediately";
+"When off, the current song keeps its quality when possible. The next song uses the new network’s quality." = "When off, the current song keeps its quality when possible. The next song uses the new network’s quality.";
