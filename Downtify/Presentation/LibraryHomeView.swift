@@ -856,8 +856,8 @@ private struct LibraryContextView: View {
                 }
             }
         }
-        .confirmationDialog("Download these songs for offline playback?", isPresented: $confirmingDownload, titleVisibility: .visible) {
-            Button("Download songs") {
+        .confirmationDialog("Add these songs to this device for offline playback?", isPresented: $confirmingDownload, titleVisibility: .visible) {
+            Button("Add to Device") {
                 var failures = 0
                 var queued = Set<String>()
                 for track in tracks where queued.insert(track.id).inserted {
@@ -905,7 +905,7 @@ private struct LibraryContextView: View {
             if !tracks.isEmpty {
                 Menu {
                     Button("Add songs to queue", systemImage: "text.append") { playback.append(tracks) }
-                    Button("Download songs", systemImage: "arrow.down.circle") { confirmingDownload = true }
+                    Button(String(localized: "Add Songs to Device"), systemImage: "arrow.down.to.line.circle") { confirmingDownload = true }
                 } label: {
                     Image(systemName: "ellipsis.circle").downtifyControlTarget()
                 }
@@ -1397,18 +1397,31 @@ private struct LibraryTrackList: View {
 
     @ViewBuilder
     private func downloadAction(_ track: LibraryTrack, record: OfflineDownload?) -> some View {
-        if let record, record.state == .ready {
-            Button("Remove offline copy", systemImage: "trash", role: .destructive) {
-                do { try downloads.delete(record.id); downloadMessage = "Offline copy removed." }
-                catch { downloadMessage = "Could not remove this offline copy." }
+        let state = DeviceSaveState(track: track, record: record)
+        MediaActionButton(presentation: .device(state, itemTitle: track.title), style: .label) {
+            do {
+                if case .failed = state, let record {
+                    _ = try downloads.retry(record.id)
+                } else {
+                    _ = try downloads.enqueue(track)
+                }
+                downloadMessage = "Offline download requested."
+            } catch { downloadMessage = "Could not start this download." }
+        }
+        switch state {
+        case .pending, .transferring:
+            if let record {
+                Button(String(localized: "Cancel Adding to Device"), systemImage: "xmark.circle") { downloads.cancel(record.id) }
             }
-        } else if let record, record.pending {
-            Button("Cancel offline download", systemImage: "xmark.circle") { downloads.cancel(record.id) }
-        } else {
-            Button(record == nil ? "Download for offline playback" : "Retry offline download", systemImage: "arrow.down.circle") {
-                do { try downloads.enqueue(track); downloadMessage = "Offline download requested." }
-                catch { downloadMessage = "Could not start this download." }
+        case .saved:
+            if let record {
+                Button(String(localized: "Remove from Device"), systemImage: "trash", role: .destructive) {
+                    do { try downloads.delete(record.id); downloadMessage = "Offline copy removed." }
+                    catch { downloadMessage = "Could not remove this offline copy." }
+                }
             }
+        default:
+            EmptyView()
         }
     }
 }
