@@ -53,6 +53,8 @@
 		00000000000000000000006C = { isa = PBXBuildFile; fileRef = 00000000000000000000006B; };
 		000000000000000000000069 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineDownloadsTests.swift; sourceTree = "<group>"; };
 		00000000000000000000006A = { isa = PBXBuildFile; fileRef = 000000000000000000000069; };
+		000000000000000000000206 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMembershipTests.swift; sourceTree = "<group>"; };
+		000000000000000000000207 = { isa = PBXBuildFile; fileRef = 000000000000000000000206; };
 		000000000000000000000202 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaActionTests.swift; sourceTree = "<group>"; };
 		000000000000000000000203 = { isa = PBXBuildFile; fileRef = 000000000000000000000202; };
 		000000000000000000000067 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerDownloadQueue.swift; sourceTree = "<group>"; };
@@ -489,6 +491,7 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000069,
+				000000000000000000000206,
 				000000000000000000000202,
 				00000000000000000000009A,
 				000000000000000000000103,
@@ -641,6 +644,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				00000000000000000000006A,
+				000000000000000000000207,
 				000000000000000000000203,
 				00000000000000000000009B,
 				000000000000000000000104,
