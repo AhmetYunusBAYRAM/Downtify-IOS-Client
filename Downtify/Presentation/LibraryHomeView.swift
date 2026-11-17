@@ -1430,7 +1430,7 @@ private struct LibraryTrackList: View {
                 } else {
                     _ = try downloads.enqueue(track)
                 }
-                downloadMessage = "Offline download requested."
+                downloadMessage = "Adding to this device."
             } catch { downloadMessage = "Could not start this download." }
         }
         switch state {
