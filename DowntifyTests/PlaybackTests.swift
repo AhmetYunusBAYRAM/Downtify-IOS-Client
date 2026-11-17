@@ -289,6 +289,7 @@ final class PlaybackTests: XCTestCase {
     func testNetworkQualityChangeResumesAtSamePositionAndInterruptionHonorsPause() async throws {
         let fixture = PlaybackFixture()
         await fixture.controller.updateSession(deviceSession()) { [] }
+        fixture.controller.setImmediateQualitySwitch(true)
         let starts = expectation(description: "Initial playback")
         fixture.engine.onPlay = { starts.fulfill() }
         fixture.controller.replaceQueue([track("song")])
@@ -318,6 +319,63 @@ final class PlaybackTests: XCTestCase {
         XCTAssertFalse(fixture.audio.active)
         fixture.audio.onEvent?(.mediaServicesReset)
         XCTAssertEqual(fixture.engine.mediaResets, 1)
+    }
+
+    @MainActor
+    func testInvalidStreamAfterHandoffReloadsAtLastPositionAndStopsRetrying() async throws {
+        let fixture = PlaybackFixture()
+        await fixture.controller.updateSession(deviceSession()) { [] }
+        let starts = expectation(description: "Initial playback")
+        fixture.engine.onPlay = { starts.fulfill() }
+        fixture.controller.replaceQueue([track("song")])
+        await fulfillment(of: [starts], timeout: 3)
+        fixture.engine.onEvent?(.position(23, duration: 100))
+
+        for attempt in 1...2 {
+            let resumes = expectation(description: "Recovery \(attempt)")
+            fixture.engine.onPlay = { resumes.fulfill() }
+            fixture.engine.onEvent?(.failed(.invalidStream))
+            await fulfillment(of: [resumes], timeout: 4)
+        }
+        XCTAssertEqual(fixture.engine.loads, [0, 23, 23])
+        fixture.engine.onEvent?(.failed(.invalidStream))
+        XCTAssertEqual(fixture.controller.phase, .failed(.invalidStream))
+    }
+
+    @MainActor
+    func testDeferredNetworkQualityKeepsCurrentSongAndUsesNewQualityForNext() async throws {
+        let fixture = PlaybackFixture()
+        await fixture.controller.updateSession(deviceSession()) { [] }
+        fixture.controller.setImmediateQualitySwitch(false)
+        let starts = expectation(description: "Current song starts")
+        fixture.engine.onPlay = { starts.fulfill() }
+        fixture.controller.replaceQueue([track("first"), track("second")])
+        await fulfillment(of: [starts], timeout: 3)
+        fixture.engine.onEvent?(.position(23, duration: 100))
+        fixture.network.update?(.cellular)
+        XCTAssertEqual(fixture.engine.loads, [0])
+        XCTAssertEqual(fixture.controller.position, 23)
+        XCTAssertEqual(fixture.controller.phase, .playing)
+
+        let next = expectation(description: "Next song starts")
+        fixture.engine.onPlay = { next.fulfill() }
+        fixture.engine.onEvent?(.ended)
+        await fulfillment(of: [next], timeout: 3)
+        let qualities = await fixture.resolver.qualities
+        XCTAssertEqual(qualities, [.original, fixture.controller.qualityPreferences.cellular])
+    }
+
+    @MainActor
+    func testImmediateQualitySwitchPreferencePersistsAndDefaultsOff() {
+        let name = "DowntifyTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let store = PlaybackStateStore(defaults: defaults)
+        XCTAssertFalse(store.loadImmediateQualitySwitch())
+        store.saveImmediateQualitySwitch(true)
+        XCTAssertTrue(PlaybackStateStore(defaults: defaults).loadImmediateQualitySwitch())
+        store.saveImmediateQualitySwitch(false)
+        XCTAssertFalse(PlaybackStateStore(defaults: defaults).loadImmediateQualitySwitch())
     }
 
     @MainActor
@@ -401,6 +459,7 @@ final class PlaybackTests: XCTestCase {
         try await cache.store(preloadStream(), for: .init(session: session, item: item, quality: .original))
         let resumes = expectation(description: "Local stream resumes")
         fixture.engine.onPlay = { resumes.fulfill() }
+        fixture.controller.setImmediateQualitySwitch(false)
         fixture.network.update?(.unavailable)
         fixture.engine.onEvent?(.failed(.network))
         await fulfillment(of: [resumes], timeout: 3)
@@ -855,6 +914,102 @@ final class PlaybackTests: XCTestCase {
         var output: [Float] = [-1, 0.1, 1, .infinity]
         output.withUnsafeMutableBufferPointer { PlaybackLevelMeasurement.process($0, gain: 2) }
         XCTAssertEqual(output, [-PlaybackLevelMeasurement.peakLimit, 0.2, PlaybackLevelMeasurement.peakLimit, 0])
+    }
+
+    @MainActor
+    func testStopAndClearEmptiesQueueAndDoesNotRestoreIt() async throws {
+        let fixture = PlaybackFixture()
+        let session = deviceSession()
+        let first = track("first")
+        let second = track("second")
+        await fixture.controller.updateSession(session) { [first, second] }
+        fixture.controller.replaceQueue([first, second], startingAt: 1, autoplay: false)
+        fixture.controller.seek(to: 48)
+
+        fixture.controller.stopAndClear()
+
+        XCTAssertNil(fixture.controller.queue.current)
+        XCTAssertNil(fixture.controller.podcast)
+        XCTAssertEqual(fixture.controller.phase, .idle)
+        XCTAssertEqual(fixture.controller.position, 0)
+
+        let restarted = PlaybackFixture(store: fixture.store)
+        await restarted.controller.updateSession(session) { [first, second] }
+        XCTAssertTrue(restarted.controller.queue.entries.isEmpty)
+        XCTAssertNil(restarted.controller.queue.current)
+    }
+
+    func testRemoveAllListenReportsClearsEveryScopeAndAcceptsNewReports() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let outbox = PlaybackListenOutbox(root: root)
+        let other = LibraryScope(serverID: "server", username: "someone", deviceID: "device")
+        let playedAt = Date(timeIntervalSince1970: 1_760_000_000)
+        try outbox.insert(PlaybackListen(trackID: "song", playID: UUID(), playedAt: playedAt), for: scope)
+        try outbox.insert(PlaybackListen(trackID: "other", playID: UUID(), playedAt: playedAt), for: other)
+        XCTAssertEqual(try outbox.pending(for: scope).count, 1)
+
+        try outbox.removeAll()
+
+        XCTAssertTrue(try outbox.pending(for: scope).isEmpty)
+        XCTAssertTrue(try outbox.pending(for: other).isEmpty)
+        let replacement = PlaybackListen(trackID: "fresh", playID: UUID(), playedAt: playedAt)
+        try outbox.insert(replacement, for: scope)
+        let files = try outbox.pending(for: scope)
+        XCTAssertEqual(try files.map(outbox.report(at:)), [replacement])
+        XCTAssertNoThrow(try outbox.removeAll())
+        XCTAssertNoThrow(try outbox.removeAll())
+    }
+
+    func testCacheRemoveAllForcesReadsToFetchAgain() async throws {
+        let cache = PlaybackCache()
+        let representation = PlaybackCache.Representation(
+            scope: scope, url: URL(string: "https://music.local/music/api/stream")!,
+            validator: "version", length: 8, mediaType: "public.mp3")
+        let counter = CacheFetchCounter()
+        let fetch: @Sendable (ClosedRange<Int64>) async throws -> Data = { range in
+            await counter.increment()
+            return Data(repeating: 4, count: Int(range.count))
+        }
+        _ = try await cache.read(0...7, representation: representation, fetch: fetch)
+        _ = try await cache.read(0...7, representation: representation, fetch: fetch)
+        let cachedFetches = await counter.value
+        XCTAssertEqual(cachedFetches, 1)
+
+        await cache.removeAll()
+
+        let bytes = try await cache.read(0...7, representation: representation, fetch: fetch)
+        XCTAssertEqual(bytes, Data(repeating: 4, count: 8))
+        let refetches = await counter.value
+        XCTAssertEqual(refetches, 2)
+    }
+
+    func testClearRecentFailuresRemovesOnlyFailureHistory() async throws {
+        let defaults = UserDefaults.standard
+        let failuresKey = "debug.networkOverlay.recentFailures"
+        let enabledKey = "debug.networkOverlay.enabled"
+        let savedFailures = defaults.object(forKey: failuresKey)
+        let savedEnabled = defaults.object(forKey: enabledKey)
+        defer {
+            defaults.set(savedFailures, forKey: failuresKey)
+            defaults.set(savedEnabled, forKey: enabledKey)
+        }
+        defaults.removeObject(forKey: failuresKey)
+        defaults.set(true, forKey: enabledKey)
+
+        let coordinator = NetworkOperationCoordinator(limit: 1)
+        await coordinator.recordFailure("Stream failed")
+        let recorded = await coordinator.snapshot().recentFailures
+        XCTAssertEqual(recorded.count, 1)
+        XCTAssertTrue(recorded.first?.hasSuffix("Stream failed") == true)
+        XCTAssertNotNil(defaults.object(forKey: failuresKey))
+
+        await coordinator.clearRecentFailures()
+
+        let cleared = await coordinator.snapshot().recentFailures
+        XCTAssertTrue(cleared.isEmpty)
+        XCTAssertNil(defaults.object(forKey: failuresKey))
+        XCTAssertTrue(defaults.bool(forKey: enabledKey))
     }
 
     private var scope: LibraryScope { LibraryScope(serverID: "server", username: "listener", deviceID: "device") }
@@ -1374,4 +1529,9 @@ private final class TestPlaybackStore: PlaybackStateStoring {
     }
     func loadQualities() -> PlaybackQualities { qualities }
     func saveQualities(_ qualities: PlaybackQualities) { self.qualities = qualities }
+}
+
+private actor CacheFetchCounter {
+    private(set) var value = 0
+    func increment() { value += 1 }
 }

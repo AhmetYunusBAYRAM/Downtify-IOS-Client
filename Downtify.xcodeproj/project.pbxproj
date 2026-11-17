@@ -9,9 +9,19 @@
 		0000000000000000000000C1 = { isa = PBXBuildFile; fileRef = 0000000000000000000000C0; };
 		000000000000000000000098 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogPresentationModel.swift; sourceTree = "<group>"; };
 		000000000000000000000099 = { isa = PBXBuildFile; fileRef = 000000000000000000000098; };
+		000000000000000000000308 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageSettingsModel.swift; sourceTree = "<group>"; };
+		000000000000000000000309 = { isa = PBXBuildFile; fileRef = 000000000000000000000308; };
+		00000000000000000000030A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageSection.swift; sourceTree = "<group>"; };
+		00000000000000000000030B = { isa = PBXBuildFile; fileRef = 00000000000000000000030A; };
+		000000000000000000000304 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDataReset.swift; sourceTree = "<group>"; };
+		000000000000000000000305 = { isa = PBXBuildFile; fileRef = 000000000000000000000304; };
+		000000000000000000000300 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageInspector.swift; sourceTree = "<group>"; };
+		000000000000000000000301 = { isa = PBXBuildFile; fileRef = 000000000000000000000300; };
 		0000000000000000000000A0 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerDownloadPresentationModel.swift; sourceTree = "<group>"; };
 		0000000000000000000000A1 = { isa = PBXBuildFile; fileRef = 0000000000000000000000A0; };
 		0000000000000000000000A2 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogSearchView.swift; sourceTree = "<group>"; };
+		000000000000000000000200 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaAction.swift; sourceTree = "<group>"; };
+		000000000000000000000201 = { isa = PBXBuildFile; fileRef = 000000000000000000000200; };
 		0000000000000000000000A3 = { isa = PBXBuildFile; fileRef = 0000000000000000000000A2; };
 		0000000000000000000000A4 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogDiscoverView.swift; sourceTree = "<group>"; };
 		0000000000000000000000A5 = { isa = PBXBuildFile; fileRef = 0000000000000000000000A4; };
@@ -26,6 +36,8 @@
 		000000000000000000000096 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogAPI.swift; sourceTree = "<group>"; };
 		000000000000000000000097 = { isa = PBXBuildFile; fileRef = 000000000000000000000096; };
 		000000000000000000000094 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Catalog.swift; sourceTree = "<group>"; };
+		000000000000000000000204 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMembership.swift; sourceTree = "<group>"; };
+		000000000000000000000205 = { isa = PBXBuildFile; fileRef = 000000000000000000000204; };
 		000000000000000000000095 = { isa = PBXBuildFile; fileRef = 000000000000000000000094; };
 		000000000000000000000092 = { isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		000000000000000000000093 = { isa = PBXBuildFile; fileRef = 000000000000000000000092; };
@@ -48,7 +60,21 @@
 		00000000000000000000006B = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		00000000000000000000006C = { isa = PBXBuildFile; fileRef = 00000000000000000000006B; };
 		000000000000000000000069 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineDownloadsTests.swift; sourceTree = "<group>"; };
+		000000000000000000000302 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageInspectorTests.swift; sourceTree = "<group>"; };
 		00000000000000000000006A = { isa = PBXBuildFile; fileRef = 000000000000000000000069; };
+		000000000000000000000206 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMembershipTests.swift; sourceTree = "<group>"; };
+		000000000000000000000207 = { isa = PBXBuildFile; fileRef = 000000000000000000000206; };
+		000000000000000000000202 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaActionTests.swift; sourceTree = "<group>"; };
+		000000000000000000000208 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogActionWiringTests.swift; sourceTree = "<group>"; };
+		000000000000000000000203 = { isa = PBXBuildFile; fileRef = 000000000000000000000202; };
+		000000000000000000000209 = { isa = PBXBuildFile; fileRef = 000000000000000000000208; };
+		00000000000000000000020A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSaveStateFlowTests.swift; sourceTree = "<group>"; };
+		00000000000000000000020B = { isa = PBXBuildFile; fileRef = 00000000000000000000020A; };
+		000000000000000000000303 = { isa = PBXBuildFile; fileRef = 000000000000000000000302; };
+		000000000000000000000306 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDataResetTests.swift; sourceTree = "<group>"; };
+		000000000000000000000307 = { isa = PBXBuildFile; fileRef = 000000000000000000000306; };
+		00000000000000000000030C = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageSettingsModelTests.swift; sourceTree = "<group>"; };
+		00000000000000000000030D = { isa = PBXBuildFile; fileRef = 00000000000000000000030C; };
 		000000000000000000000067 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerDownloadQueue.swift; sourceTree = "<group>"; };
 		000000000000000000000068 = { isa = PBXBuildFile; fileRef = 000000000000000000000067; };
 		000000000000000000000065 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineDownloadAPI.swift; sourceTree = "<group>"; };
@@ -380,6 +406,7 @@
 				000000000000000000000035,
 				00000000000000000000006D,
 				000000000000000000000094,
+				000000000000000000000204,
 			);
 			path = Domain;
 			sourceTree = "<group>";
@@ -415,6 +442,9 @@
 				000000000000000000000053,
 				000000000000000000000055,
 				000000000000000000000059,
+				000000000000000000000300,
+				000000000000000000000304,
+				000000000000000000000308,
 			);
 			sourceTree = "<group>";
 			path = App;
@@ -424,9 +454,11 @@
 			children = (
 				000000000000000000000005,
 				0000000000000000000000A2,
+				000000000000000000000200,
 				0000000000000000000000A4,
 				00000000000000000000006B,
 				000000000000000000000071,
+				00000000000000000000030A,
 				000000000000000000000077,
 				000000000000000000000080,
 				000000000000000000000075,
@@ -481,6 +513,13 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000069,
+				000000000000000000000206,
+				000000000000000000000202,
+				000000000000000000000208,
+				00000000000000000000020A,
+				000000000000000000000302,
+				000000000000000000000306,
+				00000000000000000000030C,
 				00000000000000000000009A,
 				000000000000000000000103,
 				00000000000000000000009C,
@@ -532,9 +571,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				0000000000000000000000A1,
+				000000000000000000000301,
+				000000000000000000000305,
+				00000000000000000000030B,
+				000000000000000000000309,
 				000000000000000000000099,
 				000000000000000000000097,
 				000000000000000000000095,
+				000000000000000000000205,
 				000000000000000000000068,
 				000000000000000000000066,
 				000000000000000000000064,
@@ -565,6 +609,7 @@
 				00000000000000000000006C,
 				000000000000000000000072,
 				0000000000000000000000A3,
+				000000000000000000000201,
 				0000000000000000000000A5,
 				000000000000000000000076,
 				000000000000000000000078,
@@ -630,6 +675,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				00000000000000000000006A,
+				000000000000000000000207,
+				000000000000000000000203,
+				000000000000000000000209,
+				00000000000000000000020B,
+				000000000000000000000303,
+				000000000000000000000307,
+				00000000000000000000030D,
 				00000000000000000000009B,
 				000000000000000000000104,
 				00000000000000000000009D,
@@ -729,7 +781,7 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_FILE = Downtify/Info.plist;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIconDebug;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				DEVELOPMENT_TEAM = 54XLEESNGA;
 				PRODUCT_BUNDLE_IDENTIFIER = app.downtify.ios;

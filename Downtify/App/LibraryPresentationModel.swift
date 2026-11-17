@@ -38,12 +38,15 @@ final class LibraryPresentationModel: ObservableObject {
     @Published private(set) var tracks: [LibraryTrack] = [] {
         didSet {
             catalog = LibraryCatalog(tracks)
+            membership = LibraryMembership(tracks: tracks)
             sortedSongs.removeAll()
             latestAlbums = Array(LibrarySort.recentlyAdded.ordered(Array(catalog.albumsByID.values),
                                                                   descending: true).prefix(12))
         }
     }
     private(set) var catalog = LibraryCatalog([])
+    /// Rebuilt whenever `tracks` changes; never per render.
+    private(set) var membership = LibraryMembership(tracks: [])
     private(set) var latestAlbums: [LibraryBrowseEntry] = []
     private var sortedSongs: [SongOrder: [LibraryTrack]] = [:]
 
@@ -267,6 +270,12 @@ final class LibraryCollectionsModel: ObservableObject {
     }
 
     func clearError() { actionError = nil }
+
+    /// Reloads queued actions from the database, e.g. after it was emptied by a data reset.
+    func reloadPendingActions() async throws {
+        guard let session else { pendingActions = []; return }
+        pendingActions = try await database.pendingActions(in: scope(session), deviceID: session.deviceID)
+    }
 
     func clearPlaylistMutationError() { playlistMutationError = nil }
 

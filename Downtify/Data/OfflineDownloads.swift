@@ -422,6 +422,33 @@ final class OfflineDownloads: ObservableObject, OfflinePlaybackProviding {
         completion?()
     }
 
+    /// Deletes every saved song and cancels all in-flight work. The store stays usable for new downloads.
+    func removeAll() async throws {
+        let ids = Set(records.map(\.id)).union(preparations.keys).union(jobs.keys).union(transferLeases.keys)
+        for id in ids { stop(id) }
+        // Clearing records first makes late delegate callbacks (`finish`, `completed`, `progress`) no-ops.
+        records = []
+        guard openStore() else { throw storageFailure ?? OfflineDownloadFailure.fileSystem }
+        // Cancel background transfers that were never re-adopted, so none can finish and write a file back.
+        for session in [background, foreground] {
+            for task in await session.allTasks where task is URLSessionDownloadTask {
+                guard let id = taskID(task), jobs[id] == nil else { continue }
+                task.cancel()
+            }
+        }
+        records = []
+        let fileManager = FileManager.default
+        var failure: Error?
+        do {
+            for url in try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            where url.lastPathComponent != manifest.lastPathComponent {
+                do { try fileManager.removeItem(at: url) } catch { failure = failure ?? error }
+            }
+        } catch { failure = error }
+        do { try writeManifest() } catch { failure = failure ?? error }
+        if let failure { throw failure }
+    }
+
     private func stop(_ id: UUID) {
         preparations.removeValue(forKey: id)?.cancel()
         jobs.removeValue(forKey: id)?.cancel()

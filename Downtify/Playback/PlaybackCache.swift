@@ -74,6 +74,11 @@ actor PlaybackCache {
         return bytes
     }
 
+    func removeAll() async {
+        entries.removeAll()
+        used = 0
+    }
+
     private func trim() {
         while used > byteLimit, let oldest = entries.min(by: { $0.value.access < $1.value.access }) {
             entries.removeValue(forKey: oldest.key)

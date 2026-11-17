@@ -3,6 +3,9 @@ import SwiftUI
 struct SettingsView: View {
     @Binding var appearance: DowntifyAppearance
     @Binding var language: String
+    @Binding var networkOperationLimit: Int
+    @ObservedObject var playback: PlaybackController
+    @AppStorage("debug.networkOverlay.enabled") private var networkOverlayEnabled = false
     @State private var showingAbout = false
 
     private let languages: [(String, String)] = [
@@ -13,6 +16,27 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section {
+                Toggle("Switch quality immediately", isOn: Binding(
+                    get: { playback.immediateQualitySwitch },
+                    set: { playback.setImmediateQualitySwitch($0) }
+                ))
+                Text("When off, the current song keeps its quality when possible. The next song uses the new network’s quality.")
+                    .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            } header: {
+                Text("Playback")
+            }
+            Section("Diagnostics") {
+                Toggle("Network debug overlay", isOn: $networkOverlayEnabled)
+                Text("Shows active and waiting network work, playback queue depth, and offline transfer state.")
+                    .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Section("Advanced") {
+                Stepper("Concurrent network requests: \(networkOperationLimit)", value: $networkOperationLimit,
+                        in: NetworkOperationCoordinator.allowedLimits)
+                Text("Limits simultaneous network activity, including offline downloads. Changes apply immediately.")
+                    .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
             Section("Appearance") {
                 Picker("Theme", selection: $appearance) {
                     ForEach(DowntifyAppearance.allCases) { option in

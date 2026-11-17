@@ -14,8 +14,11 @@ struct CatalogDiscoverView: View {
     var onDownload: (CatalogSong) -> Void
     var onDownloadAlbum: (String, [CatalogSong]?) -> Void = { _, _ in }
     var downloadState: (CatalogSong) -> ServerDownloadActionState = { _ in .idle }
-    var albumDownloadState: (String) -> ServerDownloadActionState = { _ in .idle }
+    var onAddToDevice: (CatalogSong) -> Void = { _ in }
+    var deviceState: (CatalogSong) -> DeviceSaveState = { _ in .unavailable(.notInLibrary) }
+    var albumDownloadState: (CatalogAlbum, Int?) -> ServerDownloadActionState = { _, _ in .idle }
     var onOpenURL: (URL) -> Void = { _ in }
+    var membership = LibraryMembership(tracks: [])
 
     @Environment(\.downtifyPalette) private var palette
     @AppStorage("catalog.discover.section") private var selectedSection = "Finder"
@@ -52,6 +55,7 @@ struct CatalogDiscoverView: View {
             }
         }
         .onAppear(perform: loadInitial)
+        .task(id: albumCountLookupKey) { loadAlbumTrackCounts() }
         .onChange(of: selectedSection) { _, rawValue in
             let value = Section(rawValue: rawValue) ?? .finder
             if value == .charts, catalog.chartsState == .idle { catalog.loadCharts() }
@@ -332,23 +336,24 @@ struct CatalogDiscoverView: View {
             if song.source != "library", catalog.isLibraryOnly != true {
                 serverDownloadButton(for: song)
             }
+            deviceButton(for: song)
             if similarAction { Button { similarArtist = song.artist; similarTrack = song.title; loadSimilar() } label: { Image(systemName: "waveform").frame(width: 40, height: 44) }.buttonStyle(.plain).accessibilityLabel("Find tracks similar to \(song.title)") }
         }
     }
 
-    @ViewBuilder private func serverDownloadButton(for song: CatalogSong) -> some View {
-        let state = downloadState(song)
-        Button { onDownload(song) } label: {
-            switch state {
-            case .submitting: ProgressView().frame(width: 44, height: 44)
-            case .queued, .accepted, .partiallyAccepted: Image(systemName: "checkmark.circle.fill").frame(width: 44, height: 44)
-            case .failed: Image(systemName: "arrow.clockwise.circle").frame(width: 44, height: 44)
-            case .idle, .outcomeUnknown: Image(systemName: "arrow.down.circle").frame(width: 44, height: 44)
-            }
+    @ViewBuilder private func deviceButton(for song: CatalogSong) -> some View {
+        let state = deviceState(song)
+        if state != .unavailable(.notInLibrary) {
+            MediaActionButton(presentation: .device(state, itemTitle: song.title)) { onAddToDevice(song) }
+                .frame(width: 44, height: 44)
+                .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
-        .disabled(disablesDownloadAction(state))
-        .accessibilityLabel(downloadAccessibilityLabel(state, title: song.title))
+    }
+
+    @ViewBuilder private func serverDownloadButton(for song: CatalogSong) -> some View {
+        MediaActionButton(presentation: .library(downloadState(song), itemTitle: song.title)) { onDownload(song) }
+            .frame(width: 44, height: 44)
+            .buttonStyle(.plain)
     }
 
     private func albumEntityRow(_ album: CatalogAlbum, open: @escaping () -> Void) -> some View {
@@ -357,7 +362,7 @@ struct CatalogDiscoverView: View {
                 entityRow(title: album.title, subtitle: album.artist, artworkURL: album.coverURL, symbol: "square.stack")
             }.buttonStyle(.plain)
             if canRequestAlbumDownload(album), let url = album.url {
-                serverAlbumDownloadButton(url: url, title: album.title)
+                serverAlbumDownloadButton(url: url, album: album)
             }
         }
     }
@@ -367,18 +372,39 @@ struct CatalogDiscoverView: View {
         return ServerDownloadQueue.isYouTubeMusicAlbumURL(url)
     }
 
-    @ViewBuilder private func serverAlbumDownloadButton(url: String, title: String) -> some View {
-        let state = albumDownloadState(url)
-        Button { onDownloadAlbum(url, resolvedAlbumTracks(for: url)) } label: {
+    /// Catalog albums on screen that may need a provider track count to be recognised as owned.
+    private var catalogAlbumRows: [CatalogAlbum] {
+        var albums: [CatalogAlbum] = []
+        func add(_ state: CatalogLoadState<[CatalogAlbum]>) {
+            if case .loaded(let value) = state { albums += value } else if case .partial(let value, _) = state { albums += value }
+        }
+        add(catalog.finderArtistAlbumsState)
+        if case .loaded(let charts) = catalog.chartsState { albums += charts.albums }
+        for state in [catalog.deezerCollectionsState, catalog.spotifyCollectionsState] {
             switch state {
-            case .submitting: ProgressView().frame(width: 44, height: 44)
-            case .queued, .accepted, .partiallyAccepted: Image(systemName: "checkmark.circle.fill").frame(width: 44, height: 44)
-            case .failed: Image(systemName: "arrow.clockwise.circle").frame(width: 44, height: 44)
-            case .idle, .outcomeUnknown: Image(systemName: "arrow.down.circle").frame(width: 44, height: 44)
+            case .loaded(let value), .partial(let value, _): albums += value.albums + value.moreAlbums
+            default: break
             }
         }
-        .disabled(disablesDownloadAction(state))
-        .accessibilityLabel(downloadAccessibilityLabel(state, title: title))
+        return albums.filter(canRequestAlbumDownload)
+    }
+
+    private var albumCountLookupKey: [CatalogResultID] { catalogAlbumRows.map(\.id) + [CatalogResultID(source: "tracks", value: String(libraryTracks.count))] }
+
+    private func loadAlbumTrackCounts() {
+        let membership = self.membership
+        catalog.loadAlbumTrackCounts(for: catalogAlbumRows) {
+            membership.hasAlbum(title: $0.title, artist: $0.artist)
+        }
+    }
+
+    @ViewBuilder private func serverAlbumDownloadButton(url: String, album: CatalogAlbum) -> some View {
+        let resolved = resolvedAlbumTracks(for: url)
+        MediaActionButton(presentation: .library(albumDownloadState(album, album.trackCount ?? catalog.albumTrackCounts[album.id] ?? resolved?.count),
+                                                 itemTitle: album.title)) {
+            onDownloadAlbum(url, resolved)
+        }
+        .frame(width: 44, height: 44)
     }
 
     private func resolvedAlbumTracks(for url: String) -> [CatalogSong]? {
@@ -386,23 +412,6 @@ struct CatalogDiscoverView: View {
         case .loaded(let details), .partial(let details, _):
             return details.album.url == url ? details.tracks : nil
         default: return nil
-        }
-    }
-
-    private func downloadAccessibilityLabel(_ state: ServerDownloadActionState, title: String) -> String {
-        switch state {
-        case .submitting: "Requesting server download for \(title)"
-        case .queued, .accepted, .partiallyAccepted: "Server download requested for \(title)"
-        case .outcomeUnknown: "Server download status unknown for \(title)"
-        case .failed: "Retry server download for \(title)"
-        case .idle: "Request server download for \(title)"
-        }
-    }
-
-    private func disablesDownloadAction(_ state: ServerDownloadActionState) -> Bool {
-        switch state {
-        case .submitting, .queued, .accepted, .partiallyAccepted, .outcomeUnknown: return true
-        case .idle, .failed: return false
         }
     }
 

@@ -36,11 +36,19 @@ def format_localization_key(value):
                 cursor += 1
             if depth == 0:
                 expression = value[start:cursor - 1].strip()
-                if "format:" in expression:
+                if "specifier:" in expression:
+                    # SwiftUI keeps the explicit format specifier, e.g. `specifier: "%.2f"`.
+                    spec = re.search(r'specifier:\s*"(%[^"]*)"', expression)
+                    result.append(spec.group(1) if spec else "%@")
+                elif "format:" in expression:
                     result.append("%@")
                 elif expression.startswith(("Int(", "UInt(")) or expression in {
                     "position", "days", "submittedCount", "entry.count", "queueStatus.active",
-                    "season", "number", "status", "model.cooldownSeconds", "selectedCatalogSongs.count", "successful", "expected"
+                    "season", "number", "status", "model.cooldownSeconds", "selectedCatalogSongs.count", "successful", "expected",
+                    "network.active", "network.maximum", "network.queued", "network.foregroundActive",
+                    "network.foregroundQueued", "network.backgroundActive", "network.backgroundQueued",
+                    "playback.queue.upcomingCount", "activeTransfers", "pausedTransfers",
+                    "pendingCount",
                 }:
                     result.append("%lld")
                 else:
@@ -58,8 +66,8 @@ for language in languages:
     key_sets[language] = {json.loads(key) for key, _ in entry_pattern.findall(path.read_text())}
     values = {json.loads(key): json.loads(value) for key, value in entry_pattern.findall(path.read_text())}
     for key, value in values.items():
-        key_specs = re.findall(r'%(?:@|lld)', key)
-        value_specs = re.findall(r'%(?:@|lld)', value)
+        key_specs = re.findall(r'%(?:@|lld|\.\d+f)', key)
+        value_specs = re.findall(r'%(?:@|lld|\.\d+f)', value)
         if sorted(key_specs) != sorted(value_specs):
             raise SystemExit(f"{language}: placeholder mismatch for {key!r}: {key_specs} != {value_specs}")
 
@@ -71,13 +79,14 @@ for language, keys in key_sets.items():
 
 patterns = (
     r'(?:Text|Button|Label|Section|Picker|Toggle|LabeledContent|ProgressView|ContentUnavailableView)\(\s*"((?:[^"\\]|\\.)*)"',
+    r'\brow\(\s*"((?:[^"\\]|\\.)*)"',
     r'Link\(\s*"((?:[^"\\]|\\.)*)"',
     r'(?:navigationTitle|accessibilityLabel|accessibilityValue|accessibilityHint)\(\s*"((?:[^"\\]|\\.)*)"',
     r'String\(localized:\s*"((?:[^"\\]|\\.)*)"',
     r'(?:alert|confirmationDialog)\(\s*"((?:[^"\\]|\\.)*)"',
     r'prompt:\s*"((?:[^"\\]|\\.)*)"',
     r'(?:browsePage|shelf)\((?:title:\s*)?"((?:[^"\\]|\\.)*)"',
-    r'(?:sectionHeader|sectionHeading|emptyMessage|heroCard|openProviderButton)\(\s*(?:title:\s*)?"((?:[^"\\]|\\.)*)"',
+    r'(?:sectionHeader|sectionHeading|emptyMessage|heroCard|openProviderButton|aboutSectionHeader)\(\s*(?:title:\s*)?"((?:[^"\\]|\\.)*)"',
     r'openProviderButton\([^\n]*?label:\s*"((?:[^"\\]|\\.)*)"',
     r'\b(?:detail|subtitle):\s*"((?:[^"\\]|\\.)*)"',
     r'DowntifyUnavailableView\(title:\s*"((?:[^"\\]|\\.)*)"',
@@ -86,6 +95,11 @@ patterns = (
     r'mutate\(failure:\s*"((?:[^"\\]|\\.)*)"',
     r'(?:cachedError|storageFailure)\("((?:[^"\\]|\\.)*)"',
     r'requestMessage\s*=\s*"((?:[^"\\]|\\.)*)"',
+    r'actionError\s*=\s*(?:\w+\s*\?\s*)?"((?:[^"\\]|\\.)*)"',
+    r'desiredValue\s*\?\s*"((?:[^"\\]|\\.)*)"',
+    r'desiredValue\s*\?\s*"(?:[^"\\]|\\.)*"\s*:\s*"((?:[^"\\]|\\.)*)"',
+    # A Text literal whose interpolation contains a quoted format specifier (nested quotes).
+    r'Text\(\s*"((?:\\\((?:[^()"]|"[^"]*")*\)|[^"\\]|\\.)*)"',
     r'errorMessage\s*=\s*"((?:[^"\\]|\\.)*)"',
     r'(?:queueError|localError|signOutError)\s*=\s*"((?:[^"\\]|\\.)*)"',
     r'(?:status|state)\s*=\s*\.failed\("((?:[^"\\]|\\.)*)"',
@@ -104,6 +118,8 @@ for source in glob.glob("Downtify/**/*.swift", recursive=True):
             # Skip regex fragments that terminate inside a nested Swift interpolation.
             if "queueStatus.paused ?" in key or "metadata.title ??" in key or "code ?? " in key:
                 continue
+            if key.endswith("specifier: "):
+                continue  # Truncated at a nested quote; the specifier pattern captures the whole literal.
             if key.startswith("Similar to \\("):
                 continue
             # Punctuation used to join localized Text fragments is not a standalone phrase.

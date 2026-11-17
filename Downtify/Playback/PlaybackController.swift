@@ -21,6 +21,7 @@ final class PlaybackController: ObservableObject {
     @Published private(set) var duration: TimeInterval?
     @Published private(set) var network: PlaybackNetwork = .wifiOrWired
     @Published private(set) var qualityPreferences: PlaybackQualities
+    @Published private(set) var immediateQualitySwitch: Bool
     @Published private(set) var availableQualities: [PlaybackQuality] = [.original]
     @Published private(set) var streamQuality: PlaybackQuality?
 
@@ -77,6 +78,8 @@ final class PlaybackController: ObservableObject {
         let canDownload: Bool
     }
 
+    private var recoveryAttempts = 0
+    private var recoveryPosition: TimeInterval = 0
     private var consecutiveUnplayableFailures = 0
     private var libraryOnlyPolicy = false
     private var libraryReportingActive = false
@@ -103,6 +106,7 @@ final class PlaybackController: ObservableObject {
         self.reporting = reporting
         self.podcasts = podcasts
         qualityPreferences = store.loadQualities()
+        immediateQualitySwitch = store.loadImmediateQualitySwitch()
         buffering = store.loadBuffering()
         normalization = store.loadNormalization()
         engine.setNormalization(normalization)
@@ -194,6 +198,32 @@ final class PlaybackController: ObservableObject {
             phase = duration.map { position >= $0 } == true ? .ended : .paused
         }
         enqueueQualifiedListen()
+        publishMetadata()
+    }
+
+    /// Stops playback, empties the queue so the dock hides, and persists the empty state.
+    func stopAndClear() {
+        stopEngine()
+        audioSession.deactivate()
+        progressGeneration += 1
+        progressTask?.cancel()
+        progressTask = nil
+        podcast = nil
+        podcastProgress.removeAll()
+        pendingPodcastProgress.removeAll()
+        podcastProgressSaveFailed = false
+        suspendedMusicPosition = 0
+        resetListen()
+        wantsPlayback = false
+        resumeAfterInterruption = false
+        resumeAfterNetworkFailure = false
+        queue = PlaybackQueue()
+        position = 0
+        duration = nil
+        phase = .idle
+        queueReadyForPersistence = true
+        persist()
+        reporting?.publish(state: .stopped, track: nil, duration: nil, position: 0)
         publishMetadata()
     }
 
@@ -401,6 +431,11 @@ final class PlaybackController: ObservableObject {
         }
     }
 
+    func setImmediateQualitySwitch(_ enabled: Bool) {
+        immediateQualitySwitch = enabled
+        store.saveImmediateQualitySwitch(enabled)
+    }
+
     func setBuffering(_ preference: PlaybackBuffering) {
         buffering = preference
         store.saveBuffering(preference)
@@ -418,7 +453,10 @@ final class PlaybackController: ObservableObject {
     func play() {
         guard (podcast != nil || queue.current != nil), !wantsPlayback else { return }
         resumeAfterNetworkFailure = false
-        if case .failed = phase { consecutiveUnplayableFailures = 0 }
+        if case .failed = phase {
+            consecutiveUnplayableFailures = 0
+            recoveryAttempts = 0
+        }
         if isInterrupted {
             resumeAfterInterruption = true
             return
@@ -523,6 +561,7 @@ final class PlaybackController: ObservableObject {
         wantsPlayback = false
         resumeAfterInterruption = false
         resumeAfterNetworkFailure = false
+        recoveryAttempts = 0
         position = 0
         duration = knownDuration(queue.current?.item.duration)
         phase = queue.current == nil ? .idle : .paused
@@ -590,8 +629,9 @@ final class PlaybackController: ObservableObject {
                 return
             } catch {
                 guard loadGeneration == generation, !Task.isCancelled else { return }
-                if item?.catalogSong != nil, isSkippableCatalogFailure(error), skipFailedCatalogItem() { return }
                 let failure = PlaybackFailure.from(error)
+                if failure == .invalidStream, recoverStream(failure) { return }
+                if item?.catalogSong != nil, isSkippableCatalogFailure(error), skipFailedCatalogItem() { return }
                 if failure == .network, episode == nil, !loadedFromDisk, wantsPlayback {
                     handOffToLocalStream(afterNetworkFailure: true)
                 } else {
@@ -700,7 +740,27 @@ final class PlaybackController: ObservableObject {
         engine.reset()
     }
 
+    private func recoverStream(_ failure: PlaybackFailure) -> Bool {
+        // Catalog failures already have bounded skip handling; do not retry the same unplayable item.
+        if failure == .invalidStream, podcast == nil, queue.current?.item.catalogSong != nil { return false }
+        guard wantsPlayback, !loadedFromDisk, network != .unavailable,
+              (failure == .network || failure == .invalidStream), recoveryAttempts < 2 else { return false }
+        recoveryAttempts += 1
+        recoveryPosition = position
+        stopEngine()
+        let generation = loadGeneration
+        phase = .buffering
+        publishMetadata()
+        loadTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            guard let self, self.loadGeneration == generation, self.wantsPlayback else { return }
+            self.loadCurrent()
+        }
+        return true
+    }
+
     private func fail(_ failure: PlaybackFailure) {
+        if recoverStream(failure) { return }
         Task {
             await NetworkOperationCoordinator.shared.recordFailure("Playback failed · \(String(describing: failure))")
         }
@@ -742,7 +802,10 @@ final class PlaybackController: ObservableObject {
             guard loaded, elapsed.isFinite else { return }
             if let actualDuration, actualDuration.isFinite, actualDuration > 0 { duration = actualDuration }
             position = boundedPosition(elapsed)
-            if phase == .playing { recordListen(at: position) }
+            if phase == .playing {
+                if position - recoveryPosition >= 30 { recoveryAttempts = 0 }
+                recordListen(at: position)
+            }
             if abs(position - lastSavedPosition) >= 5 || (listen?.elapsed ?? 0) - lastSavedListenElapsed >= 5 { persist() }
         case .ended:
             guard wantsPlayback, loaded else { return }
@@ -769,6 +832,7 @@ final class PlaybackController: ObservableObject {
                 handOffToLocalStream(afterNetworkFailure: true)
                 return
             }
+            if failure == .invalidStream, recoverStream(failure) { return }
             if queue.current?.item.catalogSong != nil,
                isSkippableCatalogFailure(failure), skipFailedCatalogItem() { return }
             fail(failure)
@@ -869,9 +933,9 @@ final class PlaybackController: ObservableObject {
         }
         lastConnectedNetwork = path
         if previous == .unavailable, let session { flushPodcastProgress(for: session) }
-        if resumeAfterNetworkFailure, previous == .unavailable {
+        if resumeAfterNetworkFailure, previous != path {
             play()
-        } else if oldQuality != preferredQuality {
+        } else if oldQuality != preferredQuality, immediateQualitySwitch {
             reloadForQualityChange()
         }
         prefetchUpcoming()
@@ -948,6 +1012,13 @@ final class PlaybackController: ObservableObject {
         } catch {
             // Keep the same play ID and retry the write on the next playback update.
         }
+    }
+
+    func preloadSnapshot() async -> PlaybackPreloadCache.Snapshot {
+        guard let preloadCache, let session, podcast == nil else { return .init() }
+        let keys = queue.preloadItems.filter { !libraryOnlyPolicy || $0.catalogSong == nil }
+            .map { PlaybackPreloadCache.Key(session: session, item: $0, quality: preferredQuality) }
+        return await preloadCache.snapshot(for: keys)
     }
 
     private func cancelPrefetch() {

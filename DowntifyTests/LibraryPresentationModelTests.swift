@@ -902,6 +902,77 @@ final class LibraryPresentationModelTests: XCTestCase {
         return (LibraryDatabase(fileURL: folder.appending(path: "library.sqlite")), folder)
     }
 
+    func testCompletedFilenameReturnsFilenameForDoneOrCompletedJob() async throws {
+        for status in ["done", "completed"] {
+            let (model, continuation) = await makeServerDownloadModel(jobs: [
+                jobJSON(songID: "s1", status: status, filename: "Music/Roads.flac")
+            ])
+            XCTAssertEqual(model.completedFilename(forActionKey: "youtube:s1"), "Music/Roads.flac", "status \(status)")
+            continuation.finish()
+        }
+    }
+
+    func testCompletedFilenameIsNilWhileJobIsQueuedOrDownloading() async throws {
+        for status in ["queued", "downloading"] {
+            let (model, continuation) = await makeServerDownloadModel(jobs: [
+                jobJSON(songID: "s1", status: status, filename: "Music/Roads.flac")
+            ])
+            XCTAssertNil(model.completedFilename(forActionKey: "youtube:s1"), "status \(status)")
+            continuation.finish()
+        }
+    }
+
+    func testCompletedFilenameIsNilForFailedUnknownOrMissingJobs() async throws {
+        let (failed, failedContinuation) = await makeServerDownloadModel(jobs: [
+            jobJSON(songID: "s1", status: "failed", filename: "Music/Roads.flac")
+        ])
+        XCTAssertNil(failed.completedFilename(forActionKey: "youtube:s1"))
+        failedContinuation.finish()
+
+        let (unknown, unknownContinuation) = await makeServerDownloadModel(jobs: [
+            jobJSON(songID: "s1", status: "mystery", filename: "Music/Roads.flac")
+        ])
+        XCTAssertNil(unknown.completedFilename(forActionKey: "youtube:s1"))
+        unknownContinuation.finish()
+
+        let (missing, missingContinuation) = await makeServerDownloadModel(jobs: [
+            jobJSON(songID: "other", status: "done", filename: "Music/Other.flac")
+        ])
+        XCTAssertNil(missing.completedFilename(forActionKey: "youtube:s1"))
+        missingContinuation.finish()
+    }
+
+    func testCompletedFilenameIsNilForDoneJobWithEmptyFilename() async throws {
+        let (model, continuation) = await makeServerDownloadModel(jobs: [
+            jobJSON(songID: "s1", status: "done", filename: "")
+        ])
+        XCTAssertNil(model.completedFilename(forActionKey: "youtube:s1"))
+        continuation.finish()
+    }
+
+    private func jobJSON(songID: String, status: String, filename: String) -> String {
+        #"{"song":{"song_id":"\#(songID)","name":"Roads"},"status":"\#(status)","filename":"\#(filename)"}"#
+    }
+
+    /// Drives the model the way production does: session arrives on the update stream,
+    /// then the queue is refreshed from the server's `/api/queue` and `/api/queue/state` routes.
+    private func makeServerDownloadModel(jobs: [String]) async -> (ServerDownloadPresentationModel, AsyncStream<DeviceSession?>.Continuation) {
+        let transport = PresentationQueueTransport(routes: [
+            "/api/server/info": #"{"product":"Downtify","api_version":1,"server_id":"server"}"#,
+            "/api/queue": "[\(jobs.joined(separator: ","))]",
+            "/api/queue/state": #"{"paused":false,"state":"idle","active":0}"#
+        ])
+        let (updates, continuation) = AsyncStream<DeviceSession?>.makeStream()
+        let model = ServerDownloadPresentationModel(queue: ServerDownloadQueue(transport: transport),
+                                                    sessionUpdates: { updates })
+        let session = makeSession()
+        model.start()
+        continuation.yield(session)
+        await waitUntil { model.session == session }
+        await model.refreshQueue()
+        return (model, continuation)
+    }
+
     private func makeSession(server: String = "server") -> DeviceSession {
         DeviceSession(baseAddress: "https://example.test", serverID: server, serverName: "Server", deviceID: "device",
                       username: "listener", role: nil, token: "secret", allowsInsecureHTTP: false)
@@ -1337,4 +1408,20 @@ private struct CatalogServingStub: CatalogServing {
 private func makeCatalogSong(title: String, source: String) throws -> CatalogSong {
     let fixture = #"{"source":"\#(source)","song_id":"\#(title)","name":"\#(title)","artists":["Artist"],"url":""}"#
     return try JSONDecoder().decode(CatalogSong.self, from: Data(fixture.utf8))
+}
+
+/// Serves fixed bodies by URL path suffix for the server download queue.
+private final class PresentationQueueTransport: HTTPDataLoading {
+    private let routes: [String: String]
+
+    init(routes: [String: String]) { self.routes = routes }
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        let path = request.url?.path ?? ""
+        guard let route = routes.keys.first(where: { path.hasSuffix($0) }), let body = routes[route] else {
+            throw APIError.invalidResponse
+        }
+        let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+        return (Data(body.utf8), response)
+    }
 }
