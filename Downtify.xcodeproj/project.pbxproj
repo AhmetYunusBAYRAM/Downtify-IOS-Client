@@ -12,6 +12,8 @@
 		0000000000000000000000A0 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerDownloadPresentationModel.swift; sourceTree = "<group>"; };
 		0000000000000000000000A1 = { isa = PBXBuildFile; fileRef = 0000000000000000000000A0; };
 		0000000000000000000000A2 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogSearchView.swift; sourceTree = "<group>"; };
+		000000000000000000000200 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaAction.swift; sourceTree = "<group>"; };
+		000000000000000000000201 = { isa = PBXBuildFile; fileRef = 000000000000000000000200; };
 		0000000000000000000000A3 = { isa = PBXBuildFile; fileRef = 0000000000000000000000A2; };
 		0000000000000000000000A4 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogDiscoverView.swift; sourceTree = "<group>"; };
 		0000000000000000000000A5 = { isa = PBXBuildFile; fileRef = 0000000000000000000000A4; };
@@ -424,6 +426,7 @@
 			children = (
 				000000000000000000000005,
 				0000000000000000000000A2,
+				000000000000000000000200,
 				0000000000000000000000A4,
 				00000000000000000000006B,
 				000000000000000000000071,
@@ -565,6 +568,7 @@
 				00000000000000000000006C,
 				000000000000000000000072,
 				0000000000000000000000A3,
+				000000000000000000000201,
 				0000000000000000000000A5,
 				000000000000000000000076,
 				000000000000000000000078,
