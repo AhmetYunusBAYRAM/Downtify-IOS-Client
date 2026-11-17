@@ -59,7 +59,7 @@ This project is licensed under the [GNU General Public License version 3](LICENS
 
 ## About page release notes
 
-Xcode generates the About page bullet list at build time from commit subjects on the current branch since its merge base with `origin/main` (falling back to local `main`). The generated `ReleaseNotes.json` is packaged into the app. Keep commit subjects user facing when building a release branch; a build from `main` itself has no branch changes to list.
+If `release-notes/<version>-<build>.json` exists (for example `0.1.2-8.json`), its bullets are packaged as the About page list; add one for every release so builds from `main` are not empty. Otherwise Xcode generates the About page bullet list at build time from commit subjects on the current branch since its merge base with `origin/main` (falling back to local `main`). The generated `ReleaseNotes.json` is packaged into the app. Keep commit subjects user facing when building a release branch; a build from `main` itself has no branch changes to list.
 
 ## Boundaries and platform decisions
 

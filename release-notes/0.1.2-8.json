@@ -1,0 +1,8 @@
+[
+  "Dismiss the keyboard in Search and Finder by tapping outside the field, pressing Done, or scrolling",
+  "Playback on slow or unstable connections now builds a short startup buffer sized to your measured server speed",
+  "Background preloading no longer crowds out album artwork and playback requests: concurrent requests default to 4 and can be changed in More > Diagnostics",
+  "Network debug overlay now shows the effective audio delivery rate",
+  "Likes and playlist favorites made while offline are queued and sent when the connection returns, with pending status in More",
+  "Playlist editing: duplicate-aware add and remove controls, conflict recovery, and localized feedback"
+]
