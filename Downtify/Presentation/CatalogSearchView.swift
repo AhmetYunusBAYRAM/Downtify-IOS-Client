@@ -17,6 +17,7 @@ struct CatalogSearchView: View {
     @State private var category: SearchCategory = .songs
     @State private var query = ""
     @State private var link = ""
+    @FocusState private var searchFocused: Bool
     @Environment(\.downtifyPalette) private var palette
 
     init(catalog: CatalogPresentationModel, library: LibraryPresentationModel,
@@ -60,6 +61,7 @@ struct CatalogSearchView: View {
             TextField("Songs, albums, artists", text: $query)
                 .textFieldStyle(.roundedBorder)
                 .submitLabel(.search)
+                .focused($searchFocused)
                 .accessibilityLabel("Search songs, albums, and artists")
 
             if !normalizedQuery.isEmpty {
@@ -77,6 +79,12 @@ struct CatalogSearchView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: category == .songs ? .leading : .center)
         .background(palette.background)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { searchFocused = false }
+            }
+        }
         .task(id: normalizedQuery) {
             guard !normalizedQuery.isEmpty else { return }
             try? await Task.sleep(for: .milliseconds(250))

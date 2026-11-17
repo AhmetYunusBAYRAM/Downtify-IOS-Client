@@ -23,6 +23,7 @@ struct CatalogDiscoverView: View {
     @State private var similarArtist = ""
     @State private var similarTrack = ""
     @State private var isSearching = false
+    @FocusState private var finderFocused: Bool
 
     private enum Section: String, CaseIterable, Identifiable {
         case finder = "Finder", discover = "For You", charts = "Charts", similar = "Similar"
@@ -42,6 +43,12 @@ struct CatalogDiscoverView: View {
             case .discover: discoverContent
             case .charts: chartsContent
             case .similar: similarContent
+            }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { finderFocused = false }
             }
         }
         .onAppear(perform: loadInitial)
@@ -65,6 +72,7 @@ struct CatalogDiscoverView: View {
                     .autocorrectionDisabled()
                     .submitLabel(.search)
                     .onSubmit(searchFinder)
+                    .focused($finderFocused)
                     .accessibilityLabel("Search Finder")
                 if !query.isEmpty {
                     Button { query = ""; isSearching = false; catalog.clearFinderSearch() } label: {

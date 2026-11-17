@@ -214,6 +214,10 @@ struct LibraryHomeView: View {
             .frame(maxWidth: .infinity)
         }
         .downtifyScrollEndClearance()
+        .scrollDismissesKeyboard(.interactively)
+        .simultaneousGesture(TapGesture().onEnded {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        })
         .refreshable { await refresh() }
         .background(palette.background.ignoresSafeArea())
         .navigationTitle(title)
