@@ -32,7 +32,7 @@ struct DownloadsView: View {
         .toolbarBackground(palette.background, for: .navigationBar)
         .task { serverDownloads.start(); await load() }
         .refreshable { await refreshQueue() }
-        .alert("Download request", isPresented: Binding(get: { requestMessage != nil }, set: { if !$0 { requestMessage = nil } })) {
+        .alert("Library request", isPresented: Binding(get: { requestMessage != nil }, set: { if !$0 { requestMessage = nil } })) {
             Button("OK", role: .cancel) { requestMessage = nil }
         } message: { if let requestMessage { Text(requestMessage) } }
     }
@@ -115,7 +115,7 @@ struct DownloadsView: View {
 
     private var serverSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Server queue", systemImage: "server.rack")
+            Label("Library Requests", systemImage: "server.rack")
                 .font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
             Text("These jobs run on the server. Completed items become available through library sync; they are not saved on this device.")
                 .font(.footnote).foregroundStyle(DowntifyStyle.secondaryText)
@@ -131,7 +131,7 @@ struct DownloadsView: View {
                 }.font(.footnote)
             } else if serverDownloads.jobs.isEmpty && !serverDownloads.isRefreshing {
                 ContentUnavailableView("Server queue is empty", systemImage: "tray",
-                                       description: Text("Add a supported link to request a server download."))
+                                       description: Text("Add a supported link to add it to your Library."))
                     .frame(maxWidth: .infinity).padding(.vertical, 4)
             }
             if serverDownloads.isRefreshing { ProgressView("Loading server queue…") }
@@ -165,7 +165,7 @@ struct DownloadsView: View {
             HStack(spacing: 8) {
                 TextField("https://…", text: $link)
                     .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .accessibilityLabel("Link for server download")
+                    .accessibilityLabel("Link to add to Library")
                 Button("Request", systemImage: "arrow.down.to.line") { Task { await submitLink() } }
                     .disabled(link.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || serverDownloads.isRefreshing || submittingLink)
                     .frame(minHeight: 44)
@@ -180,12 +180,12 @@ struct DownloadsView: View {
 
     private var catalogDownloadActions: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Find music to download to the server")
+            Text("Find music to add to your Library")
                 .font(.headline)
             HStack(spacing: 8) {
                 TextField("Song or album", text: $catalogQuery)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .accessibilityLabel("Search catalog for server downloads")
+                    .accessibilityLabel("Search catalog to add to Library")
                 Button("Search", systemImage: "magnifyingglass") {
                     selectedCatalogSongs.removeAll()
                     catalog.search(catalogQuery)
@@ -194,7 +194,7 @@ struct DownloadsView: View {
                 .frame(minHeight: 44)
             }
             if catalog.isLibraryOnly == true {
-                Text("Server downloads are unavailable in library-only mode.")
+                Text("Adding to Library is unavailable in library-only mode.")
                     .font(.footnote).foregroundStyle(DowntifyStyle.secondaryText)
             } else {
                 let songs = catalogSongs
@@ -214,11 +214,11 @@ struct DownloadsView: View {
                                 Text(song.artists.joined(separator: ", ")).font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
                             }
                             Spacer(minLength: 4)
-                            Button(songActionTitle(for: song), systemImage: "arrow.down.to.line") {
+                            MediaActionButton(presentation: .library(serverDownloads.actionState(for: song), itemTitle: song.title)) {
                                 Task { await serverDownloads.request(song: song) }
                             }
+                            .frame(minWidth: 44, minHeight: 44)
                             .disabled(catalog.isLibraryOnly != false || !canRequest(serverDownloads.actionState(for: song)))
-                            .accessibilityLabel("Download \(song.title) to server")
                         }
                         .padding(.vertical, 3)
                         if case .failed(let message) = serverDownloads.actionState(for: song) {
@@ -226,7 +226,7 @@ struct DownloadsView: View {
                         }
                     }
                     if selectedCatalogSongs.count > 1 {
-                        Button("Download selected (\(selectedCatalogSongs.count))", systemImage: "arrow.down.to.line.compact") {
+                        Button(String(localized: "Add Selected to Library"), systemImage: "plus.circle") {
                             let selected = songs.filter { selectedCatalogSongs.contains($0.id) }
                             Task { await serverDownloads.requestBatch(songs: selected) }
                         }
@@ -235,18 +235,18 @@ struct DownloadsView: View {
                     }
                 }
                 ForEach(catalogAlbums) { album in
-                    if let url = album.url, isSupportedAlbumURL(url) {
+                    if let url = album.url, ServerDownloadQueue.isYouTubeMusicAlbumURL(url) {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(album.title).font(.subheadline.weight(.medium)).lineLimit(2)
                                 Text(album.artist).font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
                             }
                             Spacer()
-                            Button(albumActionTitle(for: url), systemImage: "arrow.down.to.line") {
+                            MediaActionButton(presentation: .library(serverDownloads.actionState(forAlbumURL: url), itemTitle: album.title)) {
                                 Task { await serverDownloads.requestAlbum(url: url) }
                             }
+                            .frame(minWidth: 44, minHeight: 44)
                             .disabled(catalog.isLibraryOnly != false || !canRequest(serverDownloads.actionState(forAlbumURL: url)))
-                            .accessibilityLabel("Download album \(album.title) to server")
                         }
                         if case .failed(let message) = serverDownloads.actionState(forAlbumURL: url) {
                             Text(message).font(.caption).foregroundStyle(DowntifyStyle.error)
@@ -291,37 +291,6 @@ struct DownloadsView: View {
         }
     }
 
-    private func songActionTitle(for song: CatalogSong) -> String {
-        switch serverDownloads.actionState(for: song) {
-        case .submitting: String(localized: "Requesting…")
-        case .queued: String(localized: "Queued")
-        case .accepted: String(localized: "Requested")
-        case .partiallyAccepted: String(localized: "Partially queued")
-        case .outcomeUnknown: String(localized: "Check queue")
-        case .failed: String(localized: "Retry")
-        case .idle: String(localized: "Download to server")
-        }
-    }
-
-    private func albumActionTitle(for url: String) -> String {
-        switch serverDownloads.actionState(forAlbumURL: url) {
-        case .submitting: String(localized: "Requesting…")
-        case .accepted: String(localized: "Finished")
-        case .partiallyAccepted(let successful, let expected): String(localized: "\(successful) of \(expected) downloaded")
-        case .outcomeUnknown: String(localized: "Check queue")
-        case .failed: String(localized: "Retry")
-        case .queued: String(localized: "Queued")
-        case .idle: String(localized: "Download to server")
-        }
-    }
-
-    private func isSupportedAlbumURL(_ value: String) -> Bool {
-        guard let components = URLComponents(string: value), components.scheme?.lowercased() == "https",
-              components.host?.lowercased() == "music.youtube.com" else { return false }
-        return components.path.range(of: #"^/browse/MPREb_[A-Za-z0-9_-]+$"#, options: .regularExpression) != nil
-            || components.queryItems?.contains(where: { $0.name == "list" && $0.value?.range(of: #"^OLAK5uy_[A-Za-z0-9_-]+$"#, options: .regularExpression) != nil }) == true
-    }
-
     private func localStatus(_ item: OfflineDownload) -> LocalizedStringKey {
         switch item.state {
         case .preparing: return "Preparing download"
@@ -353,7 +322,7 @@ struct DownloadsView: View {
         submittingLink = true
         defer { submittingLink = false }
         guard let session = await activeSession() else {
-            requestMessage = "Reconnect to request a server download."
+            requestMessage = "Reconnect to add to your Library."
             return
         }
         guard let url = URL(string: link.trimmingCharacters(in: .whitespacesAndNewlines)),
@@ -365,9 +334,9 @@ struct DownloadsView: View {
             _ = try await queue.requestTrack(link: url, session: session)
             link = ""
             await refreshQueue()
-            requestMessage = "Server download requested. The item will appear after library sync."
+            requestMessage = "Added to Library requests. The item will appear after library sync."
         } catch {
-            requestMessage = "Could not request this server download. Check the link and connection."
+            requestMessage = "Could not add this to your Library. Check the link and connection."
         }
     }
 
