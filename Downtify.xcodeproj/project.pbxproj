@@ -9,6 +9,8 @@
 		0000000000000000000000C1 = { isa = PBXBuildFile; fileRef = 0000000000000000000000C0; };
 		000000000000000000000098 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogPresentationModel.swift; sourceTree = "<group>"; };
 		000000000000000000000099 = { isa = PBXBuildFile; fileRef = 000000000000000000000098; };
+		000000000000000000000304 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDataReset.swift; sourceTree = "<group>"; };
+		000000000000000000000305 = { isa = PBXBuildFile; fileRef = 000000000000000000000304; };
 		000000000000000000000300 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageInspector.swift; sourceTree = "<group>"; };
 		000000000000000000000301 = { isa = PBXBuildFile; fileRef = 000000000000000000000300; };
 		0000000000000000000000A0 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerDownloadPresentationModel.swift; sourceTree = "<group>"; };
@@ -420,6 +422,7 @@
 				000000000000000000000055,
 				000000000000000000000059,
 				000000000000000000000300,
+				000000000000000000000304,
 			);
 			sourceTree = "<group>";
 			path = App;
@@ -539,6 +542,7 @@
 			files = (
 				0000000000000000000000A1,
 				000000000000000000000301,
+				000000000000000000000305,
 				000000000000000000000099,
 				000000000000000000000097,
 				000000000000000000000095,
