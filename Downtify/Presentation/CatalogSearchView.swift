@@ -402,34 +402,8 @@ struct CatalogSearchView: View {
     }
 
     @ViewBuilder private func serverDownloadButton(for song: CatalogSong) -> some View {
-        let state = downloadState(song)
-        Button { onDownload(song) } label: {
-            switch state {
-            case .submitting: ProgressView().frame(width: 44, height: 44)
-            case .queued, .accepted, .partiallyAccepted: Image(systemName: "checkmark.circle.fill").frame(width: 44, height: 44)
-            case .failed: Image(systemName: "arrow.clockwise.circle").frame(width: 44, height: 44)
-            case .idle, .outcomeUnknown: Image(systemName: "arrow.down.circle").frame(width: 44, height: 44)
-            }
-        }
-        .disabled(disablesDownloadAction(state))
-        .accessibilityLabel(downloadAccessibilityLabel(state, title: song.title))
-    }
-
-    private func downloadAccessibilityLabel(_ state: ServerDownloadActionState, title: String) -> String {
-        switch state {
-        case .submitting: "Requesting server download for \(title)"
-        case .queued, .accepted, .partiallyAccepted: "Server download requested for \(title)"
-        case .outcomeUnknown: "Server download status unknown for \(title)"
-        case .failed: "Retry server download for \(title)"
-        case .idle: "Request server download for \(title)"
-        }
-    }
-
-    private func disablesDownloadAction(_ state: ServerDownloadActionState) -> Bool {
-        switch state {
-        case .submitting, .queued, .accepted, .partiallyAccepted, .outcomeUnknown: return true
-        case .idle, .failed: return false
-        }
+        MediaActionButton(presentation: .library(downloadState(song), itemTitle: song.title)) { onDownload(song) }
+            .frame(width: 44, height: 44)
     }
 
     private func canRequestAlbumDownload(_ album: CatalogAlbum) -> Bool {
@@ -438,17 +412,10 @@ struct CatalogSearchView: View {
     }
 
     @ViewBuilder private func serverAlbumDownloadButton(url: String, title: String) -> some View {
-        let state = albumDownloadState(url)
-        Button { onDownloadAlbum(url, resolvedAlbumTracks(for: url)) } label: {
-            switch state {
-            case .submitting: ProgressView().frame(width: 44, height: 44)
-            case .queued, .accepted, .partiallyAccepted: Image(systemName: "checkmark.circle.fill").frame(width: 44, height: 44)
-            case .failed: Image(systemName: "arrow.clockwise.circle").frame(width: 44, height: 44)
-            case .idle, .outcomeUnknown: Image(systemName: "arrow.down.circle").frame(width: 44, height: 44)
-            }
+        MediaActionButton(presentation: .library(albumDownloadState(url), itemTitle: title)) {
+            onDownloadAlbum(url, resolvedAlbumTracks(for: url))
         }
-        .disabled(disablesDownloadAction(state))
-        .accessibilityLabel(downloadAccessibilityLabel(state, title: title))
+        .frame(width: 44, height: 44)
     }
 
     private func resolvedAlbumTracks(for url: String) -> [CatalogSong]? {

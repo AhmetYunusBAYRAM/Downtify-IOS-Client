@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum MediaDestination { case library, device }
 
@@ -103,6 +104,39 @@ struct MediaActionPresentation: Equatable {
             return Self(title: String(localized: "Retry Add to Device"), systemImage: "exclamationmark.triangle",
                         accessibilityLabel: String(localized: "Retry adding \(t) to this device"),
                         isEnabled: true, explanation: nil)
+        }
+    }
+}
+
+struct MediaActionButton: View {
+    enum Style { case icon, label }
+    let presentation: MediaActionPresentation
+    var style: Style = .icon
+    let action: () -> Void
+
+    var body: some View {
+        let button = Button(action: action) {
+            switch style {
+            case .icon:
+                if let systemImage = presentation.systemImage {
+                    Image(systemName: systemImage)
+                } else {
+                    ProgressView()
+                }
+            case .label:
+                if let systemImage = presentation.systemImage {
+                    Label { Text(verbatim: presentation.title) } icon: { Image(systemName: systemImage) }
+                } else {
+                    Label { Text(verbatim: presentation.title) } icon: { ProgressView() }
+                }
+            }
+        }
+        .disabled(!presentation.isEnabled)
+        .accessibilityLabel(Text(verbatim: presentation.accessibilityLabel))
+        if let explanation = presentation.explanation {
+            button.accessibilityHint(Text(verbatim: explanation))
+        } else {
+            button
         }
     }
 }
