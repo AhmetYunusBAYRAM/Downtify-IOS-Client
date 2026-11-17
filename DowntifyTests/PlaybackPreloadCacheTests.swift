@@ -105,6 +105,21 @@ final class PlaybackPreloadCacheTests: XCTestCase {
         XCTAssertFalse(otherServer)
     }
 
+    func testRemoveAllDropsEntriesAndLeavesNoFiles() async throws {
+        let (cache, directory) = makeCache()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let key = makeKey()
+        try await cache.store(makeStream(length: 10), for: key)
+        let stored = await cache.contains(key)
+        XCTAssertTrue(stored)
+
+        await cache.removeAll()
+
+        let cached = await cache.stream(for: key)
+        XCTAssertNil(cached)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), [])
+    }
+
     private func makeCache(byteLimit: Int = 1_000_000) -> (PlaybackPreloadCache, URL) {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         return (PlaybackPreloadCache(directory: directory, byteLimit: byteLimit), directory)

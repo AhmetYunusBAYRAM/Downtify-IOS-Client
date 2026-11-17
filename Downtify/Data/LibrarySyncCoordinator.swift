@@ -57,6 +57,14 @@ final class LibrarySyncCoordinator {
         }
     }
 
+    /// Stops foreground syncing and waits for in-flight work to finish. Returns whether syncing was active.
+    func suspendAndWait() async -> Bool {
+        let wasActive = isForeground
+        setActive(false)
+        await foregroundTask?.value
+        return wasActive
+    }
+
     func runWhileActive() async {
         guard let updates = try? await sessionUpdates() else { return }
         var current: DeviceSession?

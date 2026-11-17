@@ -117,6 +117,14 @@ struct PlaybackListenOutbox {
         try FileManager.default.removeItem(at: file)
     }
 
+    func removeAll() throws {
+        do {
+            try FileManager.default.removeItem(at: root)
+        } catch CocoaError.fileNoSuchFile {
+            return
+        }
+    }
+
     private func directory(for scope: LibraryScope) -> URL {
         let key = "\(scope.serverID.utf8.count):\(scope.serverID)\(scope.account)"
         let digest = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()

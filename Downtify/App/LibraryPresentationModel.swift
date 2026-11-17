@@ -271,6 +271,12 @@ final class LibraryCollectionsModel: ObservableObject {
 
     func clearError() { actionError = nil }
 
+    /// Reloads queued actions from the database, e.g. after it was emptied by a data reset.
+    func reloadPendingActions() async throws {
+        guard let session else { pendingActions = []; return }
+        pendingActions = try await database.pendingActions(in: scope(session), deviceID: session.deviceID)
+    }
+
     func clearPlaylistMutationError() { playlistMutationError = nil }
 
     func playlist(named name: String) -> LibraryPlaylist? {

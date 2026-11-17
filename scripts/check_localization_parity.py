@@ -47,7 +47,8 @@ def format_localization_key(value):
                     "season", "number", "status", "model.cooldownSeconds", "selectedCatalogSongs.count", "successful", "expected",
                     "network.active", "network.maximum", "network.queued", "network.foregroundActive",
                     "network.foregroundQueued", "network.backgroundActive", "network.backgroundQueued",
-                    "playback.queue.upcomingCount", "activeTransfers", "pausedTransfers"
+                    "playback.queue.upcomingCount", "activeTransfers", "pausedTransfers",
+                    "pendingCount",
                 }:
                     result.append("%lld")
                 else:
@@ -78,6 +79,7 @@ for language, keys in key_sets.items():
 
 patterns = (
     r'(?:Text|Button|Label|Section|Picker|Toggle|LabeledContent|ProgressView|ContentUnavailableView)\(\s*"((?:[^"\\]|\\.)*)"',
+    r'\brow\(\s*"((?:[^"\\]|\\.)*)"',
     r'Link\(\s*"((?:[^"\\]|\\.)*)"',
     r'(?:navigationTitle|accessibilityLabel|accessibilityValue|accessibilityHint)\(\s*"((?:[^"\\]|\\.)*)"',
     r'String\(localized:\s*"((?:[^"\\]|\\.)*)"',

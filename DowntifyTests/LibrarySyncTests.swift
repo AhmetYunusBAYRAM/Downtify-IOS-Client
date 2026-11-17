@@ -374,6 +374,38 @@ final class LibrarySyncTests: XCTestCase {
         guard case .some(.none) = await iterator.next() else { return XCTFail("Expected signed out state") }
     }
 
+    func testRemoveAllClearsEveryLibraryTableAndKeepsStoreUsable() async throws {
+        let (database, _) = try temporaryDatabase()
+        let scope = LibraryScope(serverID: "server", username: "Alice", deviceID: "one")
+        let like = PendingCollectionAction(target: .like(trackID: "a"), desiredValue: true)
+        try await database.apply(LibraryPage(cursor: 10, full: true, tracks: [track("a"), track("b")], deleted: []),
+                                 etag: "first", in: scope, expected: nil)
+        try await database.saveBrowseData(Data("home".utf8), key: "home", in: scope)
+        try await database.appendPendingAction(like, in: scope, deviceID: "one")
+        let before = try await database.snapshot(for: scope)
+        XCTAssertEqual(before.tracks.count, 2)
+
+        try await database.removeAll()
+
+        let cleared = try await database.snapshot(for: scope)
+        XCTAssertNil(cleared.cursor)
+        XCTAssertTrue(cleared.tracks.isEmpty)
+        let checkpoint = try await database.checkpoint(for: scope)
+        XCTAssertNil(checkpoint)
+        let browse = try await database.browseData("home", in: scope)
+        XCTAssertNil(browse)
+        let actions = try await database.pendingActions(in: scope, deviceID: "one")
+        XCTAssertTrue(actions.isEmpty)
+        let missing = try await database.track(id: "a", in: scope)
+        XCTAssertNil(missing)
+
+        try await database.apply(LibraryPage(cursor: 3, full: true, tracks: [track("c")], deleted: []),
+                                 etag: "second", in: scope, expected: nil)
+        let updated = try await database.snapshot(for: scope)
+        XCTAssertEqual(updated.tracks.map(\.id), ["c"])
+        XCTAssertEqual(updated.cursor, 3)
+    }
+
     private func temporaryDatabase() throws -> (LibraryDatabase, URL) {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

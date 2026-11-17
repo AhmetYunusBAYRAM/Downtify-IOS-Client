@@ -631,6 +631,11 @@ final class ArtworkLoader: ObservableObject {
         cache.totalCostLimit = 32 * 1024 * 1024
     }
 
+    func removeAll() {
+        cache.removeAllObjects()
+        cachedSession = nil
+    }
+
     func image(for track: LibraryTrack, size: Int) async -> UIImage? {
         guard track.hasCover, !track.id.isEmpty else { return nil }
         return await image(key: "track:\(track.id):\(size)") { address in

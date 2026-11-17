@@ -14,6 +14,8 @@ struct AppContainer {
     let offlineDownloads: OfflineDownloads
     let serverDownloadQueue: ServerDownloadQueue
     let serverDownloads: ServerDownloadPresentationModel
+    let dataReset: AppDataReset
+    let storageSettings: StorageSettingsModel
 
     init(displayName: String = "Downtify") {
         self.displayName = displayName
@@ -85,6 +87,14 @@ struct AppContainer {
                 await serverDownloads?.queueDidChange()
             }
         )
-
+        dataReset = AppDataReset(
+            sync: LibrarySyncReset(coordinator: librarySync, presentation: presentation),
+            playback: controller, offline: offlineDownloads,
+            preloadCache: preloadCache, blockCache: playbackCache, artwork: artwork,
+            database: database, pendingActions: collections,
+            listenOutbox: PlaybackListenOutbox.applicationSupport(), savedQueues: PlaybackStateStore(),
+            networkFailures: NetworkOperationCoordinator.shared
+        )
+        storageSettings = StorageSettingsModel(reset: dataReset)
     }
 }
