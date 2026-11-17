@@ -485,3 +485,6 @@
 "Unlike song: %@" = "Dal kedvelésének visszavonása: %@";
 "Unfavorite playlist: %@" = "Lejátszási lista eltávolítása a kedvencek közül: %@";
 "Pending Actions" = "Függőben lévő műveletek";
+
+"Switch quality immediately" = "Minőség azonnali váltása";
+"When off, the current song keeps its quality when possible. The next song uses the new network’s quality." = "Kikapcsolva az aktuális szám lehetőség szerint megtartja a minőségét. A következő szám az új hálózat minőségét használja.";

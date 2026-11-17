@@ -485,3 +485,6 @@
 "Unlike song: %@" = "Şarkıyı beğenmekten vazgeç: %@";
 "Unfavorite playlist: %@" = "Çalma listesini favorilerden çıkar: %@";
 "Pending Actions" = "Bekleyen İşlemler";
+
+"Switch quality immediately" = "Kaliteyi hemen değiştir";
+"When off, the current song keeps its quality when possible. The next song uses the new network’s quality." = "Kapalıyken mevcut şarkı mümkün olduğunda kalitesini korur. Sonraki şarkı yeni ağın kalitesini kullanır.";

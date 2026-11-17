@@ -485,3 +485,6 @@
 "Unlike song: %@" = "Премахване на харесването на песента: %@";
 "Unfavorite playlist: %@" = "Премахване на плейлиста от любими: %@";
 "Pending Actions" = "Чакащи действия";
+
+"Switch quality immediately" = "Незабавна смяна на качеството";
+"When off, the current song keeps its quality when possible. The next song uses the new network’s quality." = "Когато е изключено, текущата песен запазва качеството си, когато е възможно. Следващата песен използва качеството за новата мрежа.";

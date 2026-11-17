@@ -485,3 +485,6 @@
 "Unlike song: %@" = "Je n’aime plus le titre : %@";
 "Unfavorite playlist: %@" = "Retirer des favoris : %@";
 "Pending Actions" = "Actions en attente";
+
+"Switch quality immediately" = "Changer immédiatement la qualité";
+"When off, the current song keeps its quality when possible. The next song uses the new network’s quality." = "Si cette option est désactivée, le morceau actuel conserve sa qualité lorsque possible. Le morceau suivant utilise la qualité du nouveau réseau.";

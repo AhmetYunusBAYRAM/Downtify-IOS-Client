@@ -485,3 +485,6 @@
 "Unlike song: %@" = "Δεν μου αρέσει το τραγούδι: %@";
 "Unfavorite playlist: %@" = "Αφαίρεση από τα αγαπημένα: %@";
 "Pending Actions" = "Εκκρεμείς ενέργειες";
+
+"Switch quality immediately" = "Άμεση αλλαγή ποιότητας";
+"When off, the current song keeps its quality when possible. The next song uses the new network’s quality." = "Όταν είναι απενεργοποιημένο, το τρέχον τραγούδι διατηρεί την ποιότητά του όπου είναι δυνατό. Το επόμενο χρησιμοποιεί την ποιότητα του νέου δικτύου.";
