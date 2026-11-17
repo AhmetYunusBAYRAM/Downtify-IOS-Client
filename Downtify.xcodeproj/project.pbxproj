@@ -59,6 +59,8 @@
 		000000000000000000000208 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogActionWiringTests.swift; sourceTree = "<group>"; };
 		000000000000000000000203 = { isa = PBXBuildFile; fileRef = 000000000000000000000202; };
 		000000000000000000000209 = { isa = PBXBuildFile; fileRef = 000000000000000000000208; };
+		00000000000000000000020A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSaveStateFlowTests.swift; sourceTree = "<group>"; };
+		00000000000000000000020B = { isa = PBXBuildFile; fileRef = 00000000000000000000020A; };
 		000000000000000000000067 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerDownloadQueue.swift; sourceTree = "<group>"; };
 		000000000000000000000068 = { isa = PBXBuildFile; fileRef = 000000000000000000000067; };
 		000000000000000000000065 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineDownloadAPI.swift; sourceTree = "<group>"; };
@@ -496,6 +498,7 @@
 				000000000000000000000206,
 				000000000000000000000202,
 				000000000000000000000208,
+				00000000000000000000020A,
 				00000000000000000000009A,
 				000000000000000000000103,
 				00000000000000000000009C,
@@ -650,6 +653,7 @@
 				000000000000000000000207,
 				000000000000000000000203,
 				000000000000000000000209,
+				00000000000000000000020B,
 				00000000000000000000009B,
 				000000000000000000000104,
 				00000000000000000000009D,
