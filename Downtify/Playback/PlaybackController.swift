@@ -568,6 +568,10 @@ final class PlaybackController: ObservableObject {
                     return
                 }
                 try requireCurrentLoad(generation)
+                if position == 0, let prepare = stream.prepare {
+                    try await prepareStartupBuffer(prepare)
+                    try requireCurrentLoad(generation)
+                }
                 availableQualities = stream.availableQualities
                 streamQuality = stream.quality
                 loadedFromDisk = stream.fileURL != nil
@@ -594,6 +598,22 @@ final class PlaybackController: ObservableObject {
                     fail(failure)
                 }
             }
+        }
+    }
+
+    private func prepareStartupBuffer(_ prepare: @escaping @Sendable () async throws -> Void) async throws {
+        do {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask { try await prepare() }
+                group.addTask {
+                    try await Task.sleep(for: .seconds(4))
+                    throw StartupBufferTimeout()
+                }
+                defer { group.cancelAll() }
+                try await group.next()
+            }
+        } catch is StartupBufferTimeout {
+            // Give the player a chance to start rather than wait indefinitely.
         }
     }
 
@@ -836,7 +856,10 @@ final class PlaybackController: ObservableObject {
         let oldQuality = preferredQuality
         network = path
         reporting?.update(session: session, online: path != .unavailable)
-        if previous != path { cancelPrefetch() }
+        if previous != path {
+            cancelPrefetch()
+            Task { await PlaybackThroughput.shared.reset() }
+        }
         guard path != .unavailable else {
             if previous != path {
                 prefetchUpcoming()
@@ -1004,3 +1027,5 @@ final class PlaybackController: ObservableObject {
         return duration
     }
 }
+
+private struct StartupBufferTimeout: Error {}

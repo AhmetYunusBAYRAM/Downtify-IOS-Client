@@ -350,7 +350,15 @@ struct NetworkOperationSnapshot: Equatable, Sendable {
 }
 
 actor NetworkOperationCoordinator {
-    static let shared = NetworkOperationCoordinator(limit: 2)
+    static let limitDefaultsKey = "debug.networkOperationLimit"
+    static let allowedLimits = 1...8
+    static let defaultLimit = 4
+    static let shared = NetworkOperationCoordinator(limit: savedLimit)
+
+    private static var savedLimit: Int {
+        let value = UserDefaults.standard.object(forKey: limitDefaultsKey) as? Int ?? defaultLimit
+        return min(allowedLimits.upperBound, max(allowedLimits.lowerBound, value))
+    }
     private static let failuresDefaultsKey = "debug.networkOverlay.recentFailures"
 
     private struct Waiter {
@@ -367,15 +375,20 @@ actor NetworkOperationCoordinator {
         var preemptionRequested = false
     }
 
-    private let limit: Int
+    private var limit: Int
     private var active: [UUID: ActiveOperation] = [:]
     private var order: UInt64 = 0
     private var waiters: [Waiter] = []
     private var recentFailures = UserDefaults.standard.stringArray(forKey: failuresDefaultsKey) ?? []
 
-    init(limit: Int = 2) { self.limit = max(1, limit) }
+    init(limit: Int = NetworkOperationCoordinator.defaultLimit) { self.limit = max(1, limit) }
 
     var queuedOperationCount: Int { waiters.count }
+
+    func setLimit(_ value: Int) {
+        limit = min(Self.allowedLimits.upperBound, max(Self.allowedLimits.lowerBound, value))
+        startWaitingOperations()
+    }
 
     func snapshot() -> NetworkOperationSnapshot {
         let foregroundActive = active.values.filter { $0.priority == .userFacing }.count
@@ -440,7 +453,11 @@ actor NetworkOperationCoordinator {
 
     func release(_ id: UUID) {
         guard active.removeValue(forKey: id) != nil else { return }
-        if !waiters.isEmpty {
+        startWaitingOperations()
+    }
+
+    private func startWaitingOperations() {
+        while active.count < limit && !waiters.isEmpty {
             let index = waiters.indices.max {
                 let lhs = waiters[$0], rhs = waiters[$1]
                 return lhs.priority == rhs.priority ? lhs.order > rhs.order : lhs.priority.rawValue < rhs.priority.rawValue
