@@ -244,6 +244,20 @@ actor LibraryDatabase {
         }
     }
 
+    /// Empties every table (all scopes and accounts) so the library is rebuilt from the server.
+    /// The schema and `user_version` are left untouched.
+    func removeAll() async throws {
+        let db = try database()
+        try db.transaction("BEGIN IMMEDIATE") {
+            for table in ["library_tracks", "library_checkpoints", "library_browse", "pending_collection_actions"] {
+                try db.withStatement("DELETE FROM \(table)") { try $0.execute() }
+            }
+        }
+        // Best effort: reclaim file space; failures leave the (already empty) cache valid.
+        db.executeIgnoringErrors("PRAGMA wal_checkpoint(TRUNCATE)")
+        db.executeIgnoringErrors("VACUUM")
+    }
+
     private func database() throws -> SQLiteConnection {
         if let connection { return connection }
 
@@ -387,6 +401,10 @@ private final class SQLiteConnection {
             try? execute("ROLLBACK")
             throw error
         }
+    }
+
+    func executeIgnoringErrors(_ sql: String) {
+        try? execute(sql)
     }
 
     private func execute(_ sql: String) throws {
