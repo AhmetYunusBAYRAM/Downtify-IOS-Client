@@ -16,12 +16,24 @@ final class PlaybackPreloadCacheTests: XCTestCase {
             }, for: key)
         }
         await gate.waitUntilReading()
+        let loading = await cache.snapshot(for: [key])
+        XCTAssertEqual(loading.windowCount, 1)
+        XCTAssertEqual(loading.readyCount, 0)
+        XCTAssertFalse(loading.currentReady)
+        XCTAssertEqual(loading.activeCount, 1)
+        XCTAssertEqual(loading.downloadedBytes, PlaybackCache.blockSize)
+        XCTAssertEqual(loading.downloadingBytes, length)
         let partial = await cache.stream(for: key)
         XCTAssertNil(partial)
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path).count, 1)
 
         await gate.resume()
         try await task.value
+        let finished = await cache.snapshot(for: [key])
+        XCTAssertEqual(finished.readyCount, 1)
+        XCTAssertTrue(finished.currentReady)
+        XCTAssertEqual(finished.activeCount, 0)
+        XCTAssertEqual(finished.storedBytes, length)
         let cached = await cache.stream(for: key)
         let stream = try XCTUnwrap(cached)
         let boundary = PlaybackCache.blockSize - 1

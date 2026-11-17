@@ -483,3 +483,6 @@
 "The playlist changed or is no longer available. Choose it again." = "The playlist changed or is no longer available. Choose it again.";
 "Unlike song: %@" = "Unlike song: %@";
 "Unfavorite playlist: %@" = "Unfavorite playlist: %@";
+
+"Switch quality immediately" = "Switch quality immediately";
+"When off, the current song keeps its quality when possible. The next song uses the new network’s quality." = "When off, the current song keeps its quality when possible. The next song uses the new network’s quality.";

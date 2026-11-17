@@ -320,6 +320,8 @@ protocol PlaybackStateStoring {
     func save(_ queue: SavedPlaybackQueue, for scope: LibraryScope)
     func loadQualities() -> PlaybackQualities
     func saveQualities(_ qualities: PlaybackQualities)
+    func loadImmediateQualitySwitch() -> Bool
+    func saveImmediateQualitySwitch(_ enabled: Bool)
     func loadBuffering() -> PlaybackBuffering
     func saveBuffering(_ buffering: PlaybackBuffering)
     func loadNormalization() -> PlaybackNormalization
@@ -327,6 +329,8 @@ protocol PlaybackStateStoring {
 }
 
 extension PlaybackStateStoring {
+    func loadImmediateQualitySwitch() -> Bool { false }
+    func saveImmediateQualitySwitch(_ enabled: Bool) {}
     func loadBuffering() -> PlaybackBuffering { PlaybackBuffering() }
     func saveBuffering(_ buffering: PlaybackBuffering) {}
     func loadNormalization() -> PlaybackNormalization { .off }
@@ -341,6 +345,8 @@ struct PlaybackStateStore: PlaybackStateStoring {
     func loadQualities() -> PlaybackQualities { load("playback.qualities") ?? PlaybackQualities() }
     func saveQualities(_ qualities: PlaybackQualities) { save(qualities, key: "playback.qualities") }
 
+    func loadImmediateQualitySwitch() -> Bool { defaults.object(forKey: "playback.immediateQualitySwitch") as? Bool ?? false }
+    func saveImmediateQualitySwitch(_ enabled: Bool) { defaults.set(enabled, forKey: "playback.immediateQualitySwitch") }
     func loadBuffering() -> PlaybackBuffering { load("playback.buffering") ?? PlaybackBuffering() }
     func saveBuffering(_ buffering: PlaybackBuffering) { save(buffering, key: "playback.buffering") }
     func loadNormalization() -> PlaybackNormalization { load("playback.normalization") ?? .off }
