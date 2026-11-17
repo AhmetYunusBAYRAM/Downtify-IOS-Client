@@ -7,7 +7,7 @@ struct LibraryHomeView: View {
     @Binding var appearance: DowntifyAppearance
     let connection: ConnectionService
     let serverDownloadQueue: ServerDownloadQueue
-    let serverDownloads: ServerDownloadPresentationModel
+    @ObservedObject var serverDownloads: ServerDownloadPresentationModel
     let signOut: @MainActor () async throws -> Void
     @EnvironmentObject private var collections: LibraryCollectionsModel
     @EnvironmentObject private var catalogPresentation: CatalogPresentationModel
@@ -364,7 +364,7 @@ struct LibraryHomeView: View {
                           onDownloadAlbum: { url, tracks in Task { await serverDownloads.requestAlbum(url: url, expected: tracks) } },
                           albumDownloadState: { serverDownloads.actionState(forAlbumURL: $0) },
                           onDownload: { song in Task { await serverDownloads.request(song: song) } },
-                          downloadState: { serverDownloads.actionState(for: $0) },
+                          downloadState: { catalogLibraryState(for: $0) },
                           onAddToDevice: { addCatalogSongToDevice($0) },
                           deviceState: { catalogDeviceState(for: $0) })
     }
@@ -373,6 +373,10 @@ struct LibraryHomeView: View {
         library.membership.track(for: song)
             ?? serverDownloads.completedFilename(forActionKey: song.id.description)
                 .flatMap(library.membership.track(forServerFilename:))
+    }
+
+    private func catalogLibraryState(for song: CatalogSong) -> ServerDownloadActionState {
+        .catalogRow(server: serverDownloads.actionState(for: song), inLibrary: libraryTrack(forCatalogSong: song) != nil)
     }
 
     private func catalogDeviceState(for song: CatalogSong) -> DeviceSaveState {
@@ -403,7 +407,7 @@ struct LibraryHomeView: View {
             onPlay: { song in playCatalogSong(song) },
             onDownload: { song in Task { await serverDownloads.request(song: song) } },
             onDownloadAlbum: { url, tracks in Task { await serverDownloads.requestAlbum(url: url, expected: tracks) } },
-            downloadState: { serverDownloads.actionState(for: $0) },
+            downloadState: { catalogLibraryState(for: $0) },
             onAddToDevice: { addCatalogSongToDevice($0) },
             deviceState: { catalogDeviceState(for: $0) },
             albumDownloadState: { serverDownloads.actionState(forAlbumURL: $0) },

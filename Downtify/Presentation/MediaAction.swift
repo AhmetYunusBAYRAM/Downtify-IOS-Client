@@ -140,3 +140,10 @@ struct MediaActionButton: View {
         }
     }
 }
+
+extension ServerDownloadActionState {
+    /// The library-button state for a catalog row: a row that resolves to a library track is in the library.
+    static func catalogRow(server: ServerDownloadActionState, inLibrary: Bool) -> ServerDownloadActionState {
+        inLibrary ? .accepted : server
+    }
+}
