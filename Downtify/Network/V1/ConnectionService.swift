@@ -408,6 +408,11 @@ actor NetworkOperationCoordinator {
         UserDefaults.standard.set(recentFailures, forKey: Self.failuresDefaultsKey)
     }
 
+    func clearRecentFailures() {
+        recentFailures.removeAll()
+        UserDefaults.standard.removeObject(forKey: Self.failuresDefaultsKey)
+    }
+
     func withOperation<T>(priority: NetworkOperationPriority? = nil,
                           operation: () async throws -> T) async throws -> T {
         let lease = try await acquire(priority: priority ?? NetworkOperationContext.priority)
