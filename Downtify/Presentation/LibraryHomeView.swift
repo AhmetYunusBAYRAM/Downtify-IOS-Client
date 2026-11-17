@@ -888,7 +888,7 @@ private struct LibraryContextView: View {
                 for track in tracks where queued.insert(track.id).inserted {
                     do { try downloads.enqueue(track) } catch { failures += 1 }
                 }
-                downloadMessage = failures == 0 ? "Offline downloads requested." : "Some downloads could not be started."
+                downloadMessage = failures == 0 ? "Adding songs to this device." : "Some downloads could not be started."
             }
         }
     }
@@ -1145,7 +1145,7 @@ private struct ArtistCatalogAlbumView: View {
                 }
             }
             if !songs.isEmpty {
-                Text("Songs are added after the server downloads them and the library syncs.")
+                Text("Songs appear in your Library after the server adds them and the library syncs.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
         }
@@ -1431,7 +1431,7 @@ private struct LibraryTrackList: View {
                     _ = try downloads.enqueue(track)
                 }
                 downloadMessage = "Adding to this device."
-            } catch { downloadMessage = "Could not start this download." }
+            } catch { downloadMessage = "Could not add this song to the device." }
         }
         switch state {
         case .pending, .transferring:
@@ -1441,8 +1441,8 @@ private struct LibraryTrackList: View {
         case .saved:
             if let record {
                 Button(String(localized: "Remove from Device"), systemImage: "trash", role: .destructive) {
-                    do { try downloads.delete(record.id); downloadMessage = "Offline copy removed." }
-                    catch { downloadMessage = "Could not remove this offline copy." }
+                    do { try downloads.delete(record.id); downloadMessage = "Removed from this device." }
+                    catch { downloadMessage = "Could not remove this song from the device." }
                 }
             }
         default:

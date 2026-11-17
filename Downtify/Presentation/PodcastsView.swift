@@ -232,19 +232,19 @@ private struct PodcastEpisodeView: View {
                     }
                     .buttonStyle(.borderedProminent)
                 } else {
-                    Text("No supported audio source is available. Try downloading the episode to your server.")
+                    Text("No supported audio source is available. Try adding the episode to your Library.")
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
                 if episode.isDownloaded {
                     Label(String(localized: "In Library"), systemImage: "checkmark.circle.fill")
                 } else if downloadTask != nil {
-                    ProgressView("Downloading to server…")
+                    ProgressView("Adding to Library…")
                 } else {
                     Button(String(localized: "Add to Library"), systemImage: "plus.circle") { download() }
                         .buttonStyle(.bordered)
                 }
                 if downloadFailed {
-                    Text("Could not download this episode. Try again.").font(.footnote).foregroundStyle(DowntifyStyle.error)
+                    Text("Could not add this episode to your Library. Try again.").font(.footnote).foregroundStyle(DowntifyStyle.error)
                 }
                 if let description = episode.description, !description.isEmpty {
                     Text("Episode notes").font(.headline).accessibilityAddTraits(.isHeader)

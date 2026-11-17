@@ -55,7 +55,7 @@
 "Connect to server" = "Conectar ao servidor";
 "Connect to your Downtify server to explore and play your library." = "Conecte-se ao seu servidor Downtify para explorar e ouvir sua biblioteca.";
 "Connecting to server" = "Conectando ao servidor";
-"Could not download this episode. Try again." = "Não foi possível baixar este episódio. Tente novamente.";
+"Could not add this episode to your Library. Try again." = "Não foi possível adicionar este episódio à sua biblioteca. Tente novamente.";
 "Could not load episodes" = "Não foi possível carregar episódios";
 "Could not load music trash" = "Não foi possível carregar a lixeira de músicas";
 "Could not load podcasts" = "Não foi possível carregar podcasts";
@@ -67,10 +67,9 @@
 "Could not read the saved server connection." = "Não foi possível ler a conexão salva do servidor.";
 "Could not refresh episodes. Pull to retry." = "Não foi possível atualizar episódios. Puxe para tentar novamente.";
 "Could not refresh podcasts. Pull to retry." = "Não foi possível atualizar podcasts. Puxe para tentar novamente.";
-"Could not remove this offline copy." = "Não foi possível remover esta cópia offline.";
 "Could not save playback progress to the server." = "Não foi possível salvar o progresso da reprodução no servidor.";
 "Could not sign out. Please try again." = "Não foi possível sair. Tente novamente.";
-"Could not start this download." = "Não foi possível iniciar este download.";
+"Could not add this song to the device." = "Não foi possível adicionar esta música ao dispositivo.";
 "Current episode" = "Episódio atual";
 "Current track" = "Música atual";
 "Dark" = "Escuro";
@@ -79,7 +78,7 @@
 "Discover" = "Descobrir";
 "Dismiss" = "Dispensar";
 "Done" = "Concluído";
-"Downloading to server…" = "Baixando para o servidor…";
+"Adding to Library…" = "Adicionando à biblioteca…";
 "Downloads" = "Baixados";
 "Downtify" = "Downtify";
 "Downtify for iOS is an independent client for the Downtify server. Artwork, names, and media are supplied by your server and their respective rights holders." = "O Downtify para iOS é um cliente independente para o servidor Downtify. Capas, nomes e mídias são fornecidos pelo seu servidor e seus respectivos detentores de direitos.";
@@ -137,7 +136,7 @@
 "No playlists" = "Nenhuma playlist";
 "No songs available" = "Nenhuma música disponível";
 "No subscribed shows" = "Nenhum programa assinado";
-"No supported audio source is available. Try downloading the episode to your server." = "Nenhuma fonte de áudio compatível está disponível. Tente baixar o episódio para o servidor.";
+"No supported audio source is available. Try adding the episode to your Library." = "Nenhuma fonte de áudio compatível está disponível. Tente adicionar o episódio à sua biblioteca.";
 "Nothing to jump back into yet" = "Nada para retomar por enquanto";
 "Now Playing" = "Reproduzindo";
 "Now playing, %@ by %@" = "Tocando agora, %@, de %@";
@@ -145,8 +144,8 @@
 "OK" = "OK";
 "OLED black" = "Preto OLED";
 "Off" = "Desativado";
-"Offline copy removed." = "Cópia offline removida.";
-"Offline downloads requested." = "Downloads offline solicitados.";
+"Removed from this device." = "Removido deste dispositivo.";
+"Adding songs to this device." = "Adicionando músicas a este dispositivo.";
 "One" = "Um";
 "Open Now Playing" = "Abrir Reproduzindo";
 "Open Settings" = "Abrir Ajustes";
@@ -392,7 +391,7 @@
 "Search Deezer's catalog for songs, albums, and artists." = "Pesquise músicas, álbuns e artistas no catálogo da Deezer.";
 "Search category" = "Categoria de pesquisa";
 "Searching catalog…" = "Pesquisando no catálogo…";
-"Songs are added after the server downloads them and the library syncs." = "As músicas são adicionadas após o servidor baixá-las e a biblioteca sincronizar.";
+"Songs appear in your Library after the server adds them and the library syncs." = "As músicas aparecem na sua biblioteca depois que o servidor as adiciona e a biblioteca sincroniza.";
 "This feature is unavailable on this server." = "Este recurso está indisponível neste servidor.";
 "This request is not valid." = "Esta solicitação é inválida.";
 /* Add to Library, Add to Device and Library Requests */

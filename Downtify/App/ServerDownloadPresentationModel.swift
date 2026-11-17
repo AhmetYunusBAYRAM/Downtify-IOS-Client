@@ -299,12 +299,12 @@ final class ServerDownloadPresentationModel: ObservableObject {
             return "The server could not complete this request (\(status))."
         }
         if let apiError = error as? APIError, apiError == .insecureTransportConsentRequired {
-            return "Allow HTTP for this server before requesting a download."
+            return "Allow HTTP for this server before adding to your Library."
         }
         if let catalogError = error as? CatalogAPIError, catalogError == .libraryOnly {
-            return "Server downloads are unavailable in library-only mode."
+            return "Adding to Library is unavailable in library-only mode."
         }
-        return "Could not complete the server download request."
+        return "Could not add this to your Library."
     }
 
     private func actionFailure(for error: Error) -> ServerDownloadActionState {

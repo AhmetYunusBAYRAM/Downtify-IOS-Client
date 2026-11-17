@@ -55,7 +55,7 @@
 "Connect to server" = "Свързване със сървър";
 "Connect to your Downtify server to explore and play your library." = "Свържете се с вашия Downtify сървър, за да разглеждате и слушате музиката си.";
 "Connecting to server" = "Свързване със сървъра";
-"Could not download this episode. Try again." = "Епизодът не можа да бъде изтеглен. Опитайте отново.";
+"Could not add this episode to your Library. Try again." = "Епизодът не може да бъде добавен във вашата библиотека. Опитайте отново.";
 "Could not load episodes" = "Епизодите не могат да бъдат заредени";
 "Could not load music trash" = "Кошчето за музика не може да бъде заредено";
 "Could not load podcasts" = "Подкастите не могат да бъдат заредени";
@@ -67,10 +67,9 @@
 "Could not read the saved server connection." = "Запазената връзка със сървъра не може да бъде прочетена.";
 "Could not refresh episodes. Pull to retry." = "Епизодите не могат да бъдат обновени. Издърпайте, за да опитате отново.";
 "Could not refresh podcasts. Pull to retry." = "Подкастите не могат да бъдат обновени. Издърпайте, за да опитате отново.";
-"Could not remove this offline copy." = "Офлайн копието не може да бъде премахнато.";
 "Could not save playback progress to the server." = "Напредъкът на възпроизвеждането не можа да бъде запазен на сървъра.";
 "Could not sign out. Please try again." = "Излизането не бе успешно. Опитайте отново.";
-"Could not start this download." = "Изтеглянето не може да бъде стартирано.";
+"Could not add this song to the device." = "Песента не може да бъде добавена към устройството.";
 "Current episode" = "Текущ епизод";
 "Current track" = "Текуща песен";
 "Dark" = "Тъмна";
@@ -79,7 +78,7 @@
 "Discover" = "Откриване";
 "Dismiss" = "Затваряне";
 "Done" = "Готово";
-"Downloading to server…" = "Изтегляне на сървъра…";
+"Adding to Library…" = "Добавяне в библиотеката…";
 "Downloads" = "Изтегляния";
 "Downtify" = "Downtify";
 "Downtify for iOS is an independent client for the Downtify server. Artwork, names, and media are supplied by your server and their respective rights holders." = "Downtify за iOS е независим клиент за сървъра Downtify. Обложките, имената и медиите се предоставят от вашия сървър и съответните им правоносители.";
@@ -137,7 +136,7 @@
 "No playlists" = "Няма плейлисти";
 "No songs available" = "Няма налични песни";
 "No subscribed shows" = "Няма абонирани предавания";
-"No supported audio source is available. Try downloading the episode to your server." = "Няма наличен поддържан аудио източник. Опитайте да изтеглите епизода на сървъра.";
+"No supported audio source is available. Try adding the episode to your Library." = "Няма наличен поддържан аудио източник. Опитайте да добавите епизода във вашата библиотека.";
 "Nothing to jump back into yet" = "Все още няма музика за продължаване";
 "Now Playing" = "Сега се изпълнява";
 "Now playing, %@ by %@" = "Сега се изпълнява: %@ от %@";
@@ -145,8 +144,8 @@
 "OK" = "Добре";
 "OLED black" = "OLED черна";
 "Off" = "Изкл.";
-"Offline copy removed." = "Офлайн копието е премахнато.";
-"Offline downloads requested." = "Заявени са офлайн изтегляния.";
+"Removed from this device." = "Премахнато от това устройство.";
+"Adding songs to this device." = "Песните се добавят на това устройство.";
 "One" = "Едно";
 "Open Now Playing" = "Отваряне на „Сега се изпълнява“";
 "Open Settings" = "Отваряне на настройките";
@@ -392,7 +391,7 @@
 "Search Deezer's catalog for songs, albums, and artists." = "Търсете песни, албуми и изпълнители в каталога на Deezer.";
 "Search category" = "Категория на търсенето";
 "Searching catalog…" = "Търсене в каталога…";
-"Songs are added after the server downloads them and the library syncs." = "Песните се добавят, след като сървърът ги изтегли и библиотеката се синхронизира.";
+"Songs appear in your Library after the server adds them and the library syncs." = "Песните се появяват във вашата библиотека, след като сървърът ги добави и библиотеката се синхронизира.";
 "This feature is unavailable on this server." = "Тази функция не е достъпна на този сървър.";
 "This request is not valid." = "Невалидна заявка.";
 /* Add to Library, Add to Device and Library Requests */

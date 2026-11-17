@@ -55,7 +55,7 @@
 "Connect to server" = "Csatlakozás a szerverhez";
 "Connect to your Downtify server to explore and play your library." = "Csatlakozzon a Downtify szerveréhez a zenetár böngészéséhez és lejátszásához.";
 "Connecting to server" = "Csatlakozás a szerverhez";
-"Could not download this episode. Try again." = "Az epizód letöltése nem sikerült. Próbálja újra.";
+"Could not add this episode to your Library. Try again." = "Az epizódot nem sikerült hozzáadni a könyvtárhoz. Próbálja újra.";
 "Could not load episodes" = "Az epizódok nem tölthetők be";
 "Could not load music trash" = "A zenei lomtár nem tölthető be";
 "Could not load podcasts" = "A podcastok nem tölthetők be";
@@ -67,10 +67,9 @@
 "Could not read the saved server connection." = "A mentett szerverkapcsolat nem olvasható.";
 "Could not refresh episodes. Pull to retry." = "Az epizódok frissítése nem sikerült. Húzza le az újrapróbáláshoz.";
 "Could not refresh podcasts. Pull to retry." = "A podcastok frissítése nem sikerült. Húzza le az újrapróbáláshoz.";
-"Could not remove this offline copy." = "Az offline példány eltávolítása nem sikerült.";
 "Could not save playback progress to the server." = "A lejátszási előrehaladás nem menthető a szerverre.";
 "Could not sign out. Please try again." = "A kijelentkezés nem sikerült. Próbáld újra.";
-"Could not start this download." = "A letöltés indítása nem sikerült.";
+"Could not add this song to the device." = "A dalt nem sikerült hozzáadni az eszközhöz.";
 "Current episode" = "Aktuális epizód";
 "Current track" = "Aktuális dal";
 "Dark" = "Sötét";
@@ -79,7 +78,7 @@
 "Discover" = "Felfedezés";
 "Dismiss" = "Elvetés";
 "Done" = "Kész";
-"Downloading to server…" = "Letöltés a szerverre…";
+"Adding to Library…" = "Hozzáadás a könyvtárhoz…";
 "Downloads" = "Letöltések";
 "Downtify" = "Downtify";
 "Downtify for iOS is an independent client for the Downtify server. Artwork, names, and media are supplied by your server and their respective rights holders." = "A Downtify iOS-re a Downtify szerver független kliense. A borítókat, neveket és médiatartalmakat a szerver és azok jogtulajdonosai biztosítják.";
@@ -137,7 +136,7 @@
 "No playlists" = "Nincsenek lejátszási listák";
 "No songs available" = "Nincsenek elérhető dalok";
 "No subscribed shows" = "Nincsenek feliratkozott műsorok";
-"No supported audio source is available. Try downloading the episode to your server." = "Nem érhető el támogatott hangforrás. Próbálja meg letölteni az epizódot a szerverére.";
+"No supported audio source is available. Try adding the episode to your Library." = "Nem érhető el támogatott hangforrás. Próbálja meg hozzáadni az epizódot a könyvtárához.";
 "Nothing to jump back into yet" = "Még nincs mit folytatni";
 "Now Playing" = "Most játszott";
 "Now playing, %@ by %@" = "Most szól: %@, előadó: %@";
@@ -145,8 +144,8 @@
 "OK" = "OK";
 "OLED black" = "OLED fekete";
 "Off" = "Ki";
-"Offline copy removed." = "Az offline példány eltávolítva.";
-"Offline downloads requested." = "Offline letöltések kérve.";
+"Removed from this device." = "Eltávolítva erről az eszközről.";
+"Adding songs to this device." = "Dalok hozzáadása ehhez az eszközhöz.";
 "One" = "Egy";
 "Open Now Playing" = "Most játszott megnyitása";
 "Open Settings" = "Beállítások megnyitása";
@@ -392,7 +391,7 @@
 "Search Deezer's catalog for songs, albums, and artists." = "Dalok, albumok és előadók keresése a Deezer katalógusában.";
 "Search category" = "Keresési kategória";
 "Searching catalog…" = "Keresés a katalógusban…";
-"Songs are added after the server downloads them and the library syncs." = "A dalok azután kerülnek be, hogy a kiszolgáló letöltötte őket és a könyvtár szinkronizálódott.";
+"Songs appear in your Library after the server adds them and the library syncs." = "A dalok azután jelennek meg a könyvtárban, hogy a kiszolgáló hozzáadta őket és a könyvtár szinkronizálódott.";
 "This feature is unavailable on this server." = "Ez a funkció ezen a kiszolgálón nem érhető el.";
 "This request is not valid." = "Érvénytelen kérés.";
 /* Add to Library, Add to Device and Library Requests */

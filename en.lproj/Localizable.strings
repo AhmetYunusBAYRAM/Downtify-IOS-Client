@@ -55,7 +55,7 @@
 "Connect to server" = "Connect to server";
 "Connect to your Downtify server to explore and play your library." = "Connect to your Downtify server to explore and play your library.";
 "Connecting to server" = "Connecting to server";
-"Could not download this episode. Try again." = "Could not download this episode. Try again.";
+"Could not add this episode to your Library. Try again." = "Could not add this episode to your Library. Try again.";
 "Could not load episodes" = "Could not load episodes";
 "Could not load music trash" = "Could not load music trash";
 "Could not load podcasts" = "Could not load podcasts";
@@ -67,10 +67,9 @@
 "Could not read the saved server connection." = "Could not read the saved server connection.";
 "Could not refresh episodes. Pull to retry." = "Could not refresh episodes. Pull to retry.";
 "Could not refresh podcasts. Pull to retry." = "Could not refresh podcasts. Pull to retry.";
-"Could not remove this offline copy." = "Could not remove this offline copy.";
 "Could not save playback progress to the server." = "Could not save playback progress to the server.";
 "Could not sign out. Please try again." = "Could not sign out. Please try again.";
-"Could not start this download." = "Could not start this download.";
+"Could not add this song to the device." = "Could not add this song to the device.";
 "Current episode" = "Current episode";
 "Current track" = "Current track";
 "Dark" = "Dark";
@@ -79,7 +78,7 @@
 "Discover" = "Discover";
 "Dismiss" = "Dismiss";
 "Done" = "Done";
-"Downloading to server…" = "Downloading to server…";
+"Adding to Library…" = "Adding to Library…";
 "Downloads" = "Downloads";
 "Downtify" = "Downtify";
 "Downtify for iOS is an independent client for the Downtify server. Artwork, names, and media are supplied by your server and their respective rights holders." = "Downtify for iOS is an independent client for the Downtify server. Artwork, names, and media are supplied by your server and their respective rights holders.";
@@ -137,7 +136,7 @@
 "No playlists" = "No playlists";
 "No songs available" = "No songs available";
 "No subscribed shows" = "No subscribed shows";
-"No supported audio source is available. Try downloading the episode to your server." = "No supported audio source is available. Try downloading the episode to your server.";
+"No supported audio source is available. Try adding the episode to your Library." = "No supported audio source is available. Try adding the episode to your Library.";
 "Nothing to jump back into yet" = "Nothing to jump back into yet";
 "Now Playing" = "Now Playing";
 "Now playing, %@ by %@" = "Now playing, %@ by %@";
@@ -145,8 +144,8 @@
 "OK" = "OK";
 "OLED black" = "OLED black";
 "Off" = "Off";
-"Offline copy removed." = "Offline copy removed.";
-"Offline downloads requested." = "Offline downloads requested.";
+"Removed from this device." = "Removed from this device.";
+"Adding songs to this device." = "Adding songs to this device.";
 "One" = "One";
 "Open Now Playing" = "Open Now Playing";
 "Open Settings" = "Open Settings";
@@ -392,7 +391,7 @@
 "Search Deezer's catalog for songs, albums, and artists." = "Search Deezer's catalog for songs, albums, and artists.";
 "Search category" = "Search category";
 "Searching catalog…" = "Searching catalog…";
-"Songs are added after the server downloads them and the library syncs." = "Songs are added after the server downloads them and the library syncs.";
+"Songs appear in your Library after the server adds them and the library syncs." = "Songs appear in your Library after the server adds them and the library syncs.";
 "This feature is unavailable on this server." = "This feature is unavailable on this server.";
 "This request is not valid." = "This request is not valid.";
 /* Add to Library, Add to Device and Library Requests */

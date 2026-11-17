@@ -55,7 +55,7 @@
 "Connect to server" = "Sunucuya bağlan";
 "Connect to your Downtify server to explore and play your library." = "Kitaplığınızı keşfetmek ve dinlemek için Downtify sunucunuza bağlanın.";
 "Connecting to server" = "Sunucuya bağlanılıyor";
-"Could not download this episode. Try again." = "Bu bölüm indirilemedi. Yeniden deneyin.";
+"Could not add this episode to your Library. Try again." = "Bu bölüm kitaplığınıza eklenemedi. Yeniden deneyin.";
 "Could not load episodes" = "Bölümler yüklenemedi";
 "Could not load music trash" = "Müzik çöp kutusu yüklenemedi";
 "Could not load podcasts" = "Podcastler yüklenemedi";
@@ -67,10 +67,9 @@
 "Could not read the saved server connection." = "Kaydedilmiş sunucu bağlantısı okunamadı.";
 "Could not refresh episodes. Pull to retry." = "Bölümler yenilenemedi. Yeniden denemek için aşağı çekin.";
 "Could not refresh podcasts. Pull to retry." = "Podcastler yenilenemedi. Yeniden denemek için aşağı çekin.";
-"Could not remove this offline copy." = "Bu çevrimdışı kopya kaldırılamadı.";
 "Could not save playback progress to the server." = "Oynatma ilerlemesi sunucuya kaydedilemedi.";
 "Could not sign out. Please try again." = "Oturum kapatılamadı. Lütfen yeniden deneyin.";
-"Could not start this download." = "Bu indirme başlatılamadı.";
+"Could not add this song to the device." = "Bu şarkı cihaza eklenemedi.";
 "Current episode" = "Geçerli bölüm";
 "Current track" = "Geçerli parça";
 "Dark" = "Koyu";
@@ -79,7 +78,7 @@
 "Discover" = "Keşfet";
 "Dismiss" = "Kapat";
 "Done" = "Bitti";
-"Downloading to server…" = "Sunucuya indiriliyor…";
+"Adding to Library…" = "Kitaplığa ekleniyor…";
 "Downloads" = "İndirilenler";
 "Downtify" = "Downtify";
 "Downtify for iOS is an independent client for the Downtify server. Artwork, names, and media are supplied by your server and their respective rights holders." = "iOS için Downtify, Downtify sunucusu için bağımsız bir istemcidir. Kapaklar, adlar ve medya sunucunuz ve ilgili hak sahipleri tarafından sağlanır.";
@@ -137,7 +136,7 @@
 "No playlists" = "Çalma listesi yok";
 "No songs available" = "Kullanılabilir şarkı yok";
 "No subscribed shows" = "Abone olunan program yok";
-"No supported audio source is available. Try downloading the episode to your server." = "Desteklenen ses kaynağı yok. Bölümü sunucunuza indirmeyi deneyin.";
+"No supported audio source is available. Try adding the episode to your Library." = "Desteklenen ses kaynağı yok. Bölümü kitaplığınıza eklemeyi deneyin.";
 "Nothing to jump back into yet" = "Henüz devam edilecek bir şey yok";
 "Now Playing" = "Şimdi Çalıyor";
 "Now playing, %@ by %@" = "Şimdi çalıyor: %@ - %@";
@@ -145,8 +144,8 @@
 "OK" = "Tamam";
 "OLED black" = "OLED siyahı";
 "Off" = "Kapalı";
-"Offline copy removed." = "Çevrimdışı kopya kaldırıldı.";
-"Offline downloads requested." = "Çevrimdışı indirmeler istendi.";
+"Removed from this device." = "Bu cihazdan kaldırıldı.";
+"Adding songs to this device." = "Şarkılar bu cihaza ekleniyor.";
 "One" = "Bir";
 "Open Now Playing" = "Şimdi Çalıyor’u Aç";
 "Open Settings" = "Ayarları Aç";
@@ -392,7 +391,7 @@
 "Search Deezer's catalog for songs, albums, and artists." = "Deezer kataloğunda şarkı, albüm ve sanatçı ara.";
 "Search category" = "Arama kategorisi";
 "Searching catalog…" = "Katalogda aranıyor…";
-"Songs are added after the server downloads them and the library syncs." = "Şarkılar sunucu bunları indirdikten ve kitaplık eşzamanlandıktan sonra eklenir.";
+"Songs appear in your Library after the server adds them and the library syncs." = "Şarkılar, sunucu bunları ekledikten ve kitaplık eşzamanlandıktan sonra kitaplığınızda görünür.";
 "This feature is unavailable on this server." = "Bu özellik bu sunucuda kullanılamıyor.";
 "This request is not valid." = "Bu istek geçerli değil.";
 /* Add to Library, Add to Device and Library Requests */

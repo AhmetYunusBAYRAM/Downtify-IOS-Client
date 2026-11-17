@@ -55,7 +55,7 @@
 "Connect to server" = "Σύνδεση σε διακομιστή";
 "Connect to your Downtify server to explore and play your library." = "Συνδεθείτε στον διακομιστή Downtify για να εξερευνήσετε και να ακούσετε τη βιβλιοθήκη σας.";
 "Connecting to server" = "Σύνδεση στον διακομιστή";
-"Could not download this episode. Try again." = "Δεν ήταν δυνατή η λήψη αυτού του επεισοδίου. Δοκιμάστε ξανά.";
+"Could not add this episode to your Library. Try again." = "Δεν ήταν δυνατή η προσθήκη αυτού του επεισοδίου στη βιβλιοθήκη σας. Δοκιμάστε ξανά.";
 "Could not load episodes" = "Δεν ήταν δυνατή η φόρτωση επεισοδίων";
 "Could not load music trash" = "Δεν ήταν δυνατή η φόρτωση του κάδου μουσικής";
 "Could not load podcasts" = "Δεν ήταν δυνατή η φόρτωση podcast";
@@ -67,10 +67,9 @@
 "Could not read the saved server connection." = "Δεν ήταν δυνατή η ανάγνωση της αποθηκευμένης σύνδεσης διακομιστή.";
 "Could not refresh episodes. Pull to retry." = "Δεν ήταν δυνατή η ανανέωση επεισοδίων. Τραβήξτε για νέα προσπάθεια.";
 "Could not refresh podcasts. Pull to retry." = "Δεν ήταν δυνατή η ανανέωση podcast. Τραβήξτε για νέα προσπάθεια.";
-"Could not remove this offline copy." = "Δεν ήταν δυνατή η αφαίρεση αυτού του αντιγράφου εκτός σύνδεσης.";
 "Could not save playback progress to the server." = "Δεν ήταν δυνατή η αποθήκευση της προόδου αναπαραγωγής στον διακομιστή.";
 "Could not sign out. Please try again." = "Δεν ήταν δυνατή η αποσύνδεση. Δοκιμάστε ξανά.";
-"Could not start this download." = "Δεν ήταν δυνατή η έναρξη αυτής της λήψης.";
+"Could not add this song to the device." = "Δεν ήταν δυνατή η προσθήκη αυτού του τραγουδιού στη συσκευή.";
 "Current episode" = "Τρέχον επεισόδιο";
 "Current track" = "Τρέχον τραγούδι";
 "Dark" = "Σκούρο";
@@ -79,7 +78,7 @@
 "Discover" = "Ανακάλυψη";
 "Dismiss" = "Απόρριψη";
 "Done" = "Τέλος";
-"Downloading to server…" = "Λήψη στον διακομιστή…";
+"Adding to Library…" = "Προσθήκη στη βιβλιοθήκη…";
 "Downloads" = "Λήψεις";
 "Downtify" = "Downtify";
 "Downtify for iOS is an independent client for the Downtify server. Artwork, names, and media are supplied by your server and their respective rights holders." = "Το Downtify για iOS είναι ανεξάρτητος πελάτης για τον διακομιστή Downtify. Τα εξώφυλλα, τα ονόματα και τα πολυμέσα παρέχονται από τον διακομιστή σας και τους αντίστοιχους δικαιούχους.";
@@ -137,7 +136,7 @@
 "No playlists" = "Δεν υπάρχουν λίστες αναπαραγωγής";
 "No songs available" = "Δεν υπάρχουν διαθέσιμα τραγούδια";
 "No subscribed shows" = "Δεν υπάρχουν εγγεγραμμένες εκπομπές";
-"No supported audio source is available. Try downloading the episode to your server." = "Δεν υπάρχει διαθέσιμη υποστηριζόμενη πηγή ήχου. Δοκιμάστε να κατεβάσετε το επεισόδιο στον διακομιστή σας.";
+"No supported audio source is available. Try adding the episode to your Library." = "Δεν υπάρχει διαθέσιμη υποστηριζόμενη πηγή ήχου. Δοκιμάστε να προσθέσετε το επεισόδιο στη βιβλιοθήκη σας.";
 "Nothing to jump back into yet" = "Δεν υπάρχει ακόμη κάτι για να συνεχίσετε";
 "Now Playing" = "Αναπαραγωγή τώρα";
 "Now playing, %@ by %@" = "Αναπαραγωγή τώρα: %@ από %@";
@@ -145,8 +144,8 @@
 "OK" = "Εντάξει";
 "OLED black" = "Μαύρο OLED";
 "Off" = "Ανενεργό";
-"Offline copy removed." = "Το αντίγραφο εκτός σύνδεσης αφαιρέθηκε.";
-"Offline downloads requested." = "Ζητήθηκαν λήψεις εκτός σύνδεσης.";
+"Removed from this device." = "Αφαιρέθηκε από αυτή τη συσκευή.";
+"Adding songs to this device." = "Προσθήκη τραγουδιών σε αυτή τη συσκευή.";
 "One" = "Ένα";
 "Open Now Playing" = "Άνοιγμα Αναπαραγωγή τώρα";
 "Open Settings" = "Άνοιγμα ρυθμίσεων";
@@ -392,7 +391,7 @@
 "Search Deezer's catalog for songs, albums, and artists." = "Αναζητήστε τραγούδια, άλμπουμ και καλλιτέχνες στον κατάλογο του Deezer.";
 "Search category" = "Κατηγορία αναζήτησης";
 "Searching catalog…" = "Αναζήτηση στον κατάλογο…";
-"Songs are added after the server downloads them and the library syncs." = "Τα τραγούδια προστίθενται αφού τα κατεβάσει ο διακομιστής και συγχρονιστεί η βιβλιοθήκη.";
+"Songs appear in your Library after the server adds them and the library syncs." = "Τα τραγούδια εμφανίζονται στη βιβλιοθήκη σας αφού τα προσθέσει ο διακομιστής και συγχρονιστεί η βιβλιοθήκη.";
 "This feature is unavailable on this server." = "Αυτή η λειτουργία δεν είναι διαθέσιμη σε αυτόν τον διακομιστή.";
 "This request is not valid." = "Το αίτημα δεν είναι έγκυρο.";
 /* Add to Library, Add to Device and Library Requests */

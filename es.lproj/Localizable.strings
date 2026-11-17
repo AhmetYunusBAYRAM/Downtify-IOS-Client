@@ -55,7 +55,7 @@
 "Connect to server" = "Conectar al servidor";
 "Connect to your Downtify server to explore and play your library." = "Conéctate a tu servidor Downtify para explorar y reproducir tu biblioteca.";
 "Connecting to server" = "Conectando al servidor";
-"Could not download this episode. Try again." = "No se pudo descargar este episodio. Inténtalo de nuevo.";
+"Could not add this episode to your Library. Try again." = "No se pudo añadir este episodio a tu biblioteca. Inténtalo de nuevo.";
 "Could not load episodes" = "No se pudieron cargar los episodios";
 "Could not load music trash" = "No se pudo cargar la papelera de música";
 "Could not load podcasts" = "No se pudieron cargar los podcasts";
@@ -67,10 +67,9 @@
 "Could not read the saved server connection." = "No se pudo leer la conexión guardada del servidor.";
 "Could not refresh episodes. Pull to retry." = "No se pudieron actualizar los episodios. Desliza para reintentar.";
 "Could not refresh podcasts. Pull to retry." = "No se pudieron actualizar los podcasts. Desliza para reintentar.";
-"Could not remove this offline copy." = "No se pudo eliminar esta copia sin conexión.";
 "Could not save playback progress to the server." = "No se pudo guardar el progreso de reproducción en el servidor.";
 "Could not sign out. Please try again." = "No se pudo cerrar la sesión. Inténtalo de nuevo.";
-"Could not start this download." = "No se pudo iniciar esta descarga.";
+"Could not add this song to the device." = "No se pudo añadir esta canción al dispositivo.";
 "Current episode" = "Episodio actual";
 "Current track" = "Canción actual";
 "Dark" = "Oscuro";
@@ -79,7 +78,7 @@
 "Discover" = "Descubrir";
 "Dismiss" = "Descartar";
 "Done" = "Listo";
-"Downloading to server…" = "Descargando al servidor…";
+"Adding to Library…" = "Añadiendo a la biblioteca…";
 "Downloads" = "Descargas";
 "Downtify" = "Downtify";
 "Downtify for iOS is an independent client for the Downtify server. Artwork, names, and media are supplied by your server and their respective rights holders." = "Downtify para iOS es un cliente independiente del servidor Downtify. El servidor y los respectivos titulares de derechos proporcionan las portadas, los nombres y los medios.";
@@ -137,7 +136,7 @@
 "No playlists" = "No hay listas de reproducción";
 "No songs available" = "No hay canciones disponibles";
 "No subscribed shows" = "No hay programas suscritos";
-"No supported audio source is available. Try downloading the episode to your server." = "No hay ninguna fuente de audio compatible. Prueba a descargar el episodio en tu servidor.";
+"No supported audio source is available. Try adding the episode to your Library." = "No hay ninguna fuente de audio compatible. Prueba a añadir el episodio a tu biblioteca.";
 "Nothing to jump back into yet" = "Aún no hay nada que retomar";
 "Now Playing" = "Reproduciendo";
 "Now playing, %@ by %@" = "Reproduciendo ahora, %@ de %@";
@@ -145,8 +144,8 @@
 "OK" = "Aceptar";
 "OLED black" = "Negro OLED";
 "Off" = "Desactivado";
-"Offline copy removed." = "Copia sin conexión eliminada.";
-"Offline downloads requested." = "Descargas sin conexión solicitadas.";
+"Removed from this device." = "Quitada de este dispositivo.";
+"Adding songs to this device." = "Añadiendo canciones a este dispositivo.";
 "One" = "Uno";
 "Open Now Playing" = "Abrir Reproduciendo";
 "Open Settings" = "Abrir Ajustes";
@@ -392,7 +391,7 @@
 "Search Deezer's catalog for songs, albums, and artists." = "Busca canciones, álbumes y artistas en el catálogo de Deezer.";
 "Search category" = "Categoría de búsqueda";
 "Searching catalog…" = "Buscando en el catálogo…";
-"Songs are added after the server downloads them and the library syncs." = "Las canciones se añaden después de que el servidor las descargue y se sincronice la biblioteca.";
+"Songs appear in your Library after the server adds them and the library syncs." = "Las canciones aparecen en tu biblioteca después de que el servidor las añada y se sincronice la biblioteca.";
 "This feature is unavailable on this server." = "Esta función no está disponible en este servidor.";
 "This request is not valid." = "Esta solicitud no es válida.";
 /* Add to Library, Add to Device and Library Requests */
