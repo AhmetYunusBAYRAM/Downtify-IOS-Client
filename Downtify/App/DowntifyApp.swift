@@ -15,6 +15,7 @@ struct DowntifyApp: App {
                 .environmentObject(container.artwork)
                 .environmentObject(container.collections)
                 .environmentObject(container.catalogPresentation)
+                .environmentObject(container.storageSettings)
                 .task { container.collections.start() }
                 .environmentObject(container.offlineDownloads)
         }

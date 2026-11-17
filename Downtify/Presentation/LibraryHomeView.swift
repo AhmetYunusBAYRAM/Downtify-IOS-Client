@@ -11,6 +11,7 @@ struct LibraryHomeView: View {
     let signOut: @MainActor () async throws -> Void
     @EnvironmentObject private var collections: LibraryCollectionsModel
     @EnvironmentObject private var catalogPresentation: CatalogPresentationModel
+    @EnvironmentObject private var storageModel: StorageSettingsModel
     @Environment(\.openURL) private var openURL
     @Environment(\.downtifyPalette) private var palette
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -125,6 +126,7 @@ struct LibraryHomeView: View {
                         Text("Shows active and waiting network work, playback queue depth, and offline transfer state.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
+                    StorageSection(model: storageModel)
                     Section("About") {
                         NavigationLink("About Downtify") { AboutView(version: versionText) }
                         LabeledContent("Version", value: versionText)

@@ -15,6 +15,7 @@ struct AppContainer {
     let serverDownloadQueue: ServerDownloadQueue
     let serverDownloads: ServerDownloadPresentationModel
     let dataReset: AppDataReset
+    let storageSettings: StorageSettingsModel
 
     init(displayName: String = "Downtify") {
         self.displayName = displayName
@@ -94,5 +95,6 @@ struct AppContainer {
             listenOutbox: PlaybackListenOutbox.applicationSupport(), savedQueues: PlaybackStateStore(),
             networkFailures: NetworkOperationCoordinator.shared
         )
+        storageSettings = StorageSettingsModel(reset: dataReset)
     }
 }
