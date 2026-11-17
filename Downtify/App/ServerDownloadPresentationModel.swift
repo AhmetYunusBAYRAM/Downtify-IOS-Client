@@ -265,6 +265,20 @@ final class ServerDownloadPresentationModel: ObservableObject {
         }
     }
 
+    /// The server filename of the finished job this action key reconciles to,
+    /// only when that reconciliation is `.accepted`.
+    func completedFilename(forActionKey key: String) -> String? {
+        let matches = jobs.filter { job in
+            guard let id = job.song.id else { return false }
+            return key == "library:\(id)" || key.hasSuffix(":\(id)")
+        }
+        guard Self.reconciledState(for: matches) == .accepted else { return nil }
+        let done = ["done", "completed", "complete", "success", "succeeded"]
+        guard let filename = matches.first(where: { done.contains($0.status.lowercased()) && !($0.filename ?? "").isEmpty })?.filename
+        else { return nil }
+        return filename
+    }
+
     static func reconciledState(for jobs: [ServerDownloadQueue.Job]) -> ServerDownloadActionState? {
         guard !jobs.isEmpty else { return nil }
         let active = ["queued", "pending", "running", "downloading", "processing"]

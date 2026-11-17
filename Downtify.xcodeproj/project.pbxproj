@@ -28,6 +28,8 @@
 		000000000000000000000096 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogAPI.swift; sourceTree = "<group>"; };
 		000000000000000000000097 = { isa = PBXBuildFile; fileRef = 000000000000000000000096; };
 		000000000000000000000094 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Catalog.swift; sourceTree = "<group>"; };
+		000000000000000000000204 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMembership.swift; sourceTree = "<group>"; };
+		000000000000000000000205 = { isa = PBXBuildFile; fileRef = 000000000000000000000204; };
 		000000000000000000000095 = { isa = PBXBuildFile; fileRef = 000000000000000000000094; };
 		000000000000000000000092 = { isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		000000000000000000000093 = { isa = PBXBuildFile; fileRef = 000000000000000000000092; };
@@ -384,6 +386,7 @@
 				000000000000000000000035,
 				00000000000000000000006D,
 				000000000000000000000094,
+				000000000000000000000204,
 			);
 			path = Domain;
 			sourceTree = "<group>";
@@ -541,6 +544,7 @@
 				000000000000000000000099,
 				000000000000000000000097,
 				000000000000000000000095,
+				000000000000000000000205,
 				000000000000000000000068,
 				000000000000000000000066,
 				000000000000000000000064,
