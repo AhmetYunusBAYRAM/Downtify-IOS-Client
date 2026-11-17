@@ -52,6 +52,13 @@ final class CatalogPresentationModel: ObservableObject {
     var externalCatalogAvailable: Bool { serverInfo.map { !$0.isLibraryOnly } ?? false }
     var providerFinderDetailsAvailable: Bool { externalCatalogAvailable && supportsDiscover == true }
 
+    /// Lazily fetched provider track counts for catalog albums that look owned. Unknown albums are absent.
+    @Published private(set) var albumTrackCounts: [CatalogResultID: Int] = [:]
+    private var attemptedAlbumCounts: Set<CatalogResultID> = []
+    private var inFlightAlbumCounts: Set<CatalogResultID> = []
+    private var albumCountTask: Task<Void, Never>?
+    private static let maxConcurrentAlbumCountLookups = 3
+
     private let api: any CatalogServing
     private let sessionUpdates: @Sendable () async throws -> AsyncStream<DeviceSession?>
     private var observation: Task<Void, Never>?
@@ -70,6 +77,7 @@ final class CatalogPresentationModel: ObservableObject {
     deinit {
         observation?.cancel()
         policyTask?.cancel()
+        albumCountTask?.cancel()
         requests.values.forEach { $0.cancel() }
     }
 
@@ -168,6 +176,87 @@ final class CatalogPresentationModel: ObservableObject {
         startRequest("album_tracks", session: session,
                      operation: { try await api.albumTracks(url: url, session: session) },
                      isEmpty: \.isEmpty) { self.albumTracksState = $0 }
+    }
+
+    /// Looks up track counts for the given albums whose count is unknown and for which `isCandidate`
+    /// (a library match) holds. Replaces any lookup still pending from an earlier call; each album is
+    /// attempted at most once per session, and failures leave the count unknown.
+    func loadAlbumTrackCounts(for albums: [CatalogAlbum], isCandidate: (CatalogAlbum) -> Bool) {
+        albumCountTask?.cancel()
+        albumCountTask = nil
+        // Lookups cut off by the cancel above were never answered, so they may be tried again.
+        attemptedAlbumCounts.subtract(inFlightAlbumCounts)
+        inFlightAlbumCounts.removeAll()
+        guard let session, externalCatalogAvailable else { return }
+        var seen = Set<CatalogResultID>()
+        let pending = albums.filter {
+            $0.trackCount == nil && albumTrackCounts[$0.id] == nil && !attemptedAlbumCounts.contains($0.id)
+                && seen.insert($0.id).inserted && isCandidate($0)
+        }
+        var byDeezerID: [String: [CatalogAlbum]] = [:]
+        var byURL: [CatalogAlbum] = []
+        for album in pending {
+            let deezerID = album.deezerAlbumID ?? (album.source.lowercased() == "deezer" ? album.albumID : nil)
+            if let deezerID, !deezerID.isEmpty, deezerID.utf8.allSatisfy({ (48...57).contains($0) }) {
+                byDeezerID[deezerID, default: []].append(album)
+            } else if let url = album.url, ServerDownloadQueue.isYouTubeMusicAlbumURL(url) {
+                byURL.append(album)
+            }
+        }
+        let ids = byDeezerID.keys.sorted()
+        // Each job is the albums it answers plus how to ask: a Deezer id batch (max 50) or one album URL.
+        var jobs: [(albums: [CatalogAlbum], batch: [String], url: String?)] = []
+        for start in stride(from: 0, to: ids.count, by: 50) {
+            let batch = Array(ids[start..<min(start + 50, ids.count)])
+            jobs.append((batch.flatMap { byDeezerID[$0] ?? [] }, batch, nil))
+        }
+        jobs += byURL.map { ([$0], [], $0.url) }
+        guard !jobs.isEmpty else { return }
+        let started = jobs.flatMap { $0.albums.map(\.id) }
+        attemptedAlbumCounts.formUnion(started)
+        inFlightAlbumCounts.formUnion(started)
+        let api = self.api
+        let limit = Self.maxConcurrentAlbumCountLookups
+        albumCountTask = Task { [weak self, jobs] in
+            await withTaskGroup(of: (Int, [CatalogResultID: Int]).self) { group in
+                var next = 0
+                var running = 0
+                while next < jobs.count || running > 0 {
+                    while running < limit, next < jobs.count {
+                        let index = next, job = jobs[next]
+                        next += 1
+                        running += 1
+                        group.addTask {
+                            do {
+                                if let url = job.url {
+                                    let count = try await api.albumTracks(url: url, session: session).count
+                                    return (index, count > 0 ? [job.albums[0].id: count] : [:])
+                                }
+                                let counts = try await api.finderAlbumTrackCounts(ids: job.batch, session: session)
+                                var result: [CatalogResultID: Int] = [:]
+                                for id in job.batch {
+                                    guard let count = counts[id], count > 0 else { continue }
+                                    for album in byDeezerID[id] ?? [] { result[album.id] = count }
+                                }
+                                return (index, result)
+                            } catch {
+                                return (index, [:])
+                            }
+                        }
+                    }
+                    guard let (index, found) = await group.next() else { break }
+                    running -= 1
+                    guard !Task.isCancelled else { group.cancelAll(); return }
+                    self?.finishAlbumCountJob(albums: jobs[index].albums, found: found, session: session)
+                }
+            }
+        }
+    }
+
+    private func finishAlbumCountJob(albums: [CatalogAlbum], found: [CatalogResultID: Int], session: DeviceSession) {
+        guard self.session == session else { return }
+        inFlightAlbumCounts.subtract(albums.map(\.id))
+        if !found.isEmpty { albumTrackCounts.merge(found) { _, new in new } }
     }
 
     func searchFinder(_ query: String, limit: Int = 25) {
@@ -425,6 +514,11 @@ final class CatalogPresentationModel: ObservableObject {
         requests.removeAll()
         requestIDs.removeAll()
         policyTask?.cancel()
+        albumCountTask?.cancel()
+        albumCountTask = nil
+        albumTrackCounts.removeAll()
+        attemptedAlbumCounts.removeAll()
+        inFlightAlbumCounts.removeAll()
     }
 
     private func cancelRequests(withPrefix prefix: String) {

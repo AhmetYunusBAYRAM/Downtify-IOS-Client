@@ -12,6 +12,8 @@
 		0000000000000000000000A0 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerDownloadPresentationModel.swift; sourceTree = "<group>"; };
 		0000000000000000000000A1 = { isa = PBXBuildFile; fileRef = 0000000000000000000000A0; };
 		0000000000000000000000A2 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogSearchView.swift; sourceTree = "<group>"; };
+		000000000000000000000200 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaAction.swift; sourceTree = "<group>"; };
+		000000000000000000000201 = { isa = PBXBuildFile; fileRef = 000000000000000000000200; };
 		0000000000000000000000A3 = { isa = PBXBuildFile; fileRef = 0000000000000000000000A2; };
 		0000000000000000000000A4 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogDiscoverView.swift; sourceTree = "<group>"; };
 		0000000000000000000000A5 = { isa = PBXBuildFile; fileRef = 0000000000000000000000A4; };
@@ -26,6 +28,8 @@
 		000000000000000000000096 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogAPI.swift; sourceTree = "<group>"; };
 		000000000000000000000097 = { isa = PBXBuildFile; fileRef = 000000000000000000000096; };
 		000000000000000000000094 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Catalog.swift; sourceTree = "<group>"; };
+		000000000000000000000204 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMembership.swift; sourceTree = "<group>"; };
+		000000000000000000000205 = { isa = PBXBuildFile; fileRef = 000000000000000000000204; };
 		000000000000000000000095 = { isa = PBXBuildFile; fileRef = 000000000000000000000094; };
 		000000000000000000000092 = { isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		000000000000000000000093 = { isa = PBXBuildFile; fileRef = 000000000000000000000092; };
@@ -49,6 +53,14 @@
 		00000000000000000000006C = { isa = PBXBuildFile; fileRef = 00000000000000000000006B; };
 		000000000000000000000069 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineDownloadsTests.swift; sourceTree = "<group>"; };
 		00000000000000000000006A = { isa = PBXBuildFile; fileRef = 000000000000000000000069; };
+		000000000000000000000206 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMembershipTests.swift; sourceTree = "<group>"; };
+		000000000000000000000207 = { isa = PBXBuildFile; fileRef = 000000000000000000000206; };
+		000000000000000000000202 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaActionTests.swift; sourceTree = "<group>"; };
+		000000000000000000000208 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogActionWiringTests.swift; sourceTree = "<group>"; };
+		000000000000000000000203 = { isa = PBXBuildFile; fileRef = 000000000000000000000202; };
+		000000000000000000000209 = { isa = PBXBuildFile; fileRef = 000000000000000000000208; };
+		00000000000000000000020A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSaveStateFlowTests.swift; sourceTree = "<group>"; };
+		00000000000000000000020B = { isa = PBXBuildFile; fileRef = 00000000000000000000020A; };
 		000000000000000000000067 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerDownloadQueue.swift; sourceTree = "<group>"; };
 		000000000000000000000068 = { isa = PBXBuildFile; fileRef = 000000000000000000000067; };
 		000000000000000000000065 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineDownloadAPI.swift; sourceTree = "<group>"; };
@@ -380,6 +392,7 @@
 				000000000000000000000035,
 				00000000000000000000006D,
 				000000000000000000000094,
+				000000000000000000000204,
 			);
 			path = Domain;
 			sourceTree = "<group>";
@@ -424,6 +437,7 @@
 			children = (
 				000000000000000000000005,
 				0000000000000000000000A2,
+				000000000000000000000200,
 				0000000000000000000000A4,
 				00000000000000000000006B,
 				000000000000000000000071,
@@ -481,6 +495,10 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000069,
+				000000000000000000000206,
+				000000000000000000000202,
+				000000000000000000000208,
+				00000000000000000000020A,
 				00000000000000000000009A,
 				000000000000000000000103,
 				00000000000000000000009C,
@@ -535,6 +553,7 @@
 				000000000000000000000099,
 				000000000000000000000097,
 				000000000000000000000095,
+				000000000000000000000205,
 				000000000000000000000068,
 				000000000000000000000066,
 				000000000000000000000064,
@@ -565,6 +584,7 @@
 				00000000000000000000006C,
 				000000000000000000000072,
 				0000000000000000000000A3,
+				000000000000000000000201,
 				0000000000000000000000A5,
 				000000000000000000000076,
 				000000000000000000000078,
@@ -630,6 +650,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				00000000000000000000006A,
+				000000000000000000000207,
+				000000000000000000000203,
+				000000000000000000000209,
+				00000000000000000000020B,
 				00000000000000000000009B,
 				000000000000000000000104,
 				00000000000000000000009D,

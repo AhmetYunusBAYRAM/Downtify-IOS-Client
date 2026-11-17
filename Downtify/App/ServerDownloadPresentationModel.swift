@@ -265,6 +265,20 @@ final class ServerDownloadPresentationModel: ObservableObject {
         }
     }
 
+    /// The server filename of the finished job this action key reconciles to,
+    /// only when that reconciliation is `.accepted`.
+    func completedFilename(forActionKey key: String) -> String? {
+        let matches = jobs.filter { job in
+            guard let id = job.song.id else { return false }
+            return key == "library:\(id)" || key.hasSuffix(":\(id)")
+        }
+        guard Self.reconciledState(for: matches) == .accepted else { return nil }
+        let done = ["done", "completed", "complete", "success", "succeeded"]
+        guard let filename = matches.first(where: { done.contains($0.status.lowercased()) && !($0.filename ?? "").isEmpty })?.filename
+        else { return nil }
+        return filename
+    }
+
     static func reconciledState(for jobs: [ServerDownloadQueue.Job]) -> ServerDownloadActionState? {
         guard !jobs.isEmpty else { return nil }
         let active = ["queued", "pending", "running", "downloading", "processing"]
@@ -285,12 +299,12 @@ final class ServerDownloadPresentationModel: ObservableObject {
             return "The server could not complete this request (\(status))."
         }
         if let apiError = error as? APIError, apiError == .insecureTransportConsentRequired {
-            return "Allow HTTP for this server before requesting a download."
+            return "Allow HTTP for this server before adding to your Library."
         }
         if let catalogError = error as? CatalogAPIError, catalogError == .libraryOnly {
-            return "Server downloads are unavailable in library-only mode."
+            return "Adding to Library is unavailable in library-only mode."
         }
-        return "Could not complete the server download request."
+        return "Could not add this to your Library."
     }
 
     private func actionFailure(for error: Error) -> ServerDownloadActionState {

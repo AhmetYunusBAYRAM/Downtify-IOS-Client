@@ -11,6 +11,7 @@ struct LibraryHomeView: View {
     let signOut: @MainActor () async throws -> Void
     @EnvironmentObject private var collections: LibraryCollectionsModel
     @EnvironmentObject private var catalogPresentation: CatalogPresentationModel
+    @EnvironmentObject private var offlineDownloads: OfflineDownloads
     @Environment(\.openURL) private var openURL
     @Environment(\.downtifyPalette) private var palette
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -359,29 +360,53 @@ struct LibraryHomeView: View {
 
     @ViewBuilder
     private var searchContent: some View {
-        CatalogSearchView(catalog: catalogPresentation, library: library, playback: playback,
-                          onDownloadAlbum: { url, tracks in Task { await serverDownloads.requestAlbum(url: url, expected: tracks) } },
-                          albumDownloadState: { serverDownloads.actionState(forAlbumURL: $0) },
-                          onDownload: { song in Task { await serverDownloads.request(song: song) } },
-                          downloadState: { serverDownloads.actionState(for: $0) })
+        CatalogSearchContainer(catalog: catalogPresentation, library: library, playback: playback,
+                               serverDownloads: serverDownloads,
+                               libraryState: { catalogLibraryState(for: $0) },
+                               onAddToDevice: { addCatalogSongToDevice($0) },
+                               deviceState: { catalogDeviceState(for: $0) })
+    }
+
+    private func libraryTrack(forCatalogSong song: CatalogSong) -> LibraryTrack? {
+        library.membership.track(for: song)
+            ?? serverDownloads.completedFilename(forActionKey: song.id.description)
+                .flatMap(library.membership.track(forServerFilename:))
+    }
+
+    private func catalogLibraryState(for song: CatalogSong) -> ServerDownloadActionState {
+        .catalogRow(server: serverDownloads.actionState(for: song), inLibrary: libraryTrack(forCatalogSong: song) != nil)
+    }
+
+    private func catalogDeviceState(for song: CatalogSong) -> DeviceSaveState {
+        let track = libraryTrack(forCatalogSong: song)
+        let record = track.flatMap { track in offlineDownloads.currentDownloads.first { $0.track.id == track.id } }
+        return DeviceSaveState(track: track, record: record)
+    }
+
+    private func addCatalogSongToDevice(_ song: CatalogSong) {
+        guard let track = libraryTrack(forCatalogSong: song) else { return }
+        let failed = offlineDownloads.currentDownloads.first {
+            $0.track.id == track.id && { if case .failed = $0.state { return true } else { return false } }($0)
+        }
+        if let failed { _ = try? offlineDownloads.retry(failed.id) } else { _ = try? offlineDownloads.enqueue(track) }
     }
 
     private var discoveryContent: some View {
-        CatalogDiscoverView(
+        CatalogDiscoverContainer(
             catalog: catalogPresentation,
+            serverDownloads: serverDownloads,
             libraryTracks: library.tracks,
+            membership: library.membership,
             libraryArtists: discoveryLibraryArtists,
             libraryAlbums: Array(library.catalog.albumsByID.values).map {
                 CatalogLibraryAlbum(artist: $0.artist, title: $0.title)
             },
             playlistNames: (collections.playlists ?? []).filter { $0.liked != true }.map(\.name),
             playlistIDs: (collections.playlists ?? []).filter { $0.liked != true }.map(\.id),
-            shownArtists: [],
             onPlay: { song in playCatalogSong(song) },
-            onDownload: { song in Task { await serverDownloads.request(song: song) } },
-            onDownloadAlbum: { url, tracks in Task { await serverDownloads.requestAlbum(url: url, expected: tracks) } },
-            downloadState: { serverDownloads.actionState(for: $0) },
-            albumDownloadState: { serverDownloads.actionState(forAlbumURL: $0) },
+            libraryState: { catalogLibraryState(for: $0) },
+            onAddToDevice: { addCatalogSongToDevice($0) },
+            deviceState: { catalogDeviceState(for: $0) },
             onOpenURL: { openProviderURL($0.absoluteString) }
         )
     }
@@ -856,14 +881,14 @@ private struct LibraryContextView: View {
                 }
             }
         }
-        .confirmationDialog("Download these songs for offline playback?", isPresented: $confirmingDownload, titleVisibility: .visible) {
-            Button("Download songs") {
+        .confirmationDialog("Add these songs to this device for offline playback?", isPresented: $confirmingDownload, titleVisibility: .visible) {
+            Button("Add to Device") {
                 var failures = 0
                 var queued = Set<String>()
                 for track in tracks where queued.insert(track.id).inserted {
                     do { try downloads.enqueue(track) } catch { failures += 1 }
                 }
-                downloadMessage = failures == 0 ? "Offline downloads requested." : "Some downloads could not be started."
+                downloadMessage = failures == 0 ? "Adding songs to this device." : "Some downloads could not be started."
             }
         }
     }
@@ -905,7 +930,7 @@ private struct LibraryContextView: View {
             if !tracks.isEmpty {
                 Menu {
                     Button("Add songs to queue", systemImage: "text.append") { playback.append(tracks) }
-                    Button("Download songs", systemImage: "arrow.down.circle") { confirmingDownload = true }
+                    Button(String(localized: "Add Songs to Device"), systemImage: "arrow.down.to.line.circle") { confirmingDownload = true }
                 } label: {
                     Image(systemName: "ellipsis.circle").downtifyControlTarget()
                 }
@@ -1091,15 +1116,8 @@ private struct ArtistCatalogAlbumView: View {
     }
 
     private func status(_ song: CatalogSong) -> String {
-        if isInLibrary(song) || song.source == "library" { return String(localized: "In your library") }
-        switch serverDownloads.actionState(for: song) {
-        case .idle: return String(localized: "Add to library")
-        case .submitting: return String(localized: "Requesting…")
-        case .queued, .accepted: return String(localized: "Queued")
-        case .partiallyAccepted: return String(localized: "Partially queued")
-        case .outcomeUnknown: return String(localized: "Check queue")
-        case .failed: return String(localized: "Retry")
-        }
+        if isInLibrary(song) || song.source == "library" { return String(localized: "In Library") }
+        return MediaActionPresentation.library(serverDownloads.actionState(for: song), itemTitle: song.title).title
     }
 
     var body: some View {
@@ -1109,7 +1127,7 @@ private struct ArtistCatalogAlbumView: View {
             if !isLoading && error == nil && songs.isEmpty { Text("No songs found.").foregroundStyle(.secondary) }
             let missing = songs.filter(canRequest)
             if !missing.isEmpty {
-                Button("Add missing songs to library", systemImage: "plus.circle") {
+                Button(String(localized: "Add Missing Songs to Library"), systemImage: "plus.circle") {
                     Task { await serverDownloads.requestBatch(songs: missing) }
                 }
             }
@@ -1127,7 +1145,7 @@ private struct ArtistCatalogAlbumView: View {
                 }
             }
             if !songs.isEmpty {
-                Text("Songs are added after the server downloads them and the library syncs.")
+                Text("Songs appear in your Library after the server adds them and the library syncs.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
         }
@@ -1404,18 +1422,99 @@ private struct LibraryTrackList: View {
 
     @ViewBuilder
     private func downloadAction(_ track: LibraryTrack, record: OfflineDownload?) -> some View {
-        if let record, record.state == .ready {
-            Button("Remove offline copy", systemImage: "trash", role: .destructive) {
-                do { try downloads.delete(record.id); downloadMessage = "Offline copy removed." }
-                catch { downloadMessage = "Could not remove this offline copy." }
-            }
-        } else if let record, record.pending {
-            Button("Cancel offline download", systemImage: "xmark.circle") { downloads.cancel(record.id) }
-        } else {
-            Button(record == nil ? "Download for offline playback" : "Retry offline download", systemImage: "arrow.down.circle") {
-                do { try downloads.enqueue(track); downloadMessage = "Offline download requested." }
-                catch { downloadMessage = "Could not start this download." }
-            }
+        let state = DeviceSaveState(track: track, record: record)
+        MediaActionButton(presentation: .device(state, itemTitle: track.title), style: .label) {
+            do {
+                if case .failed = state, let record {
+                    _ = try downloads.retry(record.id)
+                } else {
+                    _ = try downloads.enqueue(track)
+                }
+                downloadMessage = "Adding to this device."
+            } catch { downloadMessage = "Could not add this song to the device." }
         }
+        switch state {
+        case .pending, .transferring:
+            if let record {
+                Button(String(localized: "Cancel Adding to Device"), systemImage: "xmark.circle") { downloads.cancel(record.id) }
+            }
+        case .saved:
+            if let record {
+                Button(String(localized: "Remove from Device"), systemImage: "trash", role: .destructive) {
+                    do { try downloads.delete(record.id); downloadMessage = "Removed from this device." }
+                    catch { downloadMessage = "Could not remove this song from the device." }
+                }
+            }
+        default:
+            EmptyView()
+        }
+    }
+}
+
+/// Observes the server queue only for the Search tab so Add to Library rows refresh
+/// without re-rendering the whole library root on every queue poll.
+private struct CatalogSearchContainer: View {
+    @ObservedObject var catalog: CatalogPresentationModel
+    @ObservedObject var library: LibraryPresentationModel
+    let playback: PlaybackController
+    @ObservedObject var serverDownloads: ServerDownloadPresentationModel
+    let libraryState: (CatalogSong) -> ServerDownloadActionState
+    let onAddToDevice: (CatalogSong) -> Void
+    let deviceState: (CatalogSong) -> DeviceSaveState
+
+    var body: some View {
+        CatalogSearchView(catalog: catalog, library: library, playback: playback,
+                          onDownloadAlbum: { url, tracks in Task { await serverDownloads.requestAlbum(url: url, expected: tracks) } },
+                          albumDownloadState: { album, count in
+                              .catalogRow(server: serverDownloads.actionState(forAlbumURL: album.url ?? ""),
+                                          inLibrary: library.membership.isAlbumFullyInLibrary(
+                                              title: album.title, artist: album.artist, trackCount: count))
+                          },
+                          onDownload: { song in Task { await serverDownloads.request(song: song) } },
+                          downloadState: libraryState,
+                          onAddToDevice: onAddToDevice,
+                          deviceState: deviceState)
+    }
+}
+
+/// Same scoping for the Discover tab.
+private struct CatalogDiscoverContainer: View {
+    @ObservedObject var catalog: CatalogPresentationModel
+    @ObservedObject var serverDownloads: ServerDownloadPresentationModel
+    let libraryTracks: [LibraryTrack]
+    let membership: LibraryMembership
+    let libraryArtists: [CatalogLibraryArtist]
+    let libraryAlbums: [CatalogLibraryAlbum]
+    let playlistNames: [String]
+    let playlistIDs: [String]
+    let onPlay: (CatalogSong) -> Void
+    let libraryState: (CatalogSong) -> ServerDownloadActionState
+    let onAddToDevice: (CatalogSong) -> Void
+    let deviceState: (CatalogSong) -> DeviceSaveState
+    let onOpenURL: (URL) -> Void
+
+    var body: some View {
+        CatalogDiscoverView(
+            catalog: catalog,
+            libraryTracks: libraryTracks,
+            libraryArtists: libraryArtists,
+            libraryAlbums: libraryAlbums,
+            playlistNames: playlistNames,
+            playlistIDs: playlistIDs,
+            shownArtists: [],
+            onPlay: onPlay,
+            onDownload: { song in Task { await serverDownloads.request(song: song) } },
+            onDownloadAlbum: { url, tracks in Task { await serverDownloads.requestAlbum(url: url, expected: tracks) } },
+            downloadState: libraryState,
+            onAddToDevice: onAddToDevice,
+            deviceState: deviceState,
+            albumDownloadState: { album, count in
+                .catalogRow(server: serverDownloads.actionState(forAlbumURL: album.url ?? ""),
+                            inLibrary: membership.isAlbumFullyInLibrary(
+                                title: album.title, artist: album.artist, trackCount: count))
+            },
+            onOpenURL: onOpenURL,
+            membership: membership
+        )
     }
 }
