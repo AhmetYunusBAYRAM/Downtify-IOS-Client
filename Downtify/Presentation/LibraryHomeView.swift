@@ -1091,15 +1091,8 @@ private struct ArtistCatalogAlbumView: View {
     }
 
     private func status(_ song: CatalogSong) -> String {
-        if isInLibrary(song) || song.source == "library" { return String(localized: "In your library") }
-        switch serverDownloads.actionState(for: song) {
-        case .idle: return String(localized: "Add to library")
-        case .submitting: return String(localized: "Requesting…")
-        case .queued, .accepted: return String(localized: "Queued")
-        case .partiallyAccepted: return String(localized: "Partially queued")
-        case .outcomeUnknown: return String(localized: "Check queue")
-        case .failed: return String(localized: "Retry")
-        }
+        if isInLibrary(song) || song.source == "library" { return String(localized: "In Library") }
+        return MediaActionPresentation.library(serverDownloads.actionState(for: song), itemTitle: song.title).title
     }
 
     var body: some View {
@@ -1109,7 +1102,7 @@ private struct ArtistCatalogAlbumView: View {
             if !isLoading && error == nil && songs.isEmpty { Text("No songs found.").foregroundStyle(.secondary) }
             let missing = songs.filter(canRequest)
             if !missing.isEmpty {
-                Button("Add missing songs to library", systemImage: "plus.circle") {
+                Button(String(localized: "Add Missing Songs to Library"), systemImage: "plus.circle") {
                     Task { await serverDownloads.requestBatch(songs: missing) }
                 }
             }

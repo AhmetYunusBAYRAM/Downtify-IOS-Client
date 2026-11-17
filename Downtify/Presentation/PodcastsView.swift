@@ -149,7 +149,7 @@ private struct PodcastEpisodesList: View {
                                     Text(episode.title).font(.headline)
                                     PodcastEpisodeMetadata(episode: episode)
                                     if episode.isDownloaded {
-                                        Label("Downloaded on server", systemImage: "checkmark.circle")
+                                        Label(String(localized: "In Library"), systemImage: "checkmark.circle.fill")
                                             .font(.caption).foregroundStyle(.secondary)
                                     }
                                 }
@@ -236,11 +236,11 @@ private struct PodcastEpisodeView: View {
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
                 if episode.isDownloaded {
-                    Label("Downloaded on server", systemImage: "checkmark.circle")
+                    Label(String(localized: "In Library"), systemImage: "checkmark.circle.fill")
                 } else if downloadTask != nil {
                     ProgressView("Downloading to server…")
                 } else {
-                    Button("Download to server", systemImage: "arrow.down.circle") { download() }
+                    Button(String(localized: "Add to Library"), systemImage: "plus.circle") { download() }
                         .buttonStyle(.bordered)
                 }
                 if downloadFailed {
