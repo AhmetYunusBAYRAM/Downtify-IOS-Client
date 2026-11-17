@@ -741,6 +741,8 @@ final class PlaybackController: ObservableObject {
     }
 
     private func recoverStream(_ failure: PlaybackFailure) -> Bool {
+        // Catalog failures already have bounded skip handling; do not retry the same unplayable item.
+        if failure == .invalidStream, podcast == nil, queue.current?.item.catalogSong != nil { return false }
         guard wantsPlayback, !loadedFromDisk, network != .unavailable,
               (failure == .network || failure == .invalidStream), recoveryAttempts < 2 else { return false }
         recoveryAttempts += 1
