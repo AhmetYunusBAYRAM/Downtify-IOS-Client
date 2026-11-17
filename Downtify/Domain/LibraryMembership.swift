@@ -19,6 +19,11 @@ struct LibraryMembership {
         return normalize(title) + "\u{1F}" + normalize(artist)
     }
 
+    /// True when the library holds any track of the album (title + album artist).
+    func hasAlbum(title: String, artist: String) -> Bool {
+        trackCountByAlbum[Self.albumKey(title: title, artist: artist)] != nil
+    }
+
     /// True when the library holds at least `trackCount` tracks of the album (title + album artist).
     /// An unknown track count is never treated as fully in the library.
     func isAlbumFullyInLibrary(title: String, artist: String, trackCount: Int?) -> Bool {

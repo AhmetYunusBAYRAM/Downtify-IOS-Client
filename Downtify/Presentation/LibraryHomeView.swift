@@ -1513,7 +1513,8 @@ private struct CatalogDiscoverContainer: View {
                             inLibrary: membership.isAlbumFullyInLibrary(
                                 title: album.title, artist: album.artist, trackCount: count))
             },
-            onOpenURL: onOpenURL
+            onOpenURL: onOpenURL,
+            membership: membership
         )
     }
 }

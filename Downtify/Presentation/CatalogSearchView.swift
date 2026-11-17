@@ -41,6 +41,29 @@ struct CatalogSearchView: View {
         self.deviceState = deviceState
     }
 
+    /// Catalog albums on screen that may need a provider track count to be recognised as owned.
+    private var catalogAlbumRows: [CatalogAlbum] {
+        var albums: [CatalogAlbum] = []
+        switch catalog.searchAlbumsState {
+        case .loaded(let value), .partial(let value, _): albums += value
+        default: break
+        }
+        switch catalog.urlResolutionState {
+        case .loaded(let value), .partial(let value, _): albums += value.albums
+        default: break
+        }
+        return albums.filter(canRequestAlbumDownload)
+    }
+
+    private var albumCountLookupKey: [CatalogResultID] { catalogAlbumRows.map(\.id) + [CatalogResultID(source: "tracks", value: String(library.tracks.count))] }
+
+    private func loadAlbumTrackCounts() {
+        let membership = library.membership
+        catalog.loadAlbumTrackCounts(for: catalogAlbumRows) {
+            membership.hasAlbum(title: $0.title, artist: $0.artist)
+        }
+    }
+
     private var normalizedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var localSongs: [LibraryTrack] { LibraryTrackOrdering.matching(library.tracks, query: normalizedQuery) }
     private var localAlbums: [LibraryBrowseEntry] {
@@ -98,6 +121,7 @@ struct CatalogSearchView: View {
             catalog.search(normalizedQuery)
         }
         .onAppear { catalog.start() }
+        .task(id: albumCountLookupKey) { loadAlbumTrackCounts() }
     }
 
     @ViewBuilder private var localResults: some View {
@@ -428,7 +452,7 @@ struct CatalogSearchView: View {
 
     @ViewBuilder private func serverAlbumDownloadButton(url: String, album: CatalogAlbum) -> some View {
         let resolved = resolvedAlbumTracks(for: url)
-        MediaActionButton(presentation: .library(albumDownloadState(album, album.trackCount ?? resolved?.count),
+        MediaActionButton(presentation: .library(albumDownloadState(album, album.trackCount ?? catalog.albumTrackCounts[album.id] ?? resolved?.count),
                                                  itemTitle: album.title)) {
             onDownloadAlbum(url, resolved)
         }

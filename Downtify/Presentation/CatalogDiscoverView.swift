@@ -18,6 +18,7 @@ struct CatalogDiscoverView: View {
     var deviceState: (CatalogSong) -> DeviceSaveState = { _ in .unavailable(.notInLibrary) }
     var albumDownloadState: (CatalogAlbum, Int?) -> ServerDownloadActionState = { _, _ in .idle }
     var onOpenURL: (URL) -> Void = { _ in }
+    var membership = LibraryMembership(tracks: [])
 
     @Environment(\.downtifyPalette) private var palette
     @AppStorage("catalog.discover.section") private var selectedSection = "Finder"
@@ -54,6 +55,7 @@ struct CatalogDiscoverView: View {
             }
         }
         .onAppear(perform: loadInitial)
+        .task(id: albumCountLookupKey) { loadAlbumTrackCounts() }
         .onChange(of: selectedSection) { _, rawValue in
             let value = Section(rawValue: rawValue) ?? .finder
             if value == .charts, catalog.chartsState == .idle { catalog.loadCharts() }
@@ -370,9 +372,35 @@ struct CatalogDiscoverView: View {
         return ServerDownloadQueue.isYouTubeMusicAlbumURL(url)
     }
 
+    /// Catalog albums on screen that may need a provider track count to be recognised as owned.
+    private var catalogAlbumRows: [CatalogAlbum] {
+        var albums: [CatalogAlbum] = []
+        func add(_ state: CatalogLoadState<[CatalogAlbum]>) {
+            if case .loaded(let value) = state { albums += value } else if case .partial(let value, _) = state { albums += value }
+        }
+        add(catalog.finderArtistAlbumsState)
+        if case .loaded(let charts) = catalog.chartsState { albums += charts.albums }
+        for state in [catalog.deezerCollectionsState, catalog.spotifyCollectionsState] {
+            switch state {
+            case .loaded(let value), .partial(let value, _): albums += value.albums + value.moreAlbums
+            default: break
+            }
+        }
+        return albums.filter(canRequestAlbumDownload)
+    }
+
+    private var albumCountLookupKey: [CatalogResultID] { catalogAlbumRows.map(\.id) + [CatalogResultID(source: "tracks", value: String(libraryTracks.count))] }
+
+    private func loadAlbumTrackCounts() {
+        let membership = self.membership
+        catalog.loadAlbumTrackCounts(for: catalogAlbumRows) {
+            membership.hasAlbum(title: $0.title, artist: $0.artist)
+        }
+    }
+
     @ViewBuilder private func serverAlbumDownloadButton(url: String, album: CatalogAlbum) -> some View {
         let resolved = resolvedAlbumTracks(for: url)
-        MediaActionButton(presentation: .library(albumDownloadState(album, album.trackCount ?? resolved?.count),
+        MediaActionButton(presentation: .library(albumDownloadState(album, album.trackCount ?? catalog.albumTrackCounts[album.id] ?? resolved?.count),
                                                  itemTitle: album.title)) {
             onDownloadAlbum(url, resolved)
         }
