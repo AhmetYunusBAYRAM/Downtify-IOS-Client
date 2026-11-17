@@ -41,8 +41,8 @@ final class StorageSettingsModel: ObservableObject {
     var confirmationMessage: String {
         let size = Self.formatted(preview?.storage.total ?? 0)
         var message = String(localized: "This removes songs added to this device, caches and local library data, freeing about \(size). You stay signed in.")
-        if let count = preview?.pendingActionCount, count > 0 {
-            message += " " + String(localized: "\(count) unsent actions (likes and playlist favorites) will be lost.")
+        if let pendingCount = preview?.pendingActionCount, pendingCount > 0 {
+            message += " " + String(localized: "\(pendingCount) unsent actions (likes and playlist favorites) will be lost.")
         }
         return message + " " + String(localized: "This can't be undone.")
     }

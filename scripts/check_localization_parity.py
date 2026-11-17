@@ -40,7 +40,7 @@ def format_localization_key(value):
                     result.append("%@")
                 elif expression.startswith(("Int(", "UInt(")) or expression in {
                     "position", "days", "submittedCount", "entry.count", "queueStatus.active",
-                    "season", "number", "status", "model.cooldownSeconds", "selectedCatalogSongs.count", "successful", "expected"
+                    "season", "number", "pendingCount", "status", "model.cooldownSeconds", "selectedCatalogSongs.count", "successful", "expected"
                 }:
                     result.append("%lld")
                 else:
@@ -71,6 +71,7 @@ for language, keys in key_sets.items():
 
 patterns = (
     r'(?:Text|Button|Label|Section|Picker|Toggle|LabeledContent|ProgressView|ContentUnavailableView)\(\s*"((?:[^"\\]|\\.)*)"',
+    r'\brow\(\s*"((?:[^"\\]|\\.)*)"',
     r'Link\(\s*"((?:[^"\\]|\\.)*)"',
     r'(?:navigationTitle|accessibilityLabel|accessibilityValue|accessibilityHint)\(\s*"((?:[^"\\]|\\.)*)"',
     r'String\(localized:\s*"((?:[^"\\]|\\.)*)"',
