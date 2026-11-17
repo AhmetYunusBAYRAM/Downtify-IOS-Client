@@ -39,9 +39,9 @@ struct DownloadsView: View {
 
     private var localSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("On this device", systemImage: "iphone.gen3")
+            Label("On This Device", systemImage: "iphone.gen3")
                 .font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
-            Text("Offline files use device storage and can play without a server connection.")
+            Text("Songs added to this device use its storage and can play without a server connection.")
                 .font(.footnote).foregroundStyle(DowntifyStyle.secondaryText)
             if let localError {
                 Label(localError, systemImage: "exclamationmark.triangle.fill")
@@ -49,8 +49,8 @@ struct DownloadsView: View {
             }
             let items = downloads.currentDownloads
             if items.isEmpty {
-                ContentUnavailableView("No offline downloads", systemImage: "arrow.down.to.line",
-                                       description: Text("Choose Download for offline playback from a song’s actions."))
+                ContentUnavailableView("Nothing on this device", systemImage: "arrow.down.to.line.circle",
+                                       description: Text("Songs you add to this device appear here."))
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
             } else {
                 ForEach(items) { item in localRow(item) }
@@ -77,23 +77,23 @@ struct DownloadsView: View {
                 Spacer(minLength: 8)
                 Menu {
                     if item.state == .ready {
-                        Button("Play offline", systemImage: "play.fill") {
+                        Button("Play", systemImage: "play.fill") {
                             playback.replaceQueue([item.track], startingAt: 0)
                         }
-                        Button("Delete offline file", systemImage: "trash", role: .destructive) {
+                        Button("Remove from Device", systemImage: "trash", role: .destructive) {
                             do { try downloads.delete(item.id); localError = nil }
-                            catch { localError = "Could not delete the offline file. Check available storage and try again." }
+                            catch { localError = "Could not remove this song from the device. Check available storage and try again." }
                         }
                     } else if item.pending {
-                        Button("Cancel download", systemImage: "xmark.circle") { downloads.cancel(item.id) }
+                        Button("Cancel Adding to Device", systemImage: "xmark.circle") { downloads.cancel(item.id) }
                     } else {
-                        Button("Retry download", systemImage: "arrow.clockwise") {
+                        Button("Retry Add to Device", systemImage: "exclamationmark.triangle") {
                             do { _ = try downloads.retry(item.id); localError = nil }
-                            catch { localError = "Could not retry this download. Reconnect and try again." }
+                            catch { localError = "Could not retry adding this song to the device. Reconnect and try again." }
                         }
-                        Button("Remove", systemImage: "trash", role: .destructive) {
+                        Button("Remove from Device", systemImage: "trash", role: .destructive) {
                             do { try downloads.delete(item.id); localError = nil }
-                            catch { localError = "Could not remove this download." }
+                            catch { localError = "Could not remove this song from the device." }
                         }
                     }
                 } label: {
@@ -103,7 +103,7 @@ struct DownloadsView: View {
             }
             if item.state == .transferring, let expected = item.expectedBytes, expected > 0 {
                 ProgressView(value: Double(item.receivedBytes), total: Double(expected))
-                    .accessibilityLabel("Download progress for \(item.track.displayTitle)")
+                    .accessibilityLabel("Adding to device progress for \(item.track.displayTitle)")
                     .accessibilityValue("\(Int(Double(item.receivedBytes) / Double(expected) * 100)) percent")
             } else if item.state == .preparing {
                 ProgressView().accessibilityLabel("Preparing \(item.track.displayTitle)")
@@ -117,27 +117,27 @@ struct DownloadsView: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Library Requests", systemImage: "server.rack")
                 .font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
-            Text("These jobs run on the server. Completed items become available through library sync; they are not saved on this device.")
+            Text("These requests run on the server. Completed items become available through library sync; they are not added to this device.")
                 .font(.footnote).foregroundStyle(DowntifyStyle.secondaryText)
             catalogDownloadActions
             if let queueStatus = serverDownloads.queueStatus {
                 Text("Queue \(queueStatus.paused ? "paused" : queueStatus.state) · \(queueStatus.active) active")
-                    .font(.subheadline).accessibilityLabel("Server queue \(queueStatus.state), \(queueStatus.active) active jobs")
+                    .font(.subheadline).accessibilityLabel("Library Requests \(queueStatus.state), \(queueStatus.active) active jobs")
             }
             if let queueError = serverDownloads.queueError {
                 VStack(alignment: .leading, spacing: 8) {
                     Label(queueError, systemImage: "exclamationmark.triangle.fill").foregroundStyle(DowntifyStyle.error)
-                    Button("Retry server queue", systemImage: "arrow.clockwise") { Task { await refreshQueue() } }
+                    Button("Retry Library Requests", systemImage: "arrow.clockwise") { Task { await refreshQueue() } }
                 }.font(.footnote)
             } else if serverDownloads.jobs.isEmpty && !serverDownloads.isRefreshing {
-                ContentUnavailableView("Server queue is empty", systemImage: "tray",
+                ContentUnavailableView("No Library requests", systemImage: "tray",
                                        description: Text("Add a supported link to add it to your Library."))
                     .frame(maxWidth: .infinity).padding(.vertical, 4)
             }
-            if serverDownloads.isRefreshing { ProgressView("Loading server queue…") }
+            if serverDownloads.isRefreshing { ProgressView("Loading Library requests…") }
             ForEach(serverDownloads.jobs) { job in
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(job.song.title ?? job.filename ?? "Server download")
+                    Text(job.song.title ?? job.filename ?? "Library request")
                         .font(.headline).lineLimit(2)
                     if let artist = job.song.artist, !artist.isEmpty {
                         Text(artist).font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
@@ -154,7 +154,7 @@ struct DownloadsView: View {
                     .font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
                     if let progress = job.progress, progress.isFinite, progress > 0, progress < 100 {
                         ProgressView(value: max(0, min(100, progress)), total: 100)
-                            .accessibilityLabel("Server job progress")
+                            .accessibilityLabel("Library request progress")
                             .accessibilityValue("\(Int(max(0, min(100, progress)))) percent")
                     }
                     if let message = job.message, !message.isEmpty {
@@ -171,7 +171,7 @@ struct DownloadsView: View {
                     .frame(minHeight: 44)
             }
             .padding(.top, 4)
-            Text("Server queue controls are managed by the server. This paired device can view jobs and submit links.")
+            Text("Library Requests are managed by the server. This paired device can view requests and submit links.")
                 .font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
         }
         .padding(16)
@@ -291,19 +291,9 @@ struct DownloadsView: View {
         }
     }
 
-    private func localStatus(_ item: OfflineDownload) -> LocalizedStringKey {
-        switch item.state {
-        case .preparing: return "Preparing download"
-        case .paused: return "Paused for playback or library work"
-        case .transferring:
-            if let expected = item.expectedBytes, expected > 0 {
-                return "Downloading · \(ByteCountFormatter.string(fromByteCount: item.receivedBytes, countStyle: .file)) of \(ByteCountFormatter.string(fromByteCount: expected, countStyle: .file))"
-            }
-            return "Downloading"
-        case .ready: return "Available offline"
-        case .cancelled: return "Cancelled"
-        case let .failed(reason): return "Failed · \(reason.localizedDescription)"
-        }
+    private func localStatus(_ item: OfflineDownload) -> String {
+        if case .cancelled = item.state { return String(localized: "Cancelled") }
+        return MediaActionPresentation.device(DeviceSaveState(track: item.track, record: item), itemTitle: item.track.title).title
     }
 
     @MainActor private func load() async {
