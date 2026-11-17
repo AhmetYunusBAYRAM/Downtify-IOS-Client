@@ -7,7 +7,7 @@ struct LibraryHomeView: View {
     @Binding var appearance: DowntifyAppearance
     let connection: ConnectionService
     let serverDownloadQueue: ServerDownloadQueue
-    @ObservedObject var serverDownloads: ServerDownloadPresentationModel
+    let serverDownloads: ServerDownloadPresentationModel
     let signOut: @MainActor () async throws -> Void
     @EnvironmentObject private var collections: LibraryCollectionsModel
     @EnvironmentObject private var catalogPresentation: CatalogPresentationModel
@@ -360,13 +360,11 @@ struct LibraryHomeView: View {
 
     @ViewBuilder
     private var searchContent: some View {
-        CatalogSearchView(catalog: catalogPresentation, library: library, playback: playback,
-                          onDownloadAlbum: { url, tracks in Task { await serverDownloads.requestAlbum(url: url, expected: tracks) } },
-                          albumDownloadState: { serverDownloads.actionState(forAlbumURL: $0) },
-                          onDownload: { song in Task { await serverDownloads.request(song: song) } },
-                          downloadState: { catalogLibraryState(for: $0) },
-                          onAddToDevice: { addCatalogSongToDevice($0) },
-                          deviceState: { catalogDeviceState(for: $0) })
+        CatalogSearchContainer(catalog: catalogPresentation, library: library, playback: playback,
+                               serverDownloads: serverDownloads,
+                               libraryState: { catalogLibraryState(for: $0) },
+                               onAddToDevice: { addCatalogSongToDevice($0) },
+                               deviceState: { catalogDeviceState(for: $0) })
     }
 
     private func libraryTrack(forCatalogSong song: CatalogSong) -> LibraryTrack? {
@@ -394,8 +392,9 @@ struct LibraryHomeView: View {
     }
 
     private var discoveryContent: some View {
-        CatalogDiscoverView(
+        CatalogDiscoverContainer(
             catalog: catalogPresentation,
+            serverDownloads: serverDownloads,
             libraryTracks: library.tracks,
             libraryArtists: discoveryLibraryArtists,
             libraryAlbums: Array(library.catalog.albumsByID.values).map {
@@ -403,14 +402,10 @@ struct LibraryHomeView: View {
             },
             playlistNames: (collections.playlists ?? []).filter { $0.liked != true }.map(\.name),
             playlistIDs: (collections.playlists ?? []).filter { $0.liked != true }.map(\.id),
-            shownArtists: [],
             onPlay: { song in playCatalogSong(song) },
-            onDownload: { song in Task { await serverDownloads.request(song: song) } },
-            onDownloadAlbum: { url, tracks in Task { await serverDownloads.requestAlbum(url: url, expected: tracks) } },
-            downloadState: { catalogLibraryState(for: $0) },
+            libraryState: { catalogLibraryState(for: $0) },
             onAddToDevice: { addCatalogSongToDevice($0) },
             deviceState: { catalogDeviceState(for: $0) },
-            albumDownloadState: { serverDownloads.actionState(forAlbumURL: $0) },
             onOpenURL: { openProviderURL($0.absoluteString) }
         )
     }
@@ -1452,5 +1447,63 @@ private struct LibraryTrackList: View {
         default:
             EmptyView()
         }
+    }
+}
+
+/// Observes the server queue only for the Search tab so Add to Library rows refresh
+/// without re-rendering the whole library root on every queue poll.
+private struct CatalogSearchContainer: View {
+    @ObservedObject var catalog: CatalogPresentationModel
+    @ObservedObject var library: LibraryPresentationModel
+    let playback: PlaybackController
+    @ObservedObject var serverDownloads: ServerDownloadPresentationModel
+    let libraryState: (CatalogSong) -> ServerDownloadActionState
+    let onAddToDevice: (CatalogSong) -> Void
+    let deviceState: (CatalogSong) -> DeviceSaveState
+
+    var body: some View {
+        CatalogSearchView(catalog: catalog, library: library, playback: playback,
+                          onDownloadAlbum: { url, tracks in Task { await serverDownloads.requestAlbum(url: url, expected: tracks) } },
+                          albumDownloadState: { serverDownloads.actionState(forAlbumURL: $0) },
+                          onDownload: { song in Task { await serverDownloads.request(song: song) } },
+                          downloadState: libraryState,
+                          onAddToDevice: onAddToDevice,
+                          deviceState: deviceState)
+    }
+}
+
+/// Same scoping for the Discover tab.
+private struct CatalogDiscoverContainer: View {
+    @ObservedObject var catalog: CatalogPresentationModel
+    @ObservedObject var serverDownloads: ServerDownloadPresentationModel
+    let libraryTracks: [LibraryTrack]
+    let libraryArtists: [CatalogLibraryArtist]
+    let libraryAlbums: [CatalogLibraryAlbum]
+    let playlistNames: [String]
+    let playlistIDs: [String]
+    let onPlay: (CatalogSong) -> Void
+    let libraryState: (CatalogSong) -> ServerDownloadActionState
+    let onAddToDevice: (CatalogSong) -> Void
+    let deviceState: (CatalogSong) -> DeviceSaveState
+    let onOpenURL: (URL) -> Void
+
+    var body: some View {
+        CatalogDiscoverView(
+            catalog: catalog,
+            libraryTracks: libraryTracks,
+            libraryArtists: libraryArtists,
+            libraryAlbums: libraryAlbums,
+            playlistNames: playlistNames,
+            playlistIDs: playlistIDs,
+            shownArtists: [],
+            onPlay: onPlay,
+            onDownload: { song in Task { await serverDownloads.request(song: song) } },
+            onDownloadAlbum: { url, tracks in Task { await serverDownloads.requestAlbum(url: url, expected: tracks) } },
+            downloadState: libraryState,
+            onAddToDevice: onAddToDevice,
+            deviceState: deviceState,
+            albumDownloadState: { serverDownloads.actionState(forAlbumURL: $0) },
+            onOpenURL: onOpenURL
+        )
     }
 }
