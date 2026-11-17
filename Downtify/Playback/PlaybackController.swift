@@ -197,6 +197,32 @@ final class PlaybackController: ObservableObject {
         publishMetadata()
     }
 
+    /// Stops playback, empties the queue so the dock hides, and persists the empty state.
+    func stopAndClear() {
+        stopEngine()
+        audioSession.deactivate()
+        progressGeneration += 1
+        progressTask?.cancel()
+        progressTask = nil
+        podcast = nil
+        podcastProgress.removeAll()
+        pendingPodcastProgress.removeAll()
+        podcastProgressSaveFailed = false
+        suspendedMusicPosition = 0
+        resetListen()
+        wantsPlayback = false
+        resumeAfterInterruption = false
+        resumeAfterNetworkFailure = false
+        queue = PlaybackQueue()
+        position = 0
+        duration = nil
+        phase = .idle
+        queueReadyForPersistence = true
+        persist()
+        reporting?.publish(state: .stopped, track: nil, duration: nil, position: 0)
+        publishMetadata()
+    }
+
     func playEpisode(_ episode: PodcastEpisode, from show: PodcastShow, session expected: DeviceSession) {
         guard session == expected else { return }
         if podcast?.episode.id == episode.id {

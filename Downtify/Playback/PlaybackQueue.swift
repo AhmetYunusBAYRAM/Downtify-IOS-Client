@@ -346,6 +346,12 @@ struct PlaybackStateStore: PlaybackStateStoring {
     func loadNormalization() -> PlaybackNormalization { load("playback.normalization") ?? .off }
     func saveNormalization(_ normalization: PlaybackNormalization) { save(normalization, key: "playback.normalization") }
 
+    func removeAllSavedQueues() {
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("playback.queue.") {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
     private func key(for scope: LibraryScope) -> String {
         let identity = Data("\(scope.serverID.utf8.count):\(scope.serverID)\(scope.account)".utf8)
         let digest = Data(SHA256.hash(data: identity)).base64EncodedString()

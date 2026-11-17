@@ -51,6 +51,7 @@ actor PlaybackPreloadCache {
     private var entries: [URL: Entry] = [:]
     private var pending: [Key: Int64] = [:]
     private var byteLimit: Int64
+    private var generation = 0
     private var occupied: Int64 {
         entries.values.reduce(0) { $0 + $1.length } + pending.values.reduce(0, +)
     }
@@ -83,6 +84,17 @@ actor PlaybackPreloadCache {
         }
     }
 
+    func removeAll() async {
+        generation += 1
+        await retain([], byteLimit: Int(clamping: byteLimit))
+        // Files still leased by readers go away with their lease; everything else, including partials, goes now.
+        let leased = Set(entries.keys.map(\.lastPathComponent))
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        for file in files where !leased.contains(file.lastPathComponent) {
+            try? FileManager.default.removeItem(at: file)
+        }
+    }
+
     func contains(_ key: Key) -> Bool {
         url(for: key, allowAlternateQuality: false) != nil
     }
@@ -104,6 +116,7 @@ actor PlaybackPreloadCache {
         let partial = directory.appending(path: UUID().uuidString).appendingPathExtension("partial")
         let complete = partial.deletingPathExtension().appendingPathExtension(stream.fileExtension)
         pending[key] = stream.length
+        let startGeneration = generation
         defer {
             pending.removeValue(forKey: key)
             try? FileManager.default.removeItem(at: partial)
@@ -126,7 +139,7 @@ actor PlaybackPreloadCache {
         }
         try handle.close()
         try Task.checkCancellation()
-        guard occupied <= byteLimit else { return }
+        guard generation == startGeneration, occupied <= byteLimit else { return }
         try FileManager.default.moveItem(at: partial, to: complete)
         for (url, entry) in entries where entry.key.scope == key.scope && entry.key.media == key.media {
             retire(url)
