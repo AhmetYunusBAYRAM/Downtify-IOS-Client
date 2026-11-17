@@ -6,7 +6,7 @@ struct CatalogSearchView: View {
     @ObservedObject var library: LibraryPresentationModel
     let playback: PlaybackController
     var onDownloadAlbum: (String, [CatalogSong]?) -> Void = { _, _ in }
-    var albumDownloadState: (String) -> ServerDownloadActionState = { _ in .idle }
+    var albumDownloadState: (CatalogAlbum, Int?) -> ServerDownloadActionState = { _, _ in .idle }
     var onDownload: (CatalogSong) -> Void = { _ in }
     var downloadState: (CatalogSong) -> ServerDownloadActionState = { _ in .idle }
     var onAddToDevice: (CatalogSong) -> Void = { _ in }
@@ -25,7 +25,7 @@ struct CatalogSearchView: View {
     init(catalog: CatalogPresentationModel, library: LibraryPresentationModel,
          playback: PlaybackController,
          onDownloadAlbum: @escaping (String, [CatalogSong]?) -> Void = { _, _ in },
-         albumDownloadState: @escaping (String) -> ServerDownloadActionState = { _ in .idle },
+         albumDownloadState: @escaping (CatalogAlbum, Int?) -> ServerDownloadActionState = { _, _ in .idle },
          onDownload: @escaping (CatalogSong) -> Void = { _ in },
          downloadState: @escaping (CatalogSong) -> ServerDownloadActionState = { _ in .idle },
          onAddToDevice: @escaping (CatalogSong) -> Void = { _ in },
@@ -168,7 +168,7 @@ struct CatalogSearchView: View {
                                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                             }.buttonStyle(.plain)
                             if canRequestAlbumDownload(album), let url = album.url {
-                                serverAlbumDownloadButton(url: url, title: album.title)
+                                serverAlbumDownloadButton(url: url, album: album)
                             }
                         }
                     }
@@ -393,7 +393,7 @@ struct CatalogSearchView: View {
                                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                             }.buttonStyle(.plain)
                             if canRequestAlbumDownload(album), let url = album.url {
-                                serverAlbumDownloadButton(url: url, title: album.title)
+                                serverAlbumDownloadButton(url: url, album: album)
                             }
                         }
                     }
@@ -426,9 +426,11 @@ struct CatalogSearchView: View {
         return ServerDownloadQueue.isYouTubeMusicAlbumURL(url)
     }
 
-    @ViewBuilder private func serverAlbumDownloadButton(url: String, title: String) -> some View {
-        MediaActionButton(presentation: .library(albumDownloadState(url), itemTitle: title)) {
-            onDownloadAlbum(url, resolvedAlbumTracks(for: url))
+    @ViewBuilder private func serverAlbumDownloadButton(url: String, album: CatalogAlbum) -> some View {
+        let resolved = resolvedAlbumTracks(for: url)
+        MediaActionButton(presentation: .library(albumDownloadState(album, album.trackCount ?? resolved?.count),
+                                                 itemTitle: album.title)) {
+            onDownloadAlbum(url, resolved)
         }
         .frame(width: 44, height: 44)
     }

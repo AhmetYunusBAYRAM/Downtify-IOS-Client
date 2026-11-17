@@ -396,6 +396,7 @@ struct LibraryHomeView: View {
             catalog: catalogPresentation,
             serverDownloads: serverDownloads,
             libraryTracks: library.tracks,
+            membership: library.membership,
             libraryArtists: discoveryLibraryArtists,
             libraryAlbums: Array(library.catalog.albumsByID.values).map {
                 CatalogLibraryAlbum(artist: $0.artist, title: $0.title)
@@ -1464,7 +1465,11 @@ private struct CatalogSearchContainer: View {
     var body: some View {
         CatalogSearchView(catalog: catalog, library: library, playback: playback,
                           onDownloadAlbum: { url, tracks in Task { await serverDownloads.requestAlbum(url: url, expected: tracks) } },
-                          albumDownloadState: { serverDownloads.actionState(forAlbumURL: $0) },
+                          albumDownloadState: { album, count in
+                              .catalogRow(server: serverDownloads.actionState(forAlbumURL: album.url ?? ""),
+                                          inLibrary: library.membership.isAlbumFullyInLibrary(
+                                              title: album.title, artist: album.artist, trackCount: count))
+                          },
                           onDownload: { song in Task { await serverDownloads.request(song: song) } },
                           downloadState: libraryState,
                           onAddToDevice: onAddToDevice,
@@ -1477,6 +1482,7 @@ private struct CatalogDiscoverContainer: View {
     @ObservedObject var catalog: CatalogPresentationModel
     @ObservedObject var serverDownloads: ServerDownloadPresentationModel
     let libraryTracks: [LibraryTrack]
+    let membership: LibraryMembership
     let libraryArtists: [CatalogLibraryArtist]
     let libraryAlbums: [CatalogLibraryAlbum]
     let playlistNames: [String]
@@ -1502,7 +1508,11 @@ private struct CatalogDiscoverContainer: View {
             downloadState: libraryState,
             onAddToDevice: onAddToDevice,
             deviceState: deviceState,
-            albumDownloadState: { serverDownloads.actionState(forAlbumURL: $0) },
+            albumDownloadState: { album, count in
+                .catalogRow(server: serverDownloads.actionState(forAlbumURL: album.url ?? ""),
+                            inLibrary: membership.isAlbumFullyInLibrary(
+                                title: album.title, artist: album.artist, trackCount: count))
+            },
             onOpenURL: onOpenURL
         )
     }
