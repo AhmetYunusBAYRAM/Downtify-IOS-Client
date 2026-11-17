@@ -9,6 +9,8 @@ struct CatalogSearchView: View {
     var albumDownloadState: (String) -> ServerDownloadActionState = { _ in .idle }
     var onDownload: (CatalogSong) -> Void = { _ in }
     var downloadState: (CatalogSong) -> ServerDownloadActionState = { _ in .idle }
+    var onAddToDevice: (CatalogSong) -> Void = { _ in }
+    var deviceState: (CatalogSong) -> DeviceSaveState = { _ in .unavailable(.notInLibrary) }
 
     private enum SearchCategory: String, CaseIterable {
         case songs, artists, albums
@@ -25,7 +27,9 @@ struct CatalogSearchView: View {
          onDownloadAlbum: @escaping (String, [CatalogSong]?) -> Void = { _, _ in },
          albumDownloadState: @escaping (String) -> ServerDownloadActionState = { _ in .idle },
          onDownload: @escaping (CatalogSong) -> Void = { _ in },
-         downloadState: @escaping (CatalogSong) -> ServerDownloadActionState = { _ in .idle }) {
+         downloadState: @escaping (CatalogSong) -> ServerDownloadActionState = { _ in .idle },
+         onAddToDevice: @escaping (CatalogSong) -> Void = { _ in },
+         deviceState: @escaping (CatalogSong) -> DeviceSaveState = { _ in .unavailable(.notInLibrary) }) {
         self.catalog = catalog
         self.library = library
         self.playback = playback
@@ -33,6 +37,8 @@ struct CatalogSearchView: View {
         self.albumDownloadState = albumDownloadState
         self.onDownload = onDownload
         self.downloadState = downloadState
+        self.onAddToDevice = onAddToDevice
+        self.deviceState = deviceState
     }
 
     private var normalizedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -352,6 +358,7 @@ struct CatalogSearchView: View {
                     if song.source != "library", catalog.externalCatalogAvailable {
                         serverDownloadButton(for: song)
                     }
+                    deviceButton(for: song)
                 }
                 .padding(.vertical, 4)
             }
@@ -399,6 +406,14 @@ struct CatalogSearchView: View {
 
     private func sectionHeader(_ title: LocalizedStringKey) -> some View {
         Text(title).font(.title3.bold()).accessibilityAddTraits(.isHeader).padding(.top, 8)
+    }
+
+    @ViewBuilder private func deviceButton(for song: CatalogSong) -> some View {
+        let state = deviceState(song)
+        if state != .unavailable(.notInLibrary) {
+            MediaActionButton(presentation: .device(state, itemTitle: song.title)) { onAddToDevice(song) }
+                .frame(width: 44, height: 44)
+        }
     }
 
     @ViewBuilder private func serverDownloadButton(for song: CatalogSong) -> some View {

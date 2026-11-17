@@ -11,6 +11,7 @@ struct LibraryHomeView: View {
     let signOut: @MainActor () async throws -> Void
     @EnvironmentObject private var collections: LibraryCollectionsModel
     @EnvironmentObject private var catalogPresentation: CatalogPresentationModel
+    @EnvironmentObject private var offlineDownloads: OfflineDownloads
     @Environment(\.openURL) private var openURL
     @Environment(\.downtifyPalette) private var palette
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -363,7 +364,29 @@ struct LibraryHomeView: View {
                           onDownloadAlbum: { url, tracks in Task { await serverDownloads.requestAlbum(url: url, expected: tracks) } },
                           albumDownloadState: { serverDownloads.actionState(forAlbumURL: $0) },
                           onDownload: { song in Task { await serverDownloads.request(song: song) } },
-                          downloadState: { serverDownloads.actionState(for: $0) })
+                          downloadState: { serverDownloads.actionState(for: $0) },
+                          onAddToDevice: { addCatalogSongToDevice($0) },
+                          deviceState: { catalogDeviceState(for: $0) })
+    }
+
+    private func libraryTrack(forCatalogSong song: CatalogSong) -> LibraryTrack? {
+        library.membership.track(for: song)
+            ?? serverDownloads.completedFilename(forActionKey: song.id.description)
+                .flatMap(library.membership.track(forServerFilename:))
+    }
+
+    private func catalogDeviceState(for song: CatalogSong) -> DeviceSaveState {
+        let track = libraryTrack(forCatalogSong: song)
+        let record = track.flatMap { track in offlineDownloads.currentDownloads.first { $0.track.id == track.id } }
+        return DeviceSaveState(track: track, record: record)
+    }
+
+    private func addCatalogSongToDevice(_ song: CatalogSong) {
+        guard let track = libraryTrack(forCatalogSong: song) else { return }
+        let failed = offlineDownloads.currentDownloads.first {
+            $0.track.id == track.id && { if case .failed = $0.state { return true } else { return false } }($0)
+        }
+        if let failed { _ = try? offlineDownloads.retry(failed.id) } else { _ = try? offlineDownloads.enqueue(track) }
     }
 
     private var discoveryContent: some View {
@@ -381,6 +404,8 @@ struct LibraryHomeView: View {
             onDownload: { song in Task { await serverDownloads.request(song: song) } },
             onDownloadAlbum: { url, tracks in Task { await serverDownloads.requestAlbum(url: url, expected: tracks) } },
             downloadState: { serverDownloads.actionState(for: $0) },
+            onAddToDevice: { addCatalogSongToDevice($0) },
+            deviceState: { catalogDeviceState(for: $0) },
             albumDownloadState: { serverDownloads.actionState(forAlbumURL: $0) },
             onOpenURL: { openProviderURL($0.absoluteString) }
         )

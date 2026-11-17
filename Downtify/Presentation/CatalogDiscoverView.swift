@@ -14,6 +14,8 @@ struct CatalogDiscoverView: View {
     var onDownload: (CatalogSong) -> Void
     var onDownloadAlbum: (String, [CatalogSong]?) -> Void = { _, _ in }
     var downloadState: (CatalogSong) -> ServerDownloadActionState = { _ in .idle }
+    var onAddToDevice: (CatalogSong) -> Void = { _ in }
+    var deviceState: (CatalogSong) -> DeviceSaveState = { _ in .unavailable(.notInLibrary) }
     var albumDownloadState: (String) -> ServerDownloadActionState = { _ in .idle }
     var onOpenURL: (URL) -> Void = { _ in }
 
@@ -332,7 +334,17 @@ struct CatalogDiscoverView: View {
             if song.source != "library", catalog.isLibraryOnly != true {
                 serverDownloadButton(for: song)
             }
+            deviceButton(for: song)
             if similarAction { Button { similarArtist = song.artist; similarTrack = song.title; loadSimilar() } label: { Image(systemName: "waveform").frame(width: 40, height: 44) }.buttonStyle(.plain).accessibilityLabel("Find tracks similar to \(song.title)") }
+        }
+    }
+
+    @ViewBuilder private func deviceButton(for song: CatalogSong) -> some View {
+        let state = deviceState(song)
+        if state != .unavailable(.notInLibrary) {
+            MediaActionButton(presentation: .device(state, itemTitle: song.title)) { onAddToDevice(song) }
+                .frame(width: 44, height: 44)
+                .buttonStyle(.plain)
         }
     }
 
