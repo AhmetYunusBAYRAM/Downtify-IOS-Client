@@ -102,6 +102,7 @@ struct FoundationView: View {
                 TextField("https://music.example.com", text: $model.address)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
                     .keyboardType(.URL).textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("connect.serverField")
                     .accessibilityLabel("Server address")
                 Button { model.probeAddress() } label: {
                     if model.isWorking { ProgressView().frame(maxWidth: .infinity).accessibilityLabel("Connecting to server") }
@@ -145,7 +146,7 @@ struct FoundationView: View {
                         Text("Sign in with password").font(.subheadline.weight(.semibold))
                         TextField("Username", text: $model.username).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder)
                         SecureField("Password", text: $model.password).textFieldStyle(.roundedBorder)
-                        Button(model.cooldownSeconds > 0 ? "Wait \(model.cooldownSeconds)s" : "Sign in") { model.signIn() }.buttonStyle(.borderedProminent).foregroundStyle(DowntifyStyle.onAccent).disabled(model.isWorking || model.cooldownSeconds > 0 || model.username.isEmpty || model.password.isEmpty)
+                        Button(model.cooldownSeconds > 0 ? "Wait \(model.cooldownSeconds)s" : "Sign in") { model.signIn() }.buttonStyle(.borderedProminent).foregroundStyle(DowntifyStyle.onAccent).disabled(model.isWorking || model.cooldownSeconds > 0 || model.username.isEmpty || model.password.isEmpty).accessibilityIdentifier("connect.signInButton")
                     }
                     Text("Pairing code").font(.subheadline.weight(.semibold))
                     TextField("Enter code", text: $model.pairingCode).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder)

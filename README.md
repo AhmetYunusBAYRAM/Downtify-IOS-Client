@@ -72,6 +72,7 @@ If `release-notes/<version>-<build>.json` exists (for example `0.1.2-8.json`), i
 ## Project documents
 
 - [Porting plan](docs/PORTING_PLAN.md)
+- [Simulator automation (debug harness)](docs/SIMULATOR_AUTOMATION.md)
 - [Android parity audit](docs/ANDROID_PARITY_AUDIT.md)
 - [Search, Finder and Discover parity audit](docs/WEBUI_PARITY_AUDIT.md)
 - [Agent handoffs](agents/README.md)

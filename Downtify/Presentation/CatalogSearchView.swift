@@ -92,6 +92,7 @@ struct CatalogSearchView: View {
                 .submitLabel(.search)
                 .focused($searchFocused)
                 .accessibilityLabel("Search songs, albums, and artists")
+                .accessibilityIdentifier("catalog.searchField")
 
             if !normalizedQuery.isEmpty {
                 localResults
@@ -378,6 +379,7 @@ struct CatalogSearchView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Play \(song.title)")
+                    .accessibilityIdentifier("catalog.result.\(song.id)")
                     .disabled(song.source == "library" && song.libraryTrack(in: library.tracks) == nil)
                     if song.source != "library", catalog.externalCatalogAvailable {
                         serverDownloadButton(for: song)

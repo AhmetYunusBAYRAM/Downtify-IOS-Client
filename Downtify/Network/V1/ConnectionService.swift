@@ -353,10 +353,11 @@ actor NetworkOperationCoordinator {
     static let limitDefaultsKey = "debug.networkOperationLimit"
     static let allowedLimits = 1...8
     static let defaultLimit = 4
-    static let shared = NetworkOperationCoordinator(limit: savedLimit)
+    // Mutable only so the debug harness can swap in an isolated defaults suite before first use.
+    static var shared = NetworkOperationCoordinator(limit: savedLimit(in: .standard), defaults: .standard)
 
-    private static var savedLimit: Int {
-        let value = UserDefaults.standard.object(forKey: limitDefaultsKey) as? Int ?? defaultLimit
+    static func savedLimit(in defaults: UserDefaults) -> Int {
+        let value = defaults.object(forKey: limitDefaultsKey) as? Int ?? defaultLimit
         return min(allowedLimits.upperBound, max(allowedLimits.lowerBound, value))
     }
     private static let failuresDefaultsKey = "debug.networkOverlay.recentFailures"
@@ -379,9 +380,14 @@ actor NetworkOperationCoordinator {
     private var active: [UUID: ActiveOperation] = [:]
     private var order: UInt64 = 0
     private var waiters: [Waiter] = []
-    private var recentFailures = UserDefaults.standard.stringArray(forKey: failuresDefaultsKey) ?? []
+    private let defaults: UserDefaults
+    private var recentFailures: [String]
 
-    init(limit: Int = NetworkOperationCoordinator.defaultLimit) { self.limit = max(1, limit) }
+    init(limit: Int = NetworkOperationCoordinator.defaultLimit, defaults: UserDefaults = .standard) {
+        self.limit = max(1, limit)
+        self.defaults = defaults
+        recentFailures = defaults.stringArray(forKey: Self.failuresDefaultsKey) ?? []
+    }
 
     var queuedOperationCount: Int { waiters.count }
 
@@ -405,12 +411,12 @@ actor NetworkOperationCoordinator {
         let timestamp = ISO8601DateFormatter().string(from: Date())
         recentFailures.append("\(timestamp)  \(message)")
         if recentFailures.count > 5 { recentFailures.removeFirst(recentFailures.count - 5) }
-        UserDefaults.standard.set(recentFailures, forKey: Self.failuresDefaultsKey)
+        defaults.set(recentFailures, forKey: Self.failuresDefaultsKey)
     }
 
     func clearRecentFailures() {
         recentFailures.removeAll()
-        UserDefaults.standard.removeObject(forKey: Self.failuresDefaultsKey)
+        defaults.removeObject(forKey: Self.failuresDefaultsKey)
     }
 
     func withOperation<T>(priority: NetworkOperationPriority? = nil,
