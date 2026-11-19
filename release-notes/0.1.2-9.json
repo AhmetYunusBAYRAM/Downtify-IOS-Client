@@ -1,0 +1,7 @@
+[
+  "Add to Library and Add to Device now clearly distinguish server downloads from offline copies on your phone",
+  "See storage usage and clear app data while keeping your sign-in",
+  "Playback can recover from temporary stream failures and keep the current song’s quality when the network changes",
+  "The network debug overlay shows queue and cache readiness and can be resized and moved",
+  "Network diagnostics and the concurrent request limit are now in Settings"
+]
