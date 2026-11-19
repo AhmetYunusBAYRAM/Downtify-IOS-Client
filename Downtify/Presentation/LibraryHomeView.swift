@@ -61,13 +61,13 @@ struct LibraryHomeView: View {
                     .searchable(text: $searchText, prompt: "Filter your library")
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback) }
-            .tabItem { Label("Library", systemImage: "books.vertical") }.tag(Tab.library)
+            .tabItem { Label("Library", systemImage: "books.vertical").accessibilityIdentifier("tab.library") }.tag(Tab.library)
 
             NavigationStack {
                 browsePage(title: "Search") { searchContent }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback) }
-            .tabItem { Label("Search", systemImage: "magnifyingglass") }.tag(Tab.search)
+            .tabItem { Label("Search", systemImage: "magnifyingglass").accessibilityIdentifier("tab.search") }.tag(Tab.search)
 
             NavigationStack {
                 browsePage(title: "Discover") { discoveryContent }
@@ -127,7 +127,7 @@ struct LibraryHomeView: View {
                 .navigationTitle("More")
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback) }
-            .tabItem { Label("More", systemImage: "ellipsis") }.tag(Tab.more)
+            .tabItem { Label("More", systemImage: "ellipsis").accessibilityIdentifier("tab.more") }.tag(Tab.more)
         }
         .onChange(of: networkOperationLimit) { _, value in
             Task { await NetworkOperationCoordinator.shared.setLimit(value) }
@@ -1443,6 +1443,7 @@ private struct LibraryTrackList: View {
                         playback.replaceQueue(tracks, startingAt: index)
                     } label: {
                         TrackRow(track: track)
+                            .accessibilityIdentifier("library.trackRow.\(track.id)")
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(Text(track.accessibleMetadata))

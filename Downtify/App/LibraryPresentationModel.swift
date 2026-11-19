@@ -70,9 +70,13 @@ final class LibraryPresentationModel: ObservableObject {
     private var generation = 0
     private var manualRefreshTask: Task<Void, Never>?
 
-    init(repository: LibraryRepository, sessionUpdates: @escaping @Sendable () async throws -> AsyncStream<DeviceSession?>) {
+    private let defaults: UserDefaults
+
+    init(repository: LibraryRepository, sessionUpdates: @escaping @Sendable () async throws -> AsyncStream<DeviceSession?>,
+         defaults: UserDefaults = .standard) {
         self.repository = repository
         self.sessionUpdates = sessionUpdates
+        self.defaults = defaults
     }
 
     deinit { observation?.cancel() }
@@ -227,14 +231,17 @@ final class LibraryCollectionsModel: ObservableObject {
     private var networkMonitor: NWPathMonitor?
     private var pathAvailable = false
     private var appActive = false
+    private let defaults: UserDefaults
 
     init(api: any LibraryCollectionsFetching = LibraryCollectionsAPI(preservesTransportErrors: true), database: LibraryDatabase,
          sessionUpdates: @escaping @Sendable () async throws -> AsyncStream<DeviceSession?>,
-         verifySession: @escaping (DeviceSession) async -> Bool = { _ in false }) {
+         verifySession: @escaping (DeviceSession) async -> Bool = { _ in false },
+         defaults: UserDefaults = .standard) {
         self.api = api
         self.database = database
         self.sessionUpdates = sessionUpdates
         self.verifySession = verifySession
+        self.defaults = defaults
     }
 
     deinit {
@@ -712,13 +719,13 @@ final class LibraryCollectionsModel: ObservableObject {
 
     private func discardActions(for session: DeviceSession) async throws {
         let key = actionDiscardKey(session)
-        UserDefaults.standard.set(true, forKey: key)
+        defaults.set(true, forKey: key)
         // Flush the marker before deleting so a crash cannot replay stale rows.
-        guard UserDefaults.standard.synchronize() else { throw LibraryDatabaseError.storageUnavailable }
+        guard defaults.synchronize() else { throw LibraryDatabaseError.storageUnavailable }
         try await database.removePendingActions(in: scope(session), deviceID: session.deviceID)
-        UserDefaults.standard.removeObject(forKey: key)
-        guard UserDefaults.standard.synchronize() else {
-            UserDefaults.standard.set(true, forKey: key)
+        defaults.removeObject(forKey: key)
+        guard defaults.synchronize() else {
+            defaults.set(true, forKey: key)
             throw LibraryDatabaseError.storageUnavailable
         }
     }
@@ -757,7 +764,7 @@ final class LibraryCollectionsModel: ObservableObject {
         playlistMutationError = nil
         guard let newSession else { return }
         do {
-            if UserDefaults.standard.bool(forKey: actionDiscardKey(newSession)) {
+            if defaults.bool(forKey: actionDiscardKey(newSession)) {
                 try await discardActions(for: newSession)
             }
             guard request == generation else { return }

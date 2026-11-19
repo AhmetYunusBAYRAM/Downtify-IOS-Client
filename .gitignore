@@ -12,3 +12,6 @@ xcuserdata/
 *.key
 *.mobileprovision
 *.provisionprofile
+
+# Local staging credentials and test server config (issue #48)
+.local/

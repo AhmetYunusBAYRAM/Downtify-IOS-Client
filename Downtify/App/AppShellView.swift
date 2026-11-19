@@ -108,6 +108,7 @@ struct PlaybackDock: View {
                     .padding(.vertical, DowntifyStyle.Space.small)
                     .frame(maxWidth: .infinity)
                     .background(palette.background)
+                    .accessibilityIdentifier("player.dock")
             }
         }
         .sheet(isPresented: $showingNowPlaying) {
@@ -165,6 +166,7 @@ private struct MiniPlayerView: View {
                             .downtifyControlTarget()
                     }
                     .accessibilityLabel(isActive ? "Pause" : "Play")
+                    .accessibilityIdentifier("player.playPause")
                 }
                 if playback.podcast == nil {
                     Button { playback.skipNext() } label: {
@@ -191,6 +193,18 @@ private struct MiniPlayerView: View {
     }
 }
 
+/// Storage for per-track lyric offsets. Defaults to `.standard`; debug harness injects an isolated suite at the root.
+private struct LyricDefaultsKey: EnvironmentKey {
+    static let defaultValue: UserDefaults = .standard
+}
+
+extension EnvironmentValues {
+    var lyricDefaults: UserDefaults {
+        get { self[LyricDefaultsKey.self] }
+        set { self[LyricDefaultsKey.self] = newValue }
+    }
+}
+
 private struct NowPlayingView: View {
     @ObservedObject var playback: PlaybackController
     @AppStorage("debug.networkOverlay.enabled") private var networkOverlayEnabled = false
@@ -203,6 +217,7 @@ private struct NowPlayingView: View {
     @State private var lyricsLoading = false
     @State private var lyricsError = false
     @State private var lyricOffset: Double = 0
+    @Environment(\.lyricDefaults) private var lyricDefaults
 
     private var item: PlaybackItem? { playback.queue.current?.item }
     private var track: LibraryTrack? { item?.libraryTrack }
@@ -228,6 +243,7 @@ private struct NowPlayingView: View {
                         }
                     }
                     .accessibilityHidden(true)
+                    .accessibilityIdentifier("player.artwork")
                     VStack(spacing: DowntifyStyle.Space.regular) {
                         trackMetadata
                         phaseDescription
@@ -262,6 +278,7 @@ private struct NowPlayingView: View {
             }
             .background(palette.background.ignoresSafeArea())
             .navigationTitle("Now Playing")
+            .accessibilityIdentifier("player.full")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(palette.background, for: .navigationBar)
             .toolbar {
@@ -324,6 +341,7 @@ private struct NowPlayingView: View {
                         .font(.system(size: 56)).downtifyControlTarget()
                 }
                 .accessibilityLabel(activelyPlaying ? "Pause" : "Play")
+                .accessibilityIdentifier("player.playPause")
                 .disabled(item == nil && playback.podcast == nil)
             }
             if playback.podcast != nil {
@@ -466,7 +484,7 @@ private struct NowPlayingView: View {
         guard let track else { lyrics = nil; return }
         lyricsLoading = true
         lyricsError = false
-        lyricOffset = UserDefaults.standard.double(forKey: playback.lyricsOffsetKey(trackID: track.id))
+        lyricOffset = lyricDefaults.double(forKey: playback.lyricsOffsetKey(trackID: track.id))
         defer { lyricsLoading = false }
         do { lyrics = try await playback.lyrics(for: track.id) }
         catch { if !Task.isCancelled { lyricsError = true; lyrics = nil } }
@@ -474,7 +492,7 @@ private struct NowPlayingView: View {
 
     private func setLyricOffset(_ value: Double) {
         lyricOffset = min(10, max(-10, value))
-        if let track { UserDefaults.standard.set(lyricOffset, forKey: playback.lyricsOffsetKey(trackID: track.id)) }
+        if let track { lyricDefaults.set(lyricOffset, forKey: playback.lyricsOffsetKey(trackID: track.id)) }
     }
 
     private func activeLyricIndex(_ lines: [LyricLine]) -> Int? {
@@ -614,6 +632,10 @@ private struct QueueEntryRow: View {
 
 @MainActor
 final class ArtworkLoader: ObservableObject {
+    #if DEBUG
+    /// Successful image loads; read by the debug state probe only.
+    nonisolated(unsafe) static var debugLoadCount = 0
+    #endif
     private let connection: ConnectionService
     private let transport: any HTTPDataLoading
     private let cache = NSCache<NSString, UIImage>()
@@ -671,6 +693,9 @@ final class ArtworkLoader: ObservableObject {
             guard !Task.isCancelled, try await connection.restoreSession() == session,
                   cachedSession == session, let image = UIImage(data: data) else { return nil }
             cache.setObject(image, forKey: key as NSString, cost: data.count)
+            #if DEBUG
+            ArtworkLoader.debugLoadCount += 1
+            #endif
             return image
         } catch {
             return nil
@@ -810,7 +835,6 @@ private struct LibraryDesignPreviews: PreviewProvider {
             .downtifyAppearance(.oled)
             .environmentObject(ArtworkLoader(connection: ConnectionService()))
             .dynamicTypeSize(.accessibility3)
-            .environment(\.accessibilityReduceMotion, true)
             .previewDisplayName("Library error · OLED, Large Type")
         }
     }
