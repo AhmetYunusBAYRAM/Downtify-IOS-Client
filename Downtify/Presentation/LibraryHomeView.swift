@@ -580,6 +580,7 @@ struct NetworkDebugOverlay: View {
     var body: some View {
         let activeTransfers = downloads.currentDownloads.filter { $0.state == .transferring }.count
         let pausedTransfers = downloads.currentDownloads.filter { $0.state == .paused }.count
+        let currentReadiness = preload.currentReady ? "ready" : "not ready"
         VStack(alignment: .leading, spacing: 3) {
             HStack {
                 Text("NETWORK DEBUG").fontWeight(.bold)
@@ -608,7 +609,7 @@ struct NetworkDebugOverlay: View {
             Text("NET  \(network.active)/\(network.maximum)  ·  wait \(network.queued)")
             Text("FG \(network.foregroundActive) (+\(network.foregroundQueued))  BG \(network.backgroundActive) (+\(network.backgroundQueued))")
             Text("QUEUE  \(playback.queue.upcomingCount) upcoming")
-            Text("CACHE  \(preload.readyCount)/\(preload.windowCount) ready  ·  current \(preload.currentReady ? "ready" : "not ready")")
+            Text("CACHE  \(preload.readyCount)/\(preload.windowCount) ready  ·  current \(currentReadiness)")
             if preload.activeCount > 0 {
                 Text("PRELOAD  \(preload.activeCount) active  ·  \(megabytes(preload.downloadedBytes))/\(megabytes(preload.downloadingBytes)) MB")
             }
