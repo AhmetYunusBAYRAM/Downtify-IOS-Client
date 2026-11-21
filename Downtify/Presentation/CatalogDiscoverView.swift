@@ -327,12 +327,17 @@ struct CatalogDiscoverView: View {
 
     private func songRow(_ song: CatalogSong, similarAction: Bool = false) -> some View {
         HStack(spacing: 10) {
-            Button { onPlay(song) } label: {
-                DowntifyMediaRow(title: song.title, subtitle: song.artists.joined(separator: ", ").isEmpty ? song.artist : song.artists.joined(separator: ", "), detail: song.albumName.isEmpty ? nil : song.albumName) {
-                    artwork(song.coverURL ?? song.previewURL, fallback: "music.note")
-                } accessory: { Image(systemName: "play.fill").foregroundStyle(DowntifyStyle.accent).frame(width: 44, height: 44) }
-            }.buttonStyle(.plain).accessibilityLabel("Play \(song.title) by \(song.artist)")
-                .disabled(song.source == "library" && song.libraryTrack(in: libraryTracks) == nil)
+            NowPlayingReader { nowPlaying in
+                let isCurrent = nowPlaying.isCurrent(song)
+                Button { onPlay(song) } label: {
+                    DowntifyMediaRow(title: song.title, subtitle: song.artists.joined(separator: ", ").isEmpty ? song.artist : song.artists.joined(separator: ", "), detail: song.albumName.isEmpty ? nil : song.albumName,
+                                     isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying) {
+                        artwork(song.coverURL ?? song.previewURL, fallback: "music.note")
+                    } accessory: { Image(systemName: "play.fill").foregroundStyle(DowntifyStyle.accent).frame(width: 44, height: 44) }
+                }.buttonStyle(.plain).accessibilityLabel("Play \(song.title) by \(song.artist)")
+                    .downtifyCurrentRowAccessibility(isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
+                    .disabled(song.source == "library" && song.libraryTrack(in: libraryTracks) == nil)
+            }
             if song.source != "library", catalog.isLibraryOnly != true {
                 serverDownloadButton(for: song)
             }

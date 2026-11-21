@@ -1167,6 +1167,55 @@ final class PlaybackTests: XCTestCase {
         return try JSONDecoder().decode(PodcastEpisode.self, from: Data(json.utf8))
     }
 
+    @MainActor
+    func testNowPlayingIndicatorFollowsQueueAndIgnoresPositionTicks() async throws {
+        let episode = try Self.podcastEpisode()
+        let show = PodcastShow(id: 9, name: "Series", author: "Host", description: nil,
+                               artworkURL: nil, episodeCount: 1, downloadedCount: 0)
+        let fixture = PlaybackFixture(podcasts: TestPodcasts(episode: episode))
+        let session = deviceSession()
+        let first = track("first"), second = track("second")
+        let indicator = fixture.controller.nowPlaying
+        await fixture.controller.updateSession(session) { [] }
+        XCTAssertNil(indicator.currentID)
+
+        let starts = expectation(description: "First track starts")
+        fixture.engine.onPlay = { starts.fulfill() }
+        fixture.controller.replaceQueue([first, second])
+        await fulfillment(of: [starts], timeout: 3)
+        XCTAssertTrue(indicator.isCurrent(first))
+        XCTAssertTrue(indicator.isPlaying)
+
+        var changes = 0
+        let subscription = indicator.objectWillChange.sink { changes += 1 }
+        defer { subscription.cancel() }
+        for seconds in 1...5 { fixture.engine.onEvent?(.position(Double(seconds), duration: 100)) }
+        XCTAssertEqual(changes, 0, "Position ticks must not re-render list rows")
+
+        let advances = expectation(description: "Next track starts")
+        fixture.engine.onPlay = { advances.fulfill() }
+        fixture.controller.skipNext()
+        await fulfillment(of: [advances], timeout: 3)
+        XCTAssertTrue(indicator.isCurrent(second))
+        XCTAssertFalse(indicator.isCurrent(first))
+        XCTAssertTrue(indicator.isPlaying)
+
+        fixture.controller.pause()
+        XCTAssertTrue(indicator.isCurrent(second), "A paused song stays highlighted")
+        XCTAssertFalse(indicator.isPlaying)
+
+        let episodeStarted = expectation(description: "Episode loaded")
+        fixture.engine.onPlay = { episodeStarted.fulfill() }
+        fixture.controller.playEpisode(episode, from: show, session: session)
+        await fulfillment(of: [episodeStarted], timeout: 3)
+        fixture.engine.onPlay = nil
+        XCTAssertNil(indicator.currentID, "Podcasts do not highlight songs")
+        XCTAssertFalse(indicator.isPlaying)
+
+        await fixture.controller.updateSession(nil) { [] }
+        XCTAssertNil(indicator.currentID)
+    }
+
     private func track(_ id: String) -> LibraryTrack {
         LibraryTrack(id: id, file: "\(id).mp3", title: id, artist: "Artist", artists: ["Artist"], album: "Album",
                      albumArtist: "Artist", albumID: "album", artistID: "artist", trackNumber: 1, year: "2026",

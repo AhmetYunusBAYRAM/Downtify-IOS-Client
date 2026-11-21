@@ -76,10 +76,13 @@ private struct PlaybackItemArtwork: View {
 
 struct TrackRow: View {
     let track: LibraryTrack
+    var isCurrent = false
+    var isPlaying = false
 
     var body: some View {
         DowntifyMediaRow(title: track.displayTitle, subtitle: track.displayArtist,
-                         detail: track.album.isEmpty ? nil : track.album) {
+                         detail: track.album.isEmpty ? nil : track.album,
+                         isCurrent: isCurrent, isPlaying: isPlaying) {
             TrackArtwork(track: track, size: 56)
         } accessory: {
             Text(durationText(track.duration))
