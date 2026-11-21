@@ -962,6 +962,12 @@ final class ArtworkLoader: ObservableObject {
         }
     }
 
+    /// The largest cover already in memory for this track at any requested size, without a network request.
+    func cachedImage(for track: LibraryTrack) -> UIImage? {
+        guard track.hasCover, !track.id.isEmpty, cachedSession != nil else { return nil }
+        return [600, 150].lazy.compactMap { self.cache.object(forKey: "track:\(track.id):\($0)" as NSString) }.first
+    }
+
     func playlistImage(file: String) async -> UIImage? {
         guard !file.isEmpty else { return nil }
         return await image(key: "playlist:\(file)") { address in
