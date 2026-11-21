@@ -110,6 +110,9 @@ struct DowntifyMediaRow<Artwork: View, Accessory: View>: View {
     let subtitle: String
     var detail: String? = nil
     var accessibilityLineLimit: Int? = nil
+    /// Marks the queue's current song: accent title plus the now-playing badge.
+    var isCurrent = false
+    var isPlaying = false
     @ViewBuilder var artwork: Artwork
     @ViewBuilder var accessory: Accessory
 
@@ -134,7 +137,11 @@ struct DowntifyMediaRow<Artwork: View, Accessory: View>: View {
 
     private var metadata: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.body.weight(.semibold)).foregroundStyle(.primary)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if isCurrent { NowPlayingBadge(isPlaying: isPlaying) }
+                Text(title).font(.body.weight(.semibold))
+                    .foregroundStyle(isCurrent ? AnyShapeStyle(DowntifyStyle.accent) : AnyShapeStyle(.primary))
+            }
             Text(subtitle).font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
             if let detail {
                 Text(detail).font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
@@ -142,6 +149,39 @@ struct DowntifyMediaRow<Artwork: View, Accessory: View>: View {
         }
         .lineLimit(dynamicTypeSize.isAccessibilitySize ? accessibilityLineLimit : 1)
         .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Reads now-playing state inside one row, so a song change re-renders rows rather than whole lists.
+struct NowPlayingReader<Content: View>: View {
+    @EnvironmentObject private var nowPlaying: NowPlayingIndicator
+    @ViewBuilder let content: (NowPlayingIndicator) -> Content
+
+    var body: some View { content(nowPlaying) }
+}
+
+/// Speaker glyph shown beside the current song. Animates only while audio is playing and motion is allowed.
+struct NowPlayingBadge: View {
+    let isPlaying: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Image(systemName: "speaker.wave.2.fill")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(DowntifyStyle.accent)
+            .symbolEffect(.variableColor.iterative, options: .repeating, isActive: isPlaying && !reduceMotion)
+            .accessibilityHidden(true)
+    }
+}
+
+extension View {
+    /// Announces the current song as selected with a "Now playing" or "Paused" value.
+    /// Pass any value the row already announces (such as its duration) as `value` so both are kept.
+    func downtifyCurrentRowAccessibility(isCurrent: Bool, isPlaying: Bool, value: String? = nil) -> some View {
+        let state = isCurrent ? (isPlaying ? String(localized: "Now playing") : String(localized: "Paused")) : nil
+        let combined = [state, value].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        return accessibilityAddTraits(isCurrent ? .isSelected : [])
+            .accessibilityValue(Text(verbatim: combined))
     }
 }
 

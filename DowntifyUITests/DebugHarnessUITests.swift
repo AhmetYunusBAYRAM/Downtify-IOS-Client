@@ -40,6 +40,52 @@ final class DebugHarnessUITests: XCTestCase {
         XCTAssertNotNil(failed?.lastErrorCode)
     }
 
+    /// Issue #46: the current song row is highlighted, moves to a newly played song, and survives pause.
+    func testCurrentSongHighlightFollowsQueue() throws {
+        let app = DowntifyUITestSupport.launch()
+        XCTAssertNotNil(DowntifyUITestSupport.waitForState(app, timeout: 30) {
+            $0.sessionActive && $0.libraryTrackCount == 2
+        })
+        DowntifyUITestSupport.openLibrarySongs(app)
+        let first = DowntifyUITestSupport.element(app, "library.trackRow.fixture-track-1")
+        let second = DowntifyUITestSupport.element(app, "library.trackRow.fixture-track-2")
+        XCTAssertTrue(first.waitForExistence(timeout: 15))
+        XCTAssertFalse(value(of: first).contains("Now playing"))
+        first.tap()
+
+        XCTAssertNotNil(DowntifyUITestSupport.waitForState(app, timeout: 30) { $0.playbackPhase == "playing" })
+        XCTAssertTrue(waitForValue(of: first, toContain: "Now playing"), "first row value: \(value(of: first))")
+        XCTAssertTrue(first.isSelected)
+        XCTAssertFalse(second.isSelected)
+
+        second.tap()
+        XCTAssertNotNil(DowntifyUITestSupport.waitForState(app, timeout: 30) {
+            $0.currentTrackID == "fixture-track-2" && $0.playbackPhase == "playing"
+        }, "after selecting the second song: \(String(describing: DowntifyUITestSupport.state(of: app)))")
+        XCTAssertTrue(waitForValue(of: second, toContain: "Now playing"), "second row value: \(value(of: second))")
+        XCTAssertTrue(second.isSelected)
+        XCTAssertFalse(first.isSelected)
+        XCTAssertFalse(value(of: first).contains("Now playing"))
+
+        let pause = app.buttons["Pause"].firstMatch
+        XCTAssertTrue(pause.waitForExistence(timeout: 10))
+        pause.tap()
+        XCTAssertNotNil(DowntifyUITestSupport.waitForState(app, timeout: 15) { $0.playbackPhase == "paused" })
+        XCTAssertTrue(waitForValue(of: second, toContain: "Paused"), "paused row value: \(value(of: second))")
+        XCTAssertTrue(second.isSelected, "A paused song stays highlighted")
+    }
+
+    private func value(of element: XCUIElement) -> String { element.value as? String ?? "" }
+
+    private func waitForValue(of element: XCUIElement, toContain text: String, timeout: TimeInterval = 10) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if value(of: element).contains(text) { return true }
+            Thread.sleep(forTimeInterval: 0.25)
+        } while Date() < deadline
+        return false
+    }
+
     /// Scenario 3 (optional): real staging server, read-only. Skipped unless the runner provides a server.
     func testRealStagingLibraryLoadsReadOnly() throws {
         try XCTSkipIf(ProcessInfo.processInfo.environment["DOWNTIFY_TEST_SERVER"] == nil,

@@ -71,7 +71,8 @@ run catalog-player-unit -only-testing:DowntifyTests/CatalogPlaybackIntegrationTe
   -only-testing:DowntifyTests/CatalogPlaybackStreamTests -only-testing:DowntifyTests/DebugHarnessTests || status=1
 # End-to-end fixture scenarios: playback success and controlled stream failure (network/player paths).
 run fixture-ui -only-testing:DowntifyUITests/DebugHarnessUITests/testFixtureLibraryPlaybackEndToEnd \
-  -only-testing:DowntifyUITests/DebugHarnessUITests/testInjectedStreamFaultReportsFailure || status=1
+  -only-testing:DowntifyUITests/DebugHarnessUITests/testInjectedStreamFaultReportsFailure \
+  -only-testing:DowntifyUITests/DebugHarnessUITests/testCurrentSongHighlightFollowsQueue || status=1
 if [[ "$MODE" == "staging" ]]; then
   run staging-ui -only-testing:DowntifyUITests/DebugHarnessUITests/testRealStagingLibraryLoadsReadOnly || status=1
 fi

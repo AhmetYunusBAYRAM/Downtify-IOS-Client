@@ -24,6 +24,9 @@ final class PlaybackController: ObservableObject {
     @Published private(set) var immediateQualitySwitch: Bool
     @Published private(set) var availableQualities: [PlaybackQuality] = [.original]
     @Published private(set) var streamQuality: PlaybackQuality?
+    /// Row-level current-song signal; see `NowPlayingIndicator`.
+    let nowPlaying = NowPlayingIndicator()
+    private var nowPlayingSubscription: AnyCancellable?
 
     private let engine: any PlaybackEngining
     private let resolver: any PlaybackStreamResolving
@@ -115,6 +118,10 @@ final class PlaybackController: ObservableObject {
         audioSession.onEvent = { [weak self] event in self?.receive(event) }
         remote.onCommand = { [weak self] command in self?.receive(command) }
         networkMonitor.start { [weak self] path in self?.networkChanged(path) }
+        nowPlayingSubscription = Publishers.CombineLatest3($queue, $podcast, $phase)
+            .sink { [nowPlaying] queue, podcast, phase in
+                nowPlaying.update(item: podcast == nil ? queue.current?.item : nil, phase: phase)
+            }
     }
 
     deinit {

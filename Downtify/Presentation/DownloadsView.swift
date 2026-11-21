@@ -5,6 +5,7 @@ struct DownloadsView: View {
     let queue: ServerDownloadQueue
     @ObservedObject var serverDownloads: ServerDownloadPresentationModel
     @ObservedObject var playback: PlaybackController
+    let membership: LibraryMembership
     @EnvironmentObject private var downloads: OfflineDownloads
     @EnvironmentObject private var catalog: CatalogPresentationModel
     @Environment(\.downtifyPalette) private var palette
@@ -15,6 +16,7 @@ struct DownloadsView: View {
     @State private var selectedCatalogSongs: Set<CatalogResultID> = []
     @State private var localError: LocalizedStringKey?
     @State private var requestMessage: LocalizedStringKey?
+    @State private var pendingAlbumAdd: PendingAlbumAdd?
 
     var body: some View {
         ScrollView {
@@ -35,6 +37,23 @@ struct DownloadsView: View {
         .alert("Library request", isPresented: Binding(get: { requestMessage != nil }, set: { if !$0 { requestMessage = nil } })) {
             Button("OK", role: .cancel) { requestMessage = nil }
         } message: { if let requestMessage { Text(requestMessage) } }
+        .confirmationDialog(pendingAlbumAdd?.confirmation.title ?? "", isPresented: isConfirmingAlbumAdd,
+                            titleVisibility: .visible) {
+            if let pending = pendingAlbumAdd {
+                Button(pending.confirmation.confirmLabel) { Task { await serverDownloads.requestAlbum(url: pending.url) } }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if let pending = pendingAlbumAdd { Text(pending.confirmation.message) }
+        }
+    }
+
+    private var isConfirmingAlbumAdd: Binding<Bool> {
+        Binding(get: { pendingAlbumAdd != nil }, set: { if !$0 { pendingAlbumAdd = nil } })
+    }
+
+    private func rowState(_ song: CatalogSong) -> ServerDownloadActionState {
+        .catalogRow(server: serverDownloads.actionState(for: song), inLibrary: membership.containsSong(song))
     }
 
     private var localSection: some View {
@@ -69,10 +88,19 @@ struct DownloadsView: View {
     private func localRow(_ item: OfflineDownload) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(item.track.displayTitle).font(.headline).lineLimit(2)
-                    Text(item.track.displayArtist).font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
-                    Text(localStatus(item)).font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
+                NowPlayingReader { nowPlaying in
+                    let isCurrent = nowPlaying.isCurrent(item.track)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            if isCurrent { NowPlayingBadge(isPlaying: nowPlaying.isPlaying) }
+                            Text(item.track.displayTitle).font(.headline).lineLimit(2)
+                                .foregroundStyle(isCurrent ? AnyShapeStyle(DowntifyStyle.accent) : AnyShapeStyle(.primary))
+                        }
+                        Text(item.track.displayArtist).font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
+                        Text(localStatus(item)).font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .downtifyCurrentRowAccessibility(isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
                 }
                 Spacer(minLength: 8)
                 Menu {
@@ -208,17 +236,18 @@ struct DownloadsView: View {
                                 Image(systemName: selectedCatalogSongs.contains(song.id) ? "checkmark.circle.fill" : "circle")
                                     .font(.title3)
                             }
+                            .disabled(!canRequest(rowState(song)))
                             .accessibilityLabel(selectedCatalogSongs.contains(song.id) ? "Deselect \(song.title)" : "Select \(song.title)")
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(song.title).font(.subheadline.weight(.medium)).lineLimit(2)
                                 Text(song.artists.joined(separator: ", ")).font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
                             }
                             Spacer(minLength: 4)
-                            MediaActionButton(presentation: .library(serverDownloads.actionState(for: song), itemTitle: song.title)) {
+                            MediaActionButton(presentation: .library(rowState(song), itemTitle: song.title)) {
                                 Task { await serverDownloads.request(song: song) }
                             }
                             .frame(minWidth: 44, minHeight: 44)
-                            .disabled(catalog.isLibraryOnly != false || !canRequest(serverDownloads.actionState(for: song)))
+                            .disabled(catalog.isLibraryOnly != false || !canRequest(rowState(song)))
                         }
                         .padding(.vertical, 3)
                         if case .failed(let message) = serverDownloads.actionState(for: song) {
@@ -227,11 +256,12 @@ struct DownloadsView: View {
                     }
                     if selectedCatalogSongs.count > 1 {
                         Button(String(localized: "Add Selected to Library"), systemImage: "plus.circle") {
-                            let selected = songs.filter { selectedCatalogSongs.contains($0.id) }
+                            let selected = songs.filter { selectedCatalogSongs.contains($0.id) && canRequest(rowState($0)) }
                             Task { await serverDownloads.requestBatch(songs: selected) }
                         }
-                        .disabled(catalog.isLibraryOnly != false || !songs.filter { selectedCatalogSongs.contains($0.id) }
-                            .allSatisfy { canRequest(serverDownloads.actionState(for: $0)) })
+                        .disabled(catalog.isLibraryOnly != false || !songs.contains {
+                            selectedCatalogSongs.contains($0.id) && canRequest(rowState($0))
+                        })
                     }
                 }
                 ForEach(catalogAlbums) { album in
@@ -243,7 +273,11 @@ struct DownloadsView: View {
                             }
                             Spacer()
                             MediaActionButton(presentation: .library(serverDownloads.actionState(forAlbumURL: url), itemTitle: album.title)) {
-                                Task { await serverDownloads.requestAlbum(url: url) }
+                                if let confirmation = AlbumAddConfirmation.make(albumTitle: album.title, trackCount: nil) {
+                                    pendingAlbumAdd = PendingAlbumAdd(url: url, resolved: nil, confirmation: confirmation)
+                                } else {
+                                    Task { await serverDownloads.requestAlbum(url: url) }
+                                }
                             }
                             .frame(minWidth: 44, minHeight: 44)
                             .disabled(catalog.isLibraryOnly != false || !canRequest(serverDownloads.actionState(forAlbumURL: url)))

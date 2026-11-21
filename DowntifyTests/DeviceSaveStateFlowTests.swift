@@ -66,6 +66,18 @@ final class DeviceSaveStateFlowTests: XCTestCase {
         XCTAssertEqual(LibraryMembership(tracks: tracks).track(forServerFilename: "Artist/Album/Song.flac")?.id, "song")
     }
 
+    func testYouTubeRowMatchingExactlyOneOwnedTrackResolvesToDevice() throws {
+        let song = try decodeSong(#"{"source":"youtube","song_id":"yt-2","name":"Song","artists":["Artist"]}"#)
+        let one = LibraryMembership(tracks: [makeTrack(id: "a", file: "A/Song.flac")])
+        let resolved = one.track(for: song)
+        XCTAssertEqual(resolved?.id, "a")
+        XCTAssertNotEqual(DeviceSaveState(track: resolved, record: nil), .unavailable(.notInLibrary))
+
+        let two = LibraryMembership(tracks: [makeTrack(id: "a", file: "A/Song.flac"), makeTrack(id: "b", file: "B/Song.flac")])
+        XCTAssertTrue(two.containsSong(song))
+        XCTAssertEqual(DeviceSaveState(track: two.track(for: song), record: nil), .unavailable(.notInLibrary))
+    }
+
     private func decodeSong(_ json: String) throws -> CatalogSong {
         try JSONDecoder().decode(CatalogSong.self, from: Data(json.utf8))
     }

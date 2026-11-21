@@ -19,6 +19,7 @@ struct CatalogSearchView: View {
     @State private var category: SearchCategory = .songs
     @State private var query = ""
     @State private var link = ""
+    @State private var pendingAlbumAdd: PendingAlbumAdd?
     @FocusState private var searchFocused: Bool
     @Environment(\.downtifyPalette) private var palette
 
@@ -123,26 +124,39 @@ struct CatalogSearchView: View {
         }
         .onAppear { catalog.start() }
         .task(id: albumCountLookupKey) { loadAlbumTrackCounts() }
+        .confirmationDialog(pendingAlbumAdd?.confirmation.title ?? "", isPresented: isConfirmingAlbumAdd,
+                            titleVisibility: .visible) {
+            if let pending = pendingAlbumAdd {
+                Button(pending.confirmation.confirmLabel) { onDownloadAlbum(pending.url, pending.resolved) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if let pending = pendingAlbumAdd { Text(pending.confirmation.message) }
+        }
     }
 
     @ViewBuilder private var localResults: some View {
         if category == .songs && !localSongs.isEmpty {
             sectionHeader("In your library")
             ForEach(localSongs) { track in
-                Button { playback.replaceQueue(localSongs, startingAt: localSongs.firstIndex(of: track) ?? 0) } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(track.title).font(.body.weight(.semibold))
-                            Text(track.artist).font(.subheadline).foregroundStyle(.secondary)
+                NowPlayingReader { nowPlaying in
+                    let isCurrent = nowPlaying.isCurrent(track)
+                    Button { playback.replaceQueue(localSongs, startingAt: localSongs.firstIndex(of: track) ?? 0) } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                currentTitle(track.title, isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
+                                Text(track.artist).font(.subheadline).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "play.fill").frame(minWidth: 44, minHeight: 44)
                         }
-                        Spacer()
-                        Image(systemName: "play.fill").frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Play \(track.title)")
+                    .downtifyCurrentRowAccessibility(isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
+                    .padding(.vertical, 4)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Play \(track.title)")
-                .padding(.vertical, 4)
             }
         }
         if category == .albums && !localAlbums.isEmpty {
@@ -352,42 +366,54 @@ struct CatalogSearchView: View {
         if !songs.isEmpty {
             sectionHeader("Catalog songs")
             ForEach(songs) { song in
-                HStack(spacing: 10) {
-                    Button {
-                        if queueAlbum {
-                            let items = songs.map { PlaybackItem.resolving($0, in: library.tracks) }
-                            playback.replaceQueue(items, startingAt: songs.firstIndex(of: song) ?? 0)
-                            return
-                        }
-                        if song.source == "library" {
-                            guard let track = song.libraryTrack(in: library.tracks) else { return }
-                            playback.replaceQueue([.library(track)])
-                            return
-                        }
-                        playback.replaceQueue([PlaybackItem.resolving(song, in: library.tracks)])
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(song.title).font(.body.weight(.semibold))
-                                Text([song.artist, song.albumName].filter { !$0.isEmpty }.joined(separator: " · "))
-                                    .font(.subheadline).foregroundStyle(.secondary)
+                NowPlayingReader { nowPlaying in
+                    let isCurrent = nowPlaying.isCurrent(song)
+                    HStack(spacing: 10) {
+                        Button {
+                            if queueAlbum {
+                                let items = songs.map { PlaybackItem.resolving($0, in: library.tracks) }
+                                playback.replaceQueue(items, startingAt: songs.firstIndex(of: song) ?? 0)
+                                return
                             }
-                            Spacer(minLength: 4)
-                            Image(systemName: "play.fill").frame(minWidth: 44, minHeight: 44)
+                            if song.source == "library" {
+                                guard let track = song.libraryTrack(in: library.tracks) else { return }
+                                playback.replaceQueue([.library(track)])
+                                return
+                            }
+                            playback.replaceQueue([PlaybackItem.resolving(song, in: library.tracks)])
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    currentTitle(song.title, isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
+                                    Text([song.artist, song.albumName].filter { !$0.isEmpty }.joined(separator: " · "))
+                                        .font(.subheadline).foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 4)
+                                Image(systemName: "play.fill").frame(minWidth: 44, minHeight: 44)
+                            }
+                            .contentShape(Rectangle())
                         }
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Play \(song.title)")
+                        .downtifyCurrentRowAccessibility(isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
+                        .accessibilityIdentifier("catalog.result.\(song.id)")
+                        .disabled(song.source == "library" && song.libraryTrack(in: library.tracks) == nil)
+                        if song.source != "library", catalog.externalCatalogAvailable {
+                            serverDownloadButton(for: song)
+                        }
+                        deviceButton(for: song)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Play \(song.title)")
-                    .accessibilityIdentifier("catalog.result.\(song.id)")
-                    .disabled(song.source == "library" && song.libraryTrack(in: library.tracks) == nil)
-                    if song.source != "library", catalog.externalCatalogAvailable {
-                        serverDownloadButton(for: song)
-                    }
-                    deviceButton(for: song)
+                    .padding(.vertical, 4)
                 }
-                .padding(.vertical, 4)
             }
+        }
+    }
+
+    private func currentTitle(_ title: String, isCurrent: Bool, isPlaying: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if isCurrent { NowPlayingBadge(isPlaying: isPlaying) }
+            Text(title).font(.body.weight(.semibold))
+                .foregroundStyle(isCurrent ? AnyShapeStyle(DowntifyStyle.accent) : AnyShapeStyle(.primary))
         }
     }
 
@@ -454,11 +480,20 @@ struct CatalogSearchView: View {
 
     @ViewBuilder private func serverAlbumDownloadButton(url: String, album: CatalogAlbum) -> some View {
         let resolved = resolvedAlbumTracks(for: url)
-        MediaActionButton(presentation: .library(albumDownloadState(album, album.trackCount ?? catalog.albumTrackCounts[album.id] ?? resolved?.count),
+        let trackCount = album.trackCount ?? catalog.albumTrackCounts[album.id] ?? resolved?.count
+        MediaActionButton(presentation: .library(albumDownloadState(album, trackCount),
                                                  itemTitle: album.title)) {
-            onDownloadAlbum(url, resolved)
+            if let confirmation = AlbumAddConfirmation.make(albumTitle: album.title, trackCount: trackCount) {
+                pendingAlbumAdd = PendingAlbumAdd(url: url, resolved: resolved, confirmation: confirmation)
+            } else {
+                onDownloadAlbum(url, resolved)
+            }
         }
         .frame(width: 44, height: 44)
+    }
+
+    private var isConfirmingAlbumAdd: Binding<Bool> {
+        Binding(get: { pendingAlbumAdd != nil }, set: { if !$0 { pendingAlbumAdd = nil } })
     }
 
     private func resolvedAlbumTracks(for url: String) -> [CatalogSong]? {

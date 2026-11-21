@@ -76,7 +76,7 @@ struct LibraryHomeView: View {
             .tabItem { Label("Discover", systemImage: "sparkles") }.tag(Tab.discover)
 
             DownloadsView(connection: connection, queue: serverDownloadQueue, serverDownloads: serverDownloads,
-                          playback: playback)
+                          playback: playback, membership: library.membership)
                 .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback) }
                 .tabItem { Label("Downloads", systemImage: "arrow.down.circle") }.tag(Tab.downloads)
 
@@ -361,7 +361,8 @@ struct LibraryHomeView: View {
     }
 
     private func catalogLibraryState(for song: CatalogSong) -> ServerDownloadActionState {
-        .catalogRow(server: serverDownloads.actionState(for: song), inLibrary: libraryTrack(forCatalogSong: song) != nil)
+        .catalogRow(server: serverDownloads.actionState(for: song),
+                     inLibrary: library.membership.containsSong(song) || libraryTrack(forCatalogSong: song) != nil)
     }
 
     private func catalogDeviceState(for song: CatalogSong) -> DeviceSaveState {
@@ -580,6 +581,7 @@ struct NetworkDebugOverlay: View {
     var body: some View {
         let activeTransfers = downloads.currentDownloads.filter { $0.state == .transferring }.count
         let pausedTransfers = downloads.currentDownloads.filter { $0.state == .paused }.count
+        let currentReadiness = preload.currentReady ? "ready" : "not ready"
         VStack(alignment: .leading, spacing: 3) {
             HStack {
                 Text("NETWORK DEBUG").fontWeight(.bold)
@@ -608,7 +610,7 @@ struct NetworkDebugOverlay: View {
             Text("NET  \(network.active)/\(network.maximum)  ·  wait \(network.queued)")
             Text("FG \(network.foregroundActive) (+\(network.foregroundQueued))  BG \(network.backgroundActive) (+\(network.backgroundQueued))")
             Text("QUEUE  \(playback.queue.upcomingCount) upcoming")
-            Text("CACHE  \(preload.readyCount)/\(preload.windowCount) ready  ·  current \(preload.currentReady ? "ready" : "not ready")")
+            Text("CACHE  \(preload.readyCount)/\(preload.windowCount) ready  ·  current \(currentReadiness)")
             if preload.activeCount > 0 {
                 Text("PRELOAD  \(preload.activeCount) active  ·  \(megabytes(preload.downloadedBytes))/\(megabytes(preload.downloadingBytes)) MB")
             }
@@ -1162,11 +1164,7 @@ private struct ArtistCatalogAlbumView: View {
     @State private var error: String?
 
     private func isInLibrary(_ song: CatalogSong) -> Bool {
-        library.tracks.contains {
-            $0.title.localizedCaseInsensitiveCompare(song.title) == .orderedSame &&
-            $0.album.localizedCaseInsensitiveCompare(album.title) == .orderedSame &&
-            ($0.albumArtist.isEmpty ? $0.artist : $0.albumArtist).localizedCaseInsensitiveCompare(album.artist) == .orderedSame
-        }
+        library.membership.containsSong(song)
     }
 
     private func canRequest(_ song: CatalogSong) -> Bool {
@@ -1196,7 +1194,16 @@ private struct ArtistCatalogAlbumView: View {
             ForEach(songs) { song in
                 VStack(alignment: .leading) {
                     HStack {
-                        Text(song.title)
+                        NowPlayingReader { nowPlaying in
+                            let isCurrent = nowPlaying.isCurrent(song)
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                if isCurrent { NowPlayingBadge(isPlaying: nowPlaying.isPlaying) }
+                                Text(song.title)
+                                    .foregroundStyle(isCurrent ? AnyShapeStyle(DowntifyStyle.accent) : AnyShapeStyle(.primary))
+                            }
+                            .accessibilityElement(children: .combine)
+                            .downtifyCurrentRowAccessibility(isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
+                        }
                         Spacer()
                         Button(status(song)) { Task { await serverDownloads.request(song: song) } }
                             .disabled(!canRequest(song))
@@ -1438,17 +1445,21 @@ private struct LibraryTrackList: View {
                 let track = tracks[index]
                 let liked = collections.effectiveLike(track.id)
                 HStack(spacing: 0) {
-                    Button {
-                        if let context { collections.record(context) }
-                        playback.replaceQueue(tracks, startingAt: index)
-                    } label: {
-                        TrackRow(track: track)
-                            .accessibilityIdentifier("library.trackRow.\(track.id)")
+                    NowPlayingReader { nowPlaying in
+                        let isCurrent = nowPlaying.isCurrent(track)
+                        Button {
+                            if let context { collections.record(context) }
+                            playback.replaceQueue(tracks, startingAt: index)
+                        } label: {
+                            TrackRow(track: track, isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text(track.accessibleMetadata))
+                        .downtifyCurrentRowAccessibility(isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying,
+                                                         value: spokenDuration(track.duration))
+                        .accessibilityHint("Play this song and replace the current queue")
+                        .accessibilityIdentifier("library.trackRow.\(track.id)")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Text(track.accessibleMetadata))
-                    .accessibilityValue(spokenDuration(track.duration))
-                    .accessibilityHint("Play this song and replace the current queue")
                     Menu {
                         if collections.likedIDs != nil {
                             Button(liked ? "Unlike song" : "Like song", systemImage: liked ? "heart.slash" : "heart") {
