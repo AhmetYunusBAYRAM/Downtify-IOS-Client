@@ -156,7 +156,6 @@
 "Play" = "Lejátszás";
 "Play Queue" = "Lejátszási sor";
 "Play an artist or collection to see it here." = "Játsszon le egy előadót vagy gyűjteményt a megjelenítéséhez.";
-"Play queue" = "Lejátszási sor lejátszása";
 "Play this song and replace the current queue" = "A dal lejátszása és a jelenlegi sor cseréje";
 "Playback position" = "Lejátszási pozíció";
 "Playback position unavailable" = "A lejátszási pozíció nem érhető el";
@@ -550,3 +549,37 @@
 "This can't be undone." = "Ez a művelet nem vonható vissza.";
 "Switch quality immediately" = "Minőség azonnali váltása";
 "When off, the current song keeps its quality when possible. The next song uses the new network’s quality." = "Kikapcsolva az aktuális szám lehetőség szerint megtartja a minőségét. A következő szám az új hálózat minőségét használja.";
+
+/* Now Playing actions (issue 57) */
+"Like" = "Kedvelés";
+"Like %@" = "%@ kedvelése";
+"Unlike %@" = "%@ kedvelésének visszavonása";
+"Like song" = "Dal kedvelése";
+"Unlike song" = "Kedvelés visszavonása";
+"Likes are unavailable" = "A kedvelések nem érhetők el";
+"Add to Playlist" = "Hozzáadás listához";
+"Add %@ to a playlist" = "%@ hozzáadása lejátszási listához";
+"Added to %@" = "Hozzáadva: %@";
+"Already in %@" = "Már szerepel itt: %@";
+"Already in this playlist" = "Már szerepel ebben a listában";
+"Add Again" = "Hozzáadás újra";
+"This song is already in the playlist. Add another copy?" = "Ez a dal már szerepel a listában. Hozzáadsz egy újabb példányt?";
+"Choose Playlist" = "Lista kiválasztása";
+"No playlists you can edit" = "Nincs szerkeszthető lista";
+"This server can't edit playlists" = "Ez a szerver nem tud listákat szerkeszteni";
+"Queue" = "Sor";
+"Open queue" = "Megnyitja a sort";
+"Up Next" = "Következik";
+"Up Next: %@ by %@" = "Következik: %@ – %@";
+"Nothing up next" = "Nincs következő dal";
+"%lld more in queue" = "Még %lld a sorban";
+"Then back to the start" = "Utána újra az elejéről";
+"Next track: %@" = "Következő dal: %@";
+"Pause" = "Szünet";
+"On" = "Be";
+"Loading track" = "Dal betöltése";
+"Loading episode" = "Epizód betöltése";
+"Lyrics could not be loaded." = "A dalszöveget nem sikerült betölteni.";
+"Lyrics are unavailable for this track." = "Ehhez a dalhoz nem érhető el dalszöveg.";
+"Current queue entry" = "Aktuális elem a sorban";
+"Play this queue entry" = "Elem lejátszása a sorból";
