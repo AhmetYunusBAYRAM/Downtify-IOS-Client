@@ -19,6 +19,7 @@ struct DowntifyApp: App {
                 .environment(\.lyricDefaults, container.defaults)
                 .task { container.collections.start() }
                 .environmentObject(container.offlineDownloads)
+                .environmentObject(container.playback.nowPlaying)
                 #if DEBUG
                 .overlay(alignment: .topLeading) {
                     if container.harness != nil {

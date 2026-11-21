@@ -1197,7 +1197,16 @@ private struct ArtistCatalogAlbumView: View {
             ForEach(songs) { song in
                 VStack(alignment: .leading) {
                     HStack {
-                        Text(song.title)
+                        NowPlayingReader { nowPlaying in
+                            let isCurrent = nowPlaying.isCurrent(song)
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                if isCurrent { NowPlayingBadge(isPlaying: nowPlaying.isPlaying) }
+                                Text(song.title)
+                                    .foregroundStyle(isCurrent ? AnyShapeStyle(DowntifyStyle.accent) : AnyShapeStyle(.primary))
+                            }
+                            .accessibilityElement(children: .combine)
+                            .downtifyCurrentRowAccessibility(isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
+                        }
                         Spacer()
                         Button(status(song)) { Task { await serverDownloads.request(song: song) } }
                             .disabled(!canRequest(song))
@@ -1439,17 +1448,21 @@ private struct LibraryTrackList: View {
                 let track = tracks[index]
                 let liked = collections.effectiveLike(track.id)
                 HStack(spacing: 0) {
-                    Button {
-                        if let context { collections.record(context) }
-                        playback.replaceQueue(tracks, startingAt: index)
-                    } label: {
-                        TrackRow(track: track)
-                            .accessibilityIdentifier("library.trackRow.\(track.id)")
+                    NowPlayingReader { nowPlaying in
+                        let isCurrent = nowPlaying.isCurrent(track)
+                        Button {
+                            if let context { collections.record(context) }
+                            playback.replaceQueue(tracks, startingAt: index)
+                        } label: {
+                            TrackRow(track: track, isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text(track.accessibleMetadata))
+                        .downtifyCurrentRowAccessibility(isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying,
+                                                         value: spokenDuration(track.duration))
+                        .accessibilityHint("Play this song and replace the current queue")
+                        .accessibilityIdentifier("library.trackRow.\(track.id)")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Text(track.accessibleMetadata))
-                    .accessibilityValue(spokenDuration(track.duration))
-                    .accessibilityHint("Play this song and replace the current queue")
                     Menu {
                         if collections.likedIDs != nil {
                             Button(liked ? "Unlike song" : "Like song", systemImage: liked ? "heart.slash" : "heart") {

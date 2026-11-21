@@ -69,10 +69,19 @@ struct DownloadsView: View {
     private func localRow(_ item: OfflineDownload) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(item.track.displayTitle).font(.headline).lineLimit(2)
-                    Text(item.track.displayArtist).font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
-                    Text(localStatus(item)).font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
+                NowPlayingReader { nowPlaying in
+                    let isCurrent = nowPlaying.isCurrent(item.track)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            if isCurrent { NowPlayingBadge(isPlaying: nowPlaying.isPlaying) }
+                            Text(item.track.displayTitle).font(.headline).lineLimit(2)
+                                .foregroundStyle(isCurrent ? AnyShapeStyle(DowntifyStyle.accent) : AnyShapeStyle(.primary))
+                        }
+                        Text(item.track.displayArtist).font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
+                        Text(localStatus(item)).font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .downtifyCurrentRowAccessibility(isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
                 }
                 Spacer(minLength: 8)
                 Menu {
