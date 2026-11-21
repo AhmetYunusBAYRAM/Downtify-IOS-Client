@@ -96,6 +96,32 @@ struct TrackRow: View {
     }
 }
 
+extension View {
+    /// Shows the playback dock below this tab and publishes its height to the tab's scroll views
+    /// (`playbackDockHeight`) so their final rows can scroll clear of it.
+    func playbackDock(playback: PlaybackController, library: LibraryPresentationModel,
+                      serverDownloads: ServerDownloadPresentationModel) -> some View {
+        modifier(PlaybackDockInset(playback: playback, library: library, serverDownloads: serverDownloads))
+    }
+}
+
+private struct PlaybackDockInset: ViewModifier {
+    let playback: PlaybackController
+    let library: LibraryPresentationModel
+    let serverDownloads: ServerDownloadPresentationModel
+    /// Per tab, so a hidden tab's dock appearing or disappearing cannot change the visible tab's clearance.
+    @State private var dockHeight: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.playbackDockHeight, dockHeight)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                PlaybackDock(playback: playback, library: library, serverDownloads: serverDownloads,
+                             height: $dockHeight)
+            }
+    }
+}
+
 /// Lives at the navigation boundary so playback updates do not invalidate library rows.
 struct PlaybackDock: View {
     @ObservedObject var playback: PlaybackController
@@ -103,6 +129,8 @@ struct PlaybackDock: View {
     /// actions; not observed here.
     let library: LibraryPresentationModel
     let serverDownloads: ServerDownloadPresentationModel
+    /// Measured height of the visible dock; 0 while it is hidden.
+    @Binding var height: CGFloat
     @Environment(\.downtifyPalette) private var palette
     @State private var showingNowPlaying = false
 
@@ -115,6 +143,14 @@ struct PlaybackDock: View {
                     .padding(.vertical, DowntifyStyle.Space.small)
                     .frame(maxWidth: .infinity)
                     .background(palette.background)
+                    .background {
+                        GeometryReader { proxy in
+                            Color.clear
+                                .onAppear { height = proxy.size.height }
+                                .onChange(of: proxy.size.height) { _, newHeight in height = newHeight }
+                        }
+                    }
+                    .onDisappear { height = 0 }
                     .accessibilityIdentifier("player.dock")
             }
         }

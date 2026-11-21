@@ -59,9 +59,31 @@ extension View {
             .contentShape(Rectangle())
     }
 
-    /// Leaves room to scroll the final action clear of the mini player.
+    /// Leaves room to scroll the final action clear of the mini player, sized to the dock's measured height.
+    /// The dock sits in a safe-area inset outside the tab's `NavigationStack`, which scroll views inside it
+    /// do not reliably clear, so every vertically scrolling page in a tab applies this.
     func downtifyScrollEndClearance() -> some View {
-        contentMargins(.bottom, DowntifyStyle.Space.scrollEnd, for: .scrollContent)
+        modifier(ScrollEndClearance())
+    }
+}
+
+private struct ScrollEndClearance: ViewModifier {
+    @Environment(\.playbackDockHeight) private var dockHeight
+
+    func body(content: Content) -> some View {
+        content.contentMargins(.bottom, DowntifyStyle.scrollEndClearance(dockHeight: dockHeight), for: .scrollContent)
+    }
+}
+
+private struct PlaybackDockHeightKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    /// Measured height of the playback dock below the current tab; 0 when nothing is playing.
+    var playbackDockHeight: CGFloat {
+        get { self[PlaybackDockHeightKey.self] }
+        set { self[PlaybackDockHeightKey.self] = newValue }
     }
 }
 
@@ -72,6 +94,12 @@ enum DowntifyStyle {
     static let error = adaptive(light: 0xAE252E, dark: 0xFF9B9E)
     static let secondaryText = Color(uiColor: .secondaryLabel)
     static let minimumControlSize: CGFloat = 44
+
+    /// Bottom content margin that keeps the final row clear of a dock of the given height. Never less than
+    /// `Space.scrollEnd`; grows for taller docks such as the stacked accessibility-size layout.
+    static func scrollEndClearance(dockHeight: CGFloat) -> CGFloat {
+        max(Space.scrollEnd, dockHeight + Space.regular)
+    }
 
     enum Space {
         static let small: CGFloat = 8
