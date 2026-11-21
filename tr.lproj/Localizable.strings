@@ -402,6 +402,10 @@
 "%lld of %lld added to Library" = "%lld / %lld kitaplığa eklendi";
 "%lld of %lld added to Library for %@" = "%lld / %lld kitaplığa eklendi: %@";
 "Add %@ to Library" = "%@ öğesini kitaplığa ekle";
+"Add %@ to Library?" = "%@ öğesini kitaplığa eklensin mi?";
+"Add Album" = "Albümü Ekle";
+"The number of songs in this album is unknown. Everything the server finds for this album will be added to your library." = "Bu albümdeki şarkı sayısı bilinmiyor. Sunucunun bu albüm için bulduğu her şey kitaplığınıza eklenecek.";
+"This adds %lld songs from this album to your server library." = "Bu, bu albümden sunucu kitaplığınıza %lld şarkı ekler.";
 "Add %@ to this device" = "%@ öğesini bu cihaza ekle";
 "Add Missing Songs to Library" = "Eksik şarkıları kitaplığa ekle";
 "Add Selected to Library" = "Seçilenleri kitaplığa ekle";

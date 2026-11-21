@@ -163,4 +163,27 @@ final class MediaActionTests: XCTestCase {
         OfflineDownload(id: UUID(), track: track(), scope: .init(session()), requestedQuality: .original,
                         state: state, media: hasMedia ? media() : nil, receivedBytes: bytes)
     }
+
+    func testAlbumAddBelowThresholdNeedsNoConfirmation() {
+        XCTAssertNil(AlbumAddConfirmation.make(albumTitle: "Small Album", trackCount: 5))
+        XCTAssertNil(AlbumAddConfirmation.make(albumTitle: "Small Album", trackCount: 19))
+    }
+
+    func testAlbumAddAtThresholdNeedsConfirmationWithCount() throws {
+        let confirmation = try XCTUnwrap(AlbumAddConfirmation.make(albumTitle: "Big Album", trackCount: 20))
+        XCTAssertTrue(confirmation.message.contains("20"), confirmation.message)
+        XCTAssertFalse(confirmation.message.contains("unknown"), confirmation.message)
+    }
+
+    func testAlbumAddUnknownCountNeedsConfirmation() throws {
+        let unknown = try XCTUnwrap(AlbumAddConfirmation.make(albumTitle: "Mystery Album", trackCount: nil))
+        XCTAssertTrue(unknown.message.contains("unknown"), unknown.message)
+        let zero = try XCTUnwrap(AlbumAddConfirmation.make(albumTitle: "Mystery Album", trackCount: 0))
+        XCTAssertEqual(zero, unknown)
+    }
+
+    func testAlbumAddConfirmationTitleContainsAlbumTitle() throws {
+        let confirmation = try XCTUnwrap(AlbumAddConfirmation.make(albumTitle: "Zebra Album", trackCount: nil))
+        XCTAssertTrue(confirmation.title.contains("Zebra Album"), confirmation.title)
+    }
 }

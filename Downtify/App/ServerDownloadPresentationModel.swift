@@ -20,6 +20,10 @@ final class ServerDownloadPresentationModel: ObservableObject {
     @Published private(set) var isRefreshing = false
     @Published private(set) var actionStates: [String: ServerDownloadActionState] = [:]
 
+    /// Song key -> most recent action key started for that song, so other catalog versions
+    /// (remaster, compilation...) of the same song can read its live state.
+    private var actionKeyBySongKey: [String: String] = [:]
+
     private let queue: ServerDownloadQueue
     private let sessionUpdates: @Sendable () async throws -> AsyncStream<DeviceSession?>
     private var observation: Task<Void, Never>?
@@ -60,12 +64,42 @@ final class ServerDownloadPresentationModel: ObservableObject {
     }
 
     func actionState(for song: CatalogSong) -> ServerDownloadActionState {
-        actionStates[song.id.description] ?? .idle
+        let own = actionStates[song.id.description] ?? .idle
+        switch own {
+        case .submitting, .queued, .accepted: return own
+        case .idle, .failed, .outcomeUnknown, .partiallyAccepted:
+            return activeStateViaOtherVersion(of: song) ?? own
+        }
+    }
+
+    private static func songKey(for song: CatalogSong) -> String? {
+        let artist = song.artists.first.flatMap { $0.isEmpty ? nil : $0 } ?? song.artist
+        let key = LibraryMembership.songKey(artist: artist, title: song.title)
+        guard !key.hasPrefix("|"), !key.hasSuffix("|") else { return nil }
+        return key
+    }
+
+    /// Live submitting/queued/accepted state of another version of `song`, if any.
+    private func activeStateViaOtherVersion(of song: CatalogSong) -> ServerDownloadActionState? {
+        guard let songKey = Self.songKey(for: song),
+              let otherKey = actionKeyBySongKey[songKey],
+              otherKey != song.id.description else { return nil }
+        let state = actionStates[otherKey] ?? .idle
+        switch state {
+        case .submitting, .queued, .accepted: return state
+        case .idle, .partiallyAccepted, .outcomeUnknown, .failed: return nil
+        }
+    }
+
+    private func registerSongKey(for song: CatalogSong) {
+        guard let songKey = Self.songKey(for: song) else { return }
+        actionKeyBySongKey[songKey] = song.id.description
     }
 
     func request(song: CatalogSong) async {
         let key = song.id.description
-        guard beginAction(key: key), let active = session else { return }
+        guard activeStateViaOtherVersion(of: song) == nil, beginAction(key: key), let active = session else { return }
+        registerSongKey(for: song)
         do {
             let jobID = try await queue.requestTrack(song: song, session: active)
             guard isCurrent(active) else { return }
@@ -82,10 +116,17 @@ final class ServerDownloadPresentationModel: ObservableObject {
 
     func requestBatch(songs: [CatalogSong], options: ServerDownloadQueue.BatchOptions = .init()) async {
         guard !songs.isEmpty, let active = session else { return }
-        var seen = Set<String>()
-        let keys = songs.map { $0.id.description }.filter { seen.insert($0).inserted }
-        guard keys.allSatisfy({ canBeginAction($0) }) else { return }
+        var seenIDs = Set<String>()
+        var seenSongKeys = Set<String>()
+        let songs = songs.filter { song in
+            guard seenIDs.insert(song.id.description).inserted else { return false }
+            if let songKey = Self.songKey(for: song), !seenSongKeys.insert(songKey).inserted { return false }
+            return activeStateViaOtherVersion(of: song) == nil
+        }
+        let keys = songs.map { $0.id.description }
+        guard !songs.isEmpty, keys.allSatisfy({ canBeginAction($0) }) else { return }
         keys.forEach { actionStates[$0] = .submitting }
+        songs.forEach { registerSongKey(for: $0) }
         do {
             let response = try await queue.requestBatch(songs: songs, options: options, session: active)
             guard isCurrent(active) else { return }
@@ -117,6 +158,7 @@ final class ServerDownloadPresentationModel: ObservableObject {
                     let providerIDs = [song.youtubeID, song.songID, song.url].compactMap { $0 }
                     if providerIDs.contains(where: { jobsByProviderID[$0] != nil }) {
                         actionStates[song.id.description] = .accepted
+                        registerSongKey(for: song)
                     } else {
                         actionStates[song.id.description] = .failed("This album track was not queued.")
                     }
@@ -226,6 +268,7 @@ final class ServerDownloadPresentationModel: ObservableObject {
         queueStatus = nil
         queueError = nil
         actionStates = [:]
+        actionKeyBySongKey = [:]
         guard newSession != nil else { return }
         Task { await refreshQueue() }
     }

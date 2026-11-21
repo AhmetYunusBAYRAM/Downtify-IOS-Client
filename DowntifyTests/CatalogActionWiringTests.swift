@@ -43,6 +43,22 @@ final class CatalogActionWiringTests: XCTestCase {
         continuation.finish()
     }
 
+    func testOwnedSongRowShowsInLibraryWhileOtherVersionStaysRequestable() throws {
+        let track = LibraryTrack(id: "t", file: "Artist/Album/One.flac", title: "One", artist: "A", artists: ["A"], album: "Album",
+                                 albumArtist: "A", albumID: "al", artistID: "ar", trackNumber: 1, year: "2026",
+                                 duration: 60, codec: "flac", bitrate: 900_000, sampleRate: 44_100, channels: 2,
+                                 size: 8, added: 1, hasCover: false, isExplicit: false, playlists: [])
+        let membership = LibraryMembership(tracks: [track])
+        let owned = try decodeSong()
+        let live = try JSONDecoder().decode(CatalogSong.self, from: Data(
+            #"{"source":"youtube","song_id":"yt-2","name":"One (Live)","artists":["A"]}"#.utf8))
+
+        let ownedState = ServerDownloadActionState.catalogRow(server: .idle, inLibrary: membership.containsSong(owned))
+        XCTAssertEqual(ownedState, .accepted)
+        XCTAssertFalse(MediaActionPresentation.library(ownedState, itemTitle: owned.title).isEnabled)
+        XCTAssertEqual(ServerDownloadActionState.catalogRow(server: .idle, inLibrary: membership.containsSong(live)), .idle)
+    }
+
     func testCatalogOnlySongHasNoDevicePresentation() throws {
         let state = DeviceSaveState(track: nil, record: nil)
         XCTAssertEqual(state, .unavailable(.notInLibrary))

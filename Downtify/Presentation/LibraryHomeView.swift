@@ -76,7 +76,7 @@ struct LibraryHomeView: View {
             .tabItem { Label("Discover", systemImage: "sparkles") }.tag(Tab.discover)
 
             DownloadsView(connection: connection, queue: serverDownloadQueue, serverDownloads: serverDownloads,
-                          playback: playback)
+                          playback: playback, membership: library.membership)
                 .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback) }
                 .tabItem { Label("Downloads", systemImage: "arrow.down.circle") }.tag(Tab.downloads)
 
@@ -361,7 +361,8 @@ struct LibraryHomeView: View {
     }
 
     private func catalogLibraryState(for song: CatalogSong) -> ServerDownloadActionState {
-        .catalogRow(server: serverDownloads.actionState(for: song), inLibrary: libraryTrack(forCatalogSong: song) != nil)
+        .catalogRow(server: serverDownloads.actionState(for: song),
+                     inLibrary: library.membership.containsSong(song) || libraryTrack(forCatalogSong: song) != nil)
     }
 
     private func catalogDeviceState(for song: CatalogSong) -> DeviceSaveState {
@@ -1162,11 +1163,7 @@ private struct ArtistCatalogAlbumView: View {
     @State private var error: String?
 
     private func isInLibrary(_ song: CatalogSong) -> Bool {
-        library.tracks.contains {
-            $0.title.localizedCaseInsensitiveCompare(song.title) == .orderedSame &&
-            $0.album.localizedCaseInsensitiveCompare(album.title) == .orderedSame &&
-            ($0.albumArtist.isEmpty ? $0.artist : $0.albumArtist).localizedCaseInsensitiveCompare(album.artist) == .orderedSame
-        }
+        library.membership.containsSong(song)
     }
 
     private func canRequest(_ song: CatalogSong) -> Bool {
