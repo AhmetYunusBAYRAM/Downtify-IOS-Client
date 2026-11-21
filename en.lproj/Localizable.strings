@@ -403,6 +403,10 @@
 "%lld of %lld added to Library" = "%lld of %lld added to Library";
 "%lld of %lld added to Library for %@" = "%lld of %lld added to Library for %@";
 "Add %@ to Library" = "Add %@ to Library";
+"Add %@ to Library?" = "Add %@ to Library?";
+"Add Album" = "Add Album";
+"The number of songs in this album is unknown. Everything the server finds for this album will be added to your library." = "The number of songs in this album is unknown. Everything the server finds for this album will be added to your library.";
+"This adds %lld songs from this album to your server library." = "This adds %lld songs from this album to your server library.";
 "Add %@ to this device" = "Add %@ to this device";
 "Add Missing Songs to Library" = "Add Missing Songs to Library";
 "Add Selected to Library" = "Add Selected to Library";

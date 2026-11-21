@@ -26,6 +26,7 @@ struct CatalogDiscoverView: View {
     @State private var similarArtist = ""
     @State private var similarTrack = ""
     @State private var isSearching = false
+    @State private var pendingAlbumAdd: PendingAlbumAdd?
     @FocusState private var finderFocused: Bool
 
     private enum Section: String, CaseIterable, Identifiable {
@@ -56,6 +57,15 @@ struct CatalogDiscoverView: View {
         }
         .onAppear(perform: loadInitial)
         .task(id: albumCountLookupKey) { loadAlbumTrackCounts() }
+        .confirmationDialog(pendingAlbumAdd?.confirmation.title ?? "", isPresented: isConfirmingAlbumAdd,
+                            titleVisibility: .visible) {
+            if let pending = pendingAlbumAdd {
+                Button(pending.confirmation.confirmLabel) { onDownloadAlbum(pending.url, pending.resolved) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if let pending = pendingAlbumAdd { Text(pending.confirmation.message) }
+        }
         .onChange(of: selectedSection) { _, rawValue in
             let value = Section(rawValue: rawValue) ?? .finder
             if value == .charts, catalog.chartsState == .idle { catalog.loadCharts() }
@@ -405,11 +415,20 @@ struct CatalogDiscoverView: View {
 
     @ViewBuilder private func serverAlbumDownloadButton(url: String, album: CatalogAlbum) -> some View {
         let resolved = resolvedAlbumTracks(for: url)
-        MediaActionButton(presentation: .library(albumDownloadState(album, album.trackCount ?? catalog.albumTrackCounts[album.id] ?? resolved?.count),
+        let trackCount = album.trackCount ?? catalog.albumTrackCounts[album.id] ?? resolved?.count
+        MediaActionButton(presentation: .library(albumDownloadState(album, trackCount),
                                                  itemTitle: album.title)) {
-            onDownloadAlbum(url, resolved)
+            if let confirmation = AlbumAddConfirmation.make(albumTitle: album.title, trackCount: trackCount) {
+                pendingAlbumAdd = PendingAlbumAdd(url: url, resolved: resolved, confirmation: confirmation)
+            } else {
+                onDownloadAlbum(url, resolved)
+            }
         }
         .frame(width: 44, height: 44)
+    }
+
+    private var isConfirmingAlbumAdd: Binding<Bool> {
+        Binding(get: { pendingAlbumAdd != nil }, set: { if !$0 { pendingAlbumAdd = nil } })
     }
 
     private func resolvedAlbumTracks(for url: String) -> [CatalogSong]? {

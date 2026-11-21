@@ -403,6 +403,10 @@
 "%lld of %lld added to Library" = "%lld/%lld hozzáadva a könyvtárhoz";
 "%lld of %lld added to Library for %@" = "%lld/%lld hozzáadva a könyvtárhoz: %@";
 "Add %@ to Library" = "%@ hozzáadása a könyvtárhoz";
+"Add %@ to Library?" = "%@ hozzáadása a könyvtárhoz?";
+"Add Album" = "Album hozzáadása";
+"The number of songs in this album is unknown. Everything the server finds for this album will be added to your library." = "Az album dalainak száma ismeretlen. A szerver által erre az albumra talált minden elem hozzáadódik a könyvtárhoz.";
+"This adds %lld songs from this album to your server library." = "Ez %lld dalt ad hozzá ebből az albumból a szerveres könyvtárhoz.";
 "Add %@ to this device" = "%@ hozzáadása ehhez az eszközhöz";
 "Add Missing Songs to Library" = "Hiányzó dalok hozzáadása a könyvtárhoz";
 "Add Selected to Library" = "Kijelöltek hozzáadása a könyvtárhoz";

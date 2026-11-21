@@ -403,6 +403,10 @@
 "%lld of %lld added to Library" = "%lld από %lld προστέθηκαν στη βιβλιοθήκη";
 "%lld of %lld added to Library for %@" = "%lld από %lld προστέθηκαν στη βιβλιοθήκη για %@";
 "Add %@ to Library" = "Προσθήκη του %@ στη βιβλιοθήκη";
+"Add %@ to Library?" = "Προσθήκη του %@ στη βιβλιοθήκη;";
+"Add Album" = "Προσθήκη άλμπουμ";
+"The number of songs in this album is unknown. Everything the server finds for this album will be added to your library." = "Ο αριθμός των τραγουδιών σε αυτό το άλμπουμ είναι άγνωστος. Όλα όσα βρίσκει ο διακομιστής για αυτό το άλμπουμ θα προστεθούν στη βιβλιοθήκη σας.";
+"This adds %lld songs from this album to your server library." = "Αυτό προσθέτει %lld τραγούδια από αυτό το άλμπουμ στη βιβλιοθήκη σας στον διακομιστή.";
 "Add %@ to this device" = "Προσθήκη του %@ σε αυτήν τη συσκευή";
 "Add Missing Songs to Library" = "Προσθήκη των τραγουδιών που λείπουν στη βιβλιοθήκη";
 "Add Selected to Library" = "Προσθήκη των επιλεγμένων στη βιβλιοθήκη";

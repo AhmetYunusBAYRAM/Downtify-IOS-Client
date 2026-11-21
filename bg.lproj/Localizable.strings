@@ -403,6 +403,10 @@
 "%lld of %lld added to Library" = "%lld от %lld добавени в библиотеката";
 "%lld of %lld added to Library for %@" = "%lld от %lld добавени в библиотеката за %@";
 "Add %@ to Library" = "Добавяне на %@ в библиотеката";
+"Add %@ to Library?" = "Добавяне на %@ в библиотеката?";
+"Add Album" = "Добавяне на албум";
+"The number of songs in this album is unknown. Everything the server finds for this album will be added to your library." = "Броят песни в този албум е неизвестен. Всичко, което сървърът намери за този албум, ще бъде добавено към библиотеката ви.";
+"This adds %lld songs from this album to your server library." = "Това добавя %lld песни от този албум към библиотеката ви на сървъра.";
 "Add %@ to this device" = "Добавяне на %@ към това устройство";
 "Add Missing Songs to Library" = "Добавяне на липсващите песни в библиотеката";
 "Add Selected to Library" = "Добавяне на избраните в библиотеката";

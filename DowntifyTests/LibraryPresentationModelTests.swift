@@ -950,6 +950,138 @@ final class LibraryPresentationModelTests: XCTestCase {
         continuation.finish()
     }
 
+    // MARK: - Grouping catalog versions of the same song
+
+    func testRequestingSecondVersionOfSameSongSendsNothingAndShowsQueued() async throws {
+        let (model, transport, continuation) = await makeRecordingModel()
+        let original = try versionSong(id: "v1", title: "Karma Police", artist: "Radiohead")
+        let remaster = try versionSong(id: "v2", title: "Karma Police - Remastered 2017", artist: "Radiohead")
+
+        await model.request(song: original)
+        await model.request(song: remaster)
+
+        XCTAssertEqual(transport.posts.filter { $0.path.hasSuffix("/api/download/url") }.count, 1)
+        XCTAssertEqual(model.actionState(for: remaster), .queued(jobID: "job-1"))
+        XCTAssertEqual(model.actionState(for: original), .queued(jobID: "job-1"))
+        continuation.finish()
+    }
+
+    func testFailedVersionDoesNotBlockOtherVersion() async throws {
+        let (model, transport, continuation) = await makeRecordingModel(postStatuses: [500])
+        let original = try versionSong(id: "v1", title: "Karma Police", artist: "Radiohead")
+        let remaster = try versionSong(id: "v2", title: "Karma Police - Remastered 2017", artist: "Radiohead")
+
+        await model.request(song: original)
+        guard case .failed = model.actionState(for: original) else { return XCTFail("expected failure") }
+        XCTAssertEqual(model.actionState(for: remaster), .idle)
+
+        await model.request(song: remaster)
+        XCTAssertEqual(transport.posts.filter { $0.path.hasSuffix("/api/download/url") }.count, 2)
+        XCTAssertEqual(model.actionState(for: remaster), .queued(jobID: "job-1"))
+        continuation.finish()
+    }
+
+    func testFailedVersionShowsOtherVersionActiveState() async throws {
+        let (model, transport, continuation) = await makeRecordingModel(postStatuses: [500])
+        let original = try versionSong(id: "v1", title: "Karma Police", artist: "Radiohead")
+        let remaster = try versionSong(id: "v2", title: "Karma Police - Remastered 2017", artist: "Radiohead")
+
+        await model.request(song: remaster)
+        guard case .failed = model.actionState(for: remaster) else { return XCTFail("expected failure") }
+        await model.request(song: original)
+
+        XCTAssertEqual(model.actionState(for: remaster), .queued(jobID: "job-1"))
+        await model.request(song: remaster)
+        XCTAssertEqual(transport.posts.filter { $0.path.hasSuffix("/api/download/url") }.count, 2)
+        continuation.finish()
+    }
+
+    func testBatchDropsSameSongVersionsAndKeepsJobIDsAligned() async throws {
+        let (model, transport, continuation) = await makeRecordingModel(batchBody: #"{"job_ids":["j-a","j-b"],"count":2}"#)
+        let first = try versionSong(id: "v1", title: "Karma Police", artist: "Radiohead")
+        let other = try versionSong(id: "v3", title: "Paranoid Android", artist: "Radiohead")
+        let duplicate = try versionSong(id: "v2", title: "Karma Police - Remastered 2017", artist: "Radiohead")
+
+        await model.requestBatch(songs: [first, duplicate, other])
+
+        let batch = try XCTUnwrap(transport.posts.first { $0.path.hasSuffix("/api/download/batch") })
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: batch.body) as? [String: Any])
+        let sent = try XCTUnwrap(object["songs"] as? [[String: Any]])
+        XCTAssertEqual(sent.compactMap { $0["song_id"] as? String }, ["v1", "v3"])
+        XCTAssertEqual(model.actionStates[first.id.description], .queued(jobID: "j-a"))
+        XCTAssertEqual(model.actionStates[other.id.description], .queued(jobID: "j-b"))
+        XCTAssertNil(model.actionStates[duplicate.id.description])
+        XCTAssertEqual(model.actionState(for: duplicate), .queued(jobID: "j-a"))
+        continuation.finish()
+    }
+
+    func testBatchSkipsRowsAlreadyQueuedThroughAnotherVersion() async throws {
+        let (model, transport, continuation) = await makeRecordingModel()
+        let original = try versionSong(id: "v1", title: "Karma Police", artist: "Radiohead")
+        let remaster = try versionSong(id: "v2", title: "Karma Police - Remastered 2017", artist: "Radiohead")
+        await model.request(song: original)
+        await model.requestBatch(songs: [remaster])
+        XCTAssertTrue(transport.posts.filter { $0.path.hasSuffix("/api/download/batch") }.isEmpty)
+        continuation.finish()
+    }
+
+    func testSongsWithEmptyArtistAreNeverGrouped() async throws {
+        let (model, transport, continuation) = await makeRecordingModel()
+        let first = try versionSong(id: "e1", title: "Intro", artist: "")
+        let second = try versionSong(id: "e2", title: "Intro", artist: "")
+
+        await model.request(song: first)
+        XCTAssertEqual(model.actionState(for: second), .idle)
+        await model.request(song: second)
+
+        XCTAssertEqual(transport.posts.filter { $0.path.hasSuffix("/api/download/url") }.count, 2)
+        continuation.finish()
+    }
+
+    func testSessionChangeClearsVersionGrouping() async throws {
+        let (model, _, continuation) = await makeRecordingModel()
+        let original = try versionSong(id: "v1", title: "Karma Police", artist: "Radiohead")
+        let remaster = try versionSong(id: "v2", title: "Karma Police - Remastered 2017", artist: "Radiohead")
+        await model.request(song: original)
+        XCTAssertEqual(model.actionState(for: remaster), .queued(jobID: "job-1"))
+
+        let next = makeSession(server: "server")
+        let changed = DeviceSession(baseAddress: next.baseAddress, serverID: next.serverID, serverName: next.serverName,
+                                    deviceID: next.deviceID, username: "someone-else", role: nil, token: "other",
+                                    allowsInsecureHTTP: false)
+        continuation.yield(changed)
+        await waitUntil { model.session == changed }
+
+        XCTAssertEqual(model.actionState(for: remaster), .idle)
+        XCTAssertEqual(model.actionState(for: original), .idle)
+        continuation.finish()
+    }
+
+    private func versionSong(id: String, title: String, artist: String) throws -> CatalogSong {
+        let artists = artist.isEmpty ? "[]" : #"["\#(artist)"]"#
+        let json = #"{"source":"youtube","song_id":"\#(id)","name":"\#(title)","artist":"\#(artist)","artists":\#(artists),"url":"https://youtube.test/watch?v=\#(id)"}"#
+        return try JSONDecoder().decode(CatalogSong.self, from: Data(json.utf8))
+    }
+
+    private func makeRecordingModel(postStatuses: [Int] = [], batchBody: String = #"{"job_ids":["j-1"],"count":1}"#)
+        async -> (ServerDownloadPresentationModel, RecordingQueueTransport, AsyncStream<DeviceSession?>.Continuation) {
+        let transport = RecordingQueueTransport(routes: [
+            "/api/server/info": #"{"product":"Downtify","api_version":1,"server_id":"server"}"#,
+            "/api/queue": "[]",
+            "/api/queue/state": #"{"paused":false,"state":"idle","active":0}"#,
+            "/api/download/url": #""job-1""#,
+            "/api/download/batch": batchBody
+        ], postStatuses: postStatuses)
+        let (updates, continuation) = AsyncStream<DeviceSession?>.makeStream()
+        let model = ServerDownloadPresentationModel(queue: ServerDownloadQueue(transport: transport),
+                                                    sessionUpdates: { updates })
+        let session = makeSession()
+        model.start()
+        continuation.yield(session)
+        await waitUntil { model.session == session }
+        return (model, transport, continuation)
+    }
+
     private func jobJSON(songID: String, status: String, filename: String) -> String {
         #"{"song":{"song_id":"\#(songID)","name":"Roads"},"status":"\#(status)","filename":"\#(filename)"}"#
     }
@@ -1422,6 +1554,32 @@ private final class PresentationQueueTransport: HTTPDataLoading {
             throw APIError.invalidResponse
         }
         let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!
+        return (Data(body.utf8), response)
+    }
+}
+
+/// Like `PresentationQueueTransport`, but records POST requests and can fail the first POSTs.
+private final class RecordingQueueTransport: HTTPDataLoading, @unchecked Sendable {
+    struct Post { let path: String; let body: Data }
+    private let routes: [String: String]
+    private var postStatuses: [Int]
+    private(set) var posts: [Post] = []
+
+    init(routes: [String: String], postStatuses: [Int] = []) {
+        self.routes = routes
+        self.postStatuses = postStatuses
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        let path = request.url?.path ?? ""
+        guard let route = routes.keys.filter({ path.hasSuffix($0) }).max(by: { $0.count < $1.count }),
+              let body = routes[route] else { throw APIError.invalidResponse }
+        var status = 200
+        if request.httpMethod == "POST" {
+            posts.append(Post(path: path, body: request.httpBody ?? Data()))
+            if !postStatuses.isEmpty { status = postStatuses.removeFirst() }
+        }
+        let response = HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: status, httpVersion: nil, headerFields: nil)!
         return (Data(body.utf8), response)
     }
 }

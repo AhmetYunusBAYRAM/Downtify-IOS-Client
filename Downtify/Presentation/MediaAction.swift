@@ -147,3 +147,40 @@ extension ServerDownloadActionState {
         inLibrary ? .accepted : server
     }
 }
+
+/// Confirmation copy shown before an album is added to the server library.
+struct AlbumAddConfirmation: Equatable {
+    /// Albums at or above this many tracks ask for confirmation before they are added.
+    static let threshold = 20
+
+    let title: String
+    let message: String
+    let confirmLabel: String
+
+    /// Returns nil when the album can be added immediately. An unknown count (nil or non-positive)
+    /// always needs confirmation because the server may add more tracks than the app can show.
+    static func make(albumTitle: String, trackCount: Int?, threshold: Int = AlbumAddConfirmation.threshold) -> AlbumAddConfirmation? {
+        let title = String(localized: "Add \(albumTitle) to Library?")
+        let confirmLabel = String(localized: "Add Album")
+        guard let count = trackCount, count > 0 else {
+            return AlbumAddConfirmation(
+                title: title,
+                message: String(localized: "The number of songs in this album is unknown. Everything the server finds for this album will be added to your library."),
+                confirmLabel: confirmLabel)
+        }
+        guard count >= threshold else { return nil }
+        return AlbumAddConfirmation(
+            title: title,
+            message: String(localized: "This adds \(Int(count)) songs from this album to your server library."),
+            confirmLabel: confirmLabel)
+    }
+}
+
+/// An album add waiting on confirmation; `resolved` is captured at tap time.
+struct PendingAlbumAdd: Identifiable {
+    let url: String
+    let resolved: [CatalogSong]?
+    let confirmation: AlbumAddConfirmation
+
+    var id: String { url }
+}

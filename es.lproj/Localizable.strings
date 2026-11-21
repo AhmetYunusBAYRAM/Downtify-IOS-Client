@@ -403,6 +403,10 @@
 "%lld of %lld added to Library" = "%lld de %lld añadidos a la biblioteca";
 "%lld of %lld added to Library for %@" = "%lld de %lld añadidos a la biblioteca para %@";
 "Add %@ to Library" = "Añadir %@ a la biblioteca";
+"Add %@ to Library?" = "¿Añadir %@ a la biblioteca?";
+"Add Album" = "Añadir álbum";
+"The number of songs in this album is unknown. Everything the server finds for this album will be added to your library." = "Se desconoce el número de canciones de este álbum. Todo lo que encuentre el servidor para este álbum se añadirá a tu biblioteca.";
+"This adds %lld songs from this album to your server library." = "Esto añade %lld canciones de este álbum a tu biblioteca del servidor.";
 "Add %@ to this device" = "Añadir %@ a este dispositivo";
 "Add Missing Songs to Library" = "Añadir canciones que faltan a la biblioteca";
 "Add Selected to Library" = "Añadir selección a la biblioteca";
