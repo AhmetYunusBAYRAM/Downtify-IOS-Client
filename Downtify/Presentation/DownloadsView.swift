@@ -468,6 +468,7 @@ struct AdminTrashView: View {
         }
         .navigationTitle("Music Trash")
         .background(palette.background)
+        .downtifyScrollEndClearance()
         .task(id: "\(pairingID):\(search)") {
             if !search.isEmpty {
                 try? await Task.sleep(for: .milliseconds(250))

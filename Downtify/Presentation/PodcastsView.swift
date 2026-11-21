@@ -81,6 +81,7 @@ private struct PodcastShowsList: View {
             }
         }
         .navigationTitle("Podcasts")
+        .downtifyScrollEndClearance()
         .task(id: session) {
             shows = nil
             unavailable = false
@@ -170,6 +171,7 @@ private struct PodcastEpisodesList: View {
             }
         }
         .navigationTitle(show.name)
+        .downtifyScrollEndClearance()
         .navigationBarTitleDisplayMode(.inline)
         .task { if content == nil { await load() } }
     }
