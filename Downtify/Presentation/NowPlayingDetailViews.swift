@@ -468,7 +468,7 @@ private struct AlbumRowView: View {
             .buttonStyle(.plain)
             .disabled(!isPlayable)
             .accessibilityLabel(Text(verbatim: "\(number). \(title)"))
-            .accessibilityHint(isPlayable ? "Plays this song" : "")
+            .accessibilityHint(isPlayable ? String(localized: "Plays this song") : "")
             switch row {
             case .owned, .libraryOnly:
                 InLibraryBadge()

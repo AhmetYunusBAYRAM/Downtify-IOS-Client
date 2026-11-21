@@ -402,7 +402,7 @@ private struct NowPlayingView: View {
             .disabled(!hasAlbum)
             .accessibilityLabel(item.displayTitle)
             .accessibilityAddTraits(.isHeader)
-            .accessibilityHint(hasAlbum ? "Opens the album page" : "")
+            .accessibilityHint(hasAlbum ? String(localized: "Opens the album page") : "")
             .accessibilityIdentifier("player.title")
             Button { openArtist(item) } label: {
                 Text(item.displayArtist)
@@ -411,7 +411,7 @@ private struct NowPlayingView: View {
             }
             .disabled(!hasArtist)
             .accessibilityLabel("Artist, \(item.displayArtist)")
-            .accessibilityHint(hasArtist ? "Opens the artist page" : "")
+            .accessibilityHint(hasArtist ? String(localized: "Opens the artist page") : "")
             .accessibilityIdentifier("player.artist")
             if hasAlbum {
                 Button { openAlbum(item) } label: {
