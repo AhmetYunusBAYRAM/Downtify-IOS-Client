@@ -1455,13 +1455,13 @@ private struct LibraryTrackList: View {
                             playback.replaceQueue(tracks, startingAt: index)
                         } label: {
                             TrackRow(track: track, isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
-                                .accessibilityIdentifier("library.trackRow.\(track.id)")
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(Text(track.accessibleMetadata))
                         .downtifyCurrentRowAccessibility(isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying,
                                                          value: spokenDuration(track.duration))
                         .accessibilityHint("Play this song and replace the current queue")
+                        .accessibilityIdentifier("library.trackRow.\(track.id)")
                     }
                     Menu {
                         if collections.likedIDs != nil {
