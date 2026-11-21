@@ -225,8 +225,12 @@ struct CatalogSearchView: View {
                     sectionHeader("Catalog artists")
                     ForEach(artists) { artist in
                         NavigationLink { artistDetail(artist) } label: {
-                            Label(artist.name, systemImage: "person")
-                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            HStack(spacing: 12) {
+                                artistArtwork(artist.coverURL)
+                                Text(artist.name)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .contentShape(Rectangle())
                         }.buttonStyle(.plain)
                     }
                 }
@@ -458,6 +462,28 @@ struct CatalogSearchView: View {
 
     private func sectionHeader(_ title: LocalizedStringKey) -> some View {
         Text(title).font(.title3.bold()).accessibilityAddTraits(.isHeader).padding(.top, 8)
+    }
+
+    /// Catalog artist photo; only https covers load, anything else shows the person symbol.
+    @ViewBuilder private func artistArtwork(_ value: String?) -> some View {
+        Group {
+            if let value, let url = URL(string: value), url.scheme?.lowercased() == "https" {
+                AsyncImage(url: url) { phase in
+                    if let image = phase.image { image.resizable().scaledToFill() }
+                    else { artistArtworkPlaceholder }
+                }
+            } else {
+                artistArtworkPlaceholder
+            }
+        }
+        .frame(width: 48, height: 48)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+    }
+
+    private var artistArtworkPlaceholder: some View {
+        Image(systemName: "person.crop.circle").font(.title3).foregroundStyle(.secondary)
+            .frame(width: 48, height: 48).background(palette.background)
     }
 
     @ViewBuilder private func deviceButton(for song: CatalogSong) -> some View {

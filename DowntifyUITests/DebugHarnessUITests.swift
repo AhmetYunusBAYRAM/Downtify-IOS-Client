@@ -75,6 +75,84 @@ final class DebugHarnessUITests: XCTestCase {
         XCTAssertTrue(second.isSelected, "A paused song stays highlighted")
     }
 
+    /// Issue 57: Like, Add to Playlist, Queue and Up Next are visible and work from Now Playing.
+    func testNowPlayingActionsAreDiscoverable() throws {
+        let app = DowntifyUITestSupport.launch()
+        XCTAssertNotNil(DowntifyUITestSupport.waitForState(app, timeout: 30) {
+            $0.sessionActive && $0.libraryTrackCount == 2
+        })
+        DowntifyUITestSupport.openLibrarySongs(app)
+        // Songs default to newest first, so Fixture Two plays first and Fixture One is up next.
+        let newest = DowntifyUITestSupport.element(app, "library.trackRow.fixture-track-2")
+        XCTAssertTrue(newest.waitForExistence(timeout: 15))
+        newest.tap()
+        XCTAssertNotNil(DowntifyUITestSupport.waitForState(app, timeout: 30) { $0.playbackPhase == "playing" })
+
+        let dock = DowntifyUITestSupport.element(app, "player.dock")
+        XCTAssertTrue(dock.waitForExistence(timeout: 10))
+        dock.tap()
+
+        let upNext = DowntifyUITestSupport.element(app, "player.upNext")
+        XCTAssertTrue(upNext.waitForExistence(timeout: 10))
+        XCTAssertTrue(upNext.label.contains("Fixture One"), "up next label: \(upNext.label)")
+
+        let like = app.buttons["player.like"]
+        let addToPlaylist = app.buttons["player.addToPlaylist"]
+        let queue = app.buttons["player.queue"]
+        XCTAssertTrue(like.waitForExistence(timeout: 10))
+        XCTAssertTrue(addToPlaylist.exists)
+        XCTAssertTrue(queue.exists)
+        XCTAssertTrue(waitForEnabled(like), "Like never enabled")
+        XCTAssertEqual(like.label, "Like Fixture Two")
+        like.tap()
+        XCTAssertTrue(waitForLabel(of: like, toBe: "Unlike Fixture Two"), "like label: \(like.label)")
+
+        XCTAssertTrue(waitForEnabled(addToPlaylist), "Add to Playlist never enabled")
+        addToPlaylist.tap()
+        let mix = app.buttons["addToPlaylist.Fixture Mix"]
+        XCTAssertTrue(mix.waitForExistence(timeout: 10))
+        mix.tap()
+        // The picker closes only after the server confirms the add; the banner itself is transient.
+        XCTAssertTrue(mix.waitForNonExistence(timeout: 15), "picker did not close after adding")
+
+        // Adding the same song again shows it is already there and asks before creating a duplicate.
+        XCTAssertTrue(waitForEnabled(addToPlaylist))
+        addToPlaylist.tap()
+        XCTAssertTrue(mix.waitForExistence(timeout: 10))
+        XCTAssertTrue(waitForValue(of: mix, toContain: "Already in this playlist"), "value: \(value(of: mix))")
+        mix.tap()
+        XCTAssertTrue(app.buttons["Add Again"].waitForExistence(timeout: 10))
+        app.buttons["Cancel"].firstMatch.tap()
+        app.buttons["Cancel"].firstMatch.tap()
+
+        queue.tap()
+        XCTAssertTrue(app.navigationBars["Play Queue"].waitForExistence(timeout: 10))
+        app.navigationBars["Play Queue"].buttons["Done"].tap()
+
+        app.buttons["Next track"].firstMatch.tap()
+        XCTAssertNotNil(DowntifyUITestSupport.waitForState(app, timeout: 30) { $0.currentTrackID == "fixture-track-1" })
+        XCTAssertTrue(waitForLabel(of: upNext, toBe: "Nothing up next"), "up next label: \(upNext.label)")
+        XCTAssertFalse(app.buttons["Next track"].firstMatch.isEnabled)
+    }
+
+    private func waitForEnabled(_ element: XCUIElement, timeout: TimeInterval = 15) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if element.exists && element.isEnabled { return true }
+            Thread.sleep(forTimeInterval: 0.25)
+        } while Date() < deadline
+        return false
+    }
+
+    private func waitForLabel(of element: XCUIElement, toBe text: String, timeout: TimeInterval = 15) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if element.exists && element.label == text { return true }
+            Thread.sleep(forTimeInterval: 0.25)
+        } while Date() < deadline
+        return false
+    }
+
     private func value(of element: XCUIElement) -> String { element.value as? String ?? "" }
 
     private func waitForValue(of element: XCUIElement, toContain text: String, timeout: TimeInterval = 10) -> Bool {

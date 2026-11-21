@@ -187,3 +187,132 @@ final class MediaActionTests: XCTestCase {
         XCTAssertTrue(confirmation.title.contains("Zebra Album"), confirmation.title)
     }
 }
+
+final class NowPlayingActionTests: XCTestCase {
+    func testLikeIsEnabledForLibraryTrackWithLikes() {
+        let like = NowPlayingLikePresentation.make(itemTitle: "Song", isInLibrary: true, likesAvailable: true,
+                                                   liked: false, pending: false, busy: false)
+        XCTAssertTrue(like.isEnabled)
+        XCTAssertFalse(like.isLiked)
+        XCTAssertEqual(like.systemImage, "heart")
+        XCTAssertEqual(like.title, "Like")
+        XCTAssertEqual(like.accessibilityLabel, "Like Song")
+        XCTAssertNil(like.explanation)
+    }
+
+    func testLikedTrackOffersUnlike() {
+        let like = NowPlayingLikePresentation.make(itemTitle: "Song", isInLibrary: true, likesAvailable: true,
+                                                   liked: true, pending: true, busy: false)
+        XCTAssertTrue(like.isLiked)
+        XCTAssertTrue(like.isPending)
+        XCTAssertEqual(like.systemImage, "heart.fill")
+        XCTAssertEqual(like.title, "Liked")
+        XCTAssertEqual(like.accessibilityLabel, "Unlike Song")
+    }
+
+    func testLikeExplainsWhyItIsDisabled() {
+        let notInLibrary = NowPlayingLikePresentation.make(itemTitle: "Song", isInLibrary: false, likesAvailable: true,
+                                                           liked: true, pending: true, busy: false)
+        XCTAssertFalse(notInLibrary.isEnabled)
+        XCTAssertFalse(notInLibrary.isLiked, "A catalog song never shows a stale library like")
+        XCTAssertFalse(notInLibrary.isPending)
+        XCTAssertEqual(notInLibrary.explanation, "Add to Library first")
+
+        let noLikes = NowPlayingLikePresentation.make(itemTitle: "Song", isInLibrary: true, likesAvailable: false,
+                                                      liked: false, pending: false, busy: false)
+        XCTAssertFalse(noLikes.isEnabled)
+        XCTAssertEqual(noLikes.explanation, "Likes are unavailable")
+
+        let busy = NowPlayingLikePresentation.make(itemTitle: "Song", isInLibrary: true, likesAvailable: true,
+                                                   liked: false, pending: false, busy: true)
+        XCTAssertFalse(busy.isEnabled)
+        XCTAssertNil(busy.explanation)
+    }
+
+    func testPlaylistActionStates() {
+        let cases: [(Bool, Bool, Int, Bool, Bool, String?)] = [
+            (true, true, 2, false, true, nil),
+            (true, true, 2, true, false, nil),
+            (false, true, 2, false, false, "Add to Library first"),
+            (true, false, 2, false, false, "This server can't edit playlists"),
+            (true, true, 0, false, false, "No playlists you can edit"),
+        ]
+        for (inLibrary, supports, count, busy, enabled, explanation) in cases {
+            let action = NowPlayingPlaylistPresentation.make(itemTitle: "Song", isInLibrary: inLibrary,
+                                                             supportsEditing: supports, editablePlaylistCount: count,
+                                                             busy: busy)
+            XCTAssertEqual(action.isEnabled, enabled, "\(inLibrary) \(supports) \(count) \(busy)")
+            XCTAssertEqual(action.explanation, explanation, "\(inLibrary) \(supports) \(count) \(busy)")
+            XCTAssertEqual(action.accessibilityLabel, "Add Song to a playlist")
+        }
+    }
+
+    func testEditablePlaylistsKeepOnlyManualEditableWithFavoritesFirst() {
+        let lists = [
+            playlist("zeta", manual: true, editable: true),
+            playlist("Smart", manual: false, editable: true),
+            playlist("Shared read-only", manual: true, editable: false),
+            playlist("alpha", manual: true, editable: true),
+            playlist("Favorite", manual: true, editable: true, favorite: true),
+        ]
+        XCTAssertEqual(EditablePlaylists.sorted(lists, supportsEditing: true).map(\.name), ["Favorite", "alpha", "zeta"])
+        XCTAssertEqual(EditablePlaylists.sorted(lists, supportsEditing: false), [])
+        XCTAssertEqual(EditablePlaylists.sorted(nil, supportsEditing: true), [])
+    }
+
+    func testUpNextShowsFollowingEntryAndRemainingCount() throws {
+        var queue = PlaybackQueue()
+        queue.replace([track("a"), track("b"), track("c")], startingAt: 0)
+        let summary = try XCTUnwrap(UpNextSummary(queue: queue))
+        XCTAssertEqual(summary.entry.item.libraryTrack?.id, "b")
+        XCTAssertEqual(summary.laterCount, 1)
+        XCTAssertFalse(summary.wrapsToStart)
+    }
+
+    func testUpNextIsNilAtEndWithoutRepeatAndWrapsWithRepeatAll() throws {
+        var queue = PlaybackQueue()
+        queue.replace([track("a"), track("b")], startingAt: 1)
+        XCTAssertNil(UpNextSummary(queue: queue))
+
+        queue.repeatMode = .all
+        let summary = try XCTUnwrap(UpNextSummary(queue: queue))
+        XCTAssertEqual(summary.entry.item.libraryTrack?.id, "a")
+        XCTAssertTrue(summary.wrapsToStart)
+        XCTAssertEqual(summary.laterCount, 0)
+    }
+
+    func testUpNextIgnoresRepeatOneForManualNextAndSingleTrackLoops() throws {
+        var queue = PlaybackQueue()
+        queue.replace([track("a"), track("b")], startingAt: 0)
+        queue.repeatMode = .one
+        XCTAssertEqual(try XCTUnwrap(UpNextSummary(queue: queue)).entry.item.libraryTrack?.id, "b")
+
+        queue.replace([track("solo")], startingAt: 0)
+        queue.repeatMode = .all
+        XCTAssertNil(UpNextSummary(queue: queue), "Looping a single song has nothing else up next")
+    }
+
+    func testUpNextFollowsShuffleOrderAndDistinguishesDuplicates() throws {
+        var queue = PlaybackQueue()
+        queue.replace([track("a"), track("a"), track("b")], startingAt: 0)
+        queue.setShuffle(true)
+        let summary = try XCTUnwrap(UpNextSummary(queue: queue))
+        let order = queue.order
+        XCTAssertEqual(summary.entry.id, order[1].id)
+        XCTAssertNotEqual(summary.entry.id, queue.currentID)
+        XCTAssertEqual(summary.laterCount, 1)
+    }
+
+    private func track(_ id: String) -> LibraryTrack {
+        LibraryTrack(id: id, file: "\(id).mp3", title: id, artist: "Artist", artists: ["Artist"], album: "Album",
+                     albumArtist: "Artist", albumID: "album", artistID: "artist", trackNumber: 1, year: "2026",
+                     duration: 100, codec: "mp3", bitrate: 128_000, sampleRate: 44_100, channels: 2, size: 100,
+                     added: 0, hasCover: false, isExplicit: false, playlists: [])
+    }
+
+    private func playlist(_ name: String, manual: Bool, editable: Bool, favorite: Bool = false) -> LibraryPlaylist {
+        LibraryPlaylist(name: name, displayName: nil, liked: nil, favorite: favorite, trackIDs: [], cover: nil,
+                        owner: nil, mine: true, manual: manual, canEditTracks: editable, visibility: nil,
+                        sharedWithMe: nil, sharedWith: nil, editors: nil)
+    }
+}

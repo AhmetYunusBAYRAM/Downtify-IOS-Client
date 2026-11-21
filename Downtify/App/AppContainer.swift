@@ -64,7 +64,8 @@ struct AppContainer {
         defaults = environment.defaults
         let connection = ConnectionService(transport: environment.transport, store: environment.sessionStore)
         connectionService = connection
-        artwork = ArtworkLoader(connection: connection, transport: environment.transport)
+        let artworkLoader = ArtworkLoader(connection: connection, transport: environment.transport)
+        artwork = artworkLoader
         sessionPresentation = SessionPresentationCoordinator(connectionService: connection, serverDiscovery: serverDiscovery) {
             try await connection.sessionUpdates()
         }
@@ -75,7 +76,10 @@ struct AppContainer {
         }
         library = repository
         let sessionUpdates: @Sendable () async throws -> AsyncStream<DeviceSession?> = { try await connection.sessionUpdates() }
-        let collections = LibraryCollectionsModel(database: database, sessionUpdates: sessionUpdates, verifySession: { session in
+        // Same transport as the library so harness fixture and staging guards also cover likes and playlists.
+        let collections = LibraryCollectionsModel(api: LibraryCollectionsAPI(transport: environment.transport,
+                                                                            preservesTransportErrors: true),
+                                                  database: database, sessionUpdates: sessionUpdates, verifySession: { session in
             (try? await connection.verifySession(expected: session)) == .active
         }, defaults: environment.defaults)
         self.collections = collections
@@ -107,7 +111,8 @@ struct AppContainer {
             engine: AVPlaybackEngine(),
             resolver: environment.streamResolver
                 ?? PlaybackStreamResolver(cache: playbackCache, offline: offlineDownloads, preloadCache: preloadCache),
-            audioSession: SystemPlaybackAudioSession(), remote: SystemPlaybackRemoteControls(),
+            audioSession: SystemPlaybackAudioSession(),
+            remote: SystemPlaybackRemoteControls(artworkProvider: AppNowPlayingArtworkProvider(artwork: artworkLoader)),
             store: PlaybackStateStore(defaults: environment.defaults), networkMonitor: SystemPlaybackNetworkMonitor(),
             cache: playbackCache, preloadCache: preloadCache,
             reporting: PlaybackReporting(outbox: listenOutbox, defaults: environment.defaults,

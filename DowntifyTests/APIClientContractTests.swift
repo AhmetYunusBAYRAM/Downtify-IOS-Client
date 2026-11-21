@@ -255,6 +255,17 @@ final class APIClientContractTests: XCTestCase {
         XCTAssertEqual(discover.artists.first?.rawPayload.objectValue?["score"], .number(1.25))
     }
 
+    func testArtistSearchDecodesYouTubeMusicCover() throws {
+        let json = #"[{"artist_id":"UCabc","name":"Radiohead","cover_url":"https://lh3.googleusercontent.com/a=w544-h544","url":"https://music.youtube.com/channel/UCabc","source":"youtube"},{"artist_id":"UCdef","name":"No Photo","cover_url":"","url":"https://music.youtube.com/channel/UCdef","source":"youtube"}]"#
+        let artists = try JSONDecoder().decode([CatalogArtist].self, from: Data(json.utf8))
+
+        XCTAssertEqual(artists.count, 2)
+        XCTAssertEqual(artists[0].source, "youtube")
+        XCTAssertEqual(artists[0].artistID, "UCabc")
+        XCTAssertEqual(artists[0].coverURL, "https://lh3.googleusercontent.com/a=w544-h544")
+        XCTAssertNil(artists[1].coverURL.flatMap(URL.init(string:))?.scheme)
+    }
+
     func testCollectionRowsPreserveDeezerAndSpotifyIDsWhenSourceIsOmitted() throws {
         let json = #"{"albums":[{"name":"Dummy","artist":"Portishead","year":"1994","cover_url":"https://cover.test/dummy.jpg","source":"deezer","deezer_album_id":"13","deezer_artist_id":"42","url":"https://www.deezer.com/album/13","reason":"similar","because":["Air"]},{"name":"Third","artist":"Portishead","year":"2008","cover_url":"https://cover.test/third.jpg","spotify_id":"sp-album-1","url":"https://open.spotify.com/album/sp-album-1","reason":"more_from","because":["Portishead"]}],"more_albums":[],"playlists":[{"name":"This Is Portishead","owner":"spotify","cover_url":"https://cover.test/list.jpg","spotify_id":"sp-playlist-1","url":"https://open.spotify.com/playlist/sp-playlist-1","reason":"this_is","artist":"Portishead"}],"partial":false}"#
         let collections = try JSONDecoder().decode(CatalogCollectionsResults.self, from: Data(json.utf8))

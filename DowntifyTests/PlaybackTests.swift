@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import UIKit
 import UniformTypeIdentifiers
 import XCTest
 @testable import Downtify
@@ -1583,4 +1584,153 @@ private final class TestPlaybackStore: PlaybackStateStoring {
 private actor CacheFetchCounter {
     private(set) var value = 0
     func increment() { value += 1 }
+}
+
+@MainActor
+final class NowPlayingArtworkTests: XCTestCase {
+    func testSourceUsesLibraryCoverCatalogHTTPSAndPodcastArtwork() throws {
+        XCTAssertEqual(NowPlayingArtworkSource(metadata(.library(track("a", hasCover: true)))), .track(track("a", hasCover: true)))
+        XCTAssertNil(NowPlayingArtworkSource(metadata(.library(track("a", hasCover: false)))))
+        XCTAssertEqual(NowPlayingArtworkSource(metadata(.catalog(try song(cover: "https://cdn.test/a.jpg")))),
+                       .remote(URL(string: "https://cdn.test/a.jpg")!))
+        XCTAssertNil(NowPlayingArtworkSource(metadata(.catalog(try song(cover: "http://cdn.test/a.jpg")))))
+        XCTAssertNil(NowPlayingArtworkSource(metadata(.catalog(try song(cover: "")))))
+        let episode = try JSONDecoder().decode(PodcastEpisode.self, from: Data(Self.episodeJSON.utf8))
+        let show = PodcastShow(id: 9, name: "Series", author: "Host", description: nil,
+                               artworkURL: "https://cdn.test/show.jpg", episodeCount: 1, downloadedCount: 0)
+        let podcast = PlaybackMetadata(item: nil, podcast: PodcastSelection(show: show, episode: episode), position: 0,
+                                       duration: nil, isPlaying: true, wantsPlayback: true, queueIndex: 0, queueCount: 1,
+                                       canSkipNext: false, canSkipPrevious: false)
+        XCTAssertEqual(NowPlayingArtworkSource(podcast), .remote(URL(string: "https://cdn.test/show.jpg")!))
+    }
+
+    func testCachedArtworkShowsImmediatelyAndLoadsOncePerItem() async {
+        let provider = TestArtworkProvider()
+        let cached = UIImage()
+        let full = UIImage()
+        provider.cached = cached
+        provider.result = full
+        let coordinator = NowPlayingArtworkCoordinator(provider: provider)
+        var loaded: [UIImage] = []
+        coordinator.onLoad = { loaded.append($0) }
+        let current = metadata(.library(track("a", hasCover: true)))
+
+        XCTAssertTrue(coordinator.update(for: current) === cached)
+        XCTAssertTrue(coordinator.update(for: current) === cached)
+        await provider.waitForLoads(1)
+        await settle { !loaded.isEmpty }
+
+        XCTAssertEqual(provider.loadCount, 1)
+        XCTAssertTrue(loaded.first === full)
+        XCTAssertTrue(coordinator.update(for: current) === full)
+        XCTAssertEqual(provider.loadCount, 1)
+    }
+
+    func testFailedLoadKeepsCachedArtwork() async {
+        let provider = TestArtworkProvider()
+        let cached = UIImage()
+        provider.cached = cached
+        let coordinator = NowPlayingArtworkCoordinator(provider: provider)
+        var loads = 0
+        coordinator.onLoad = { _ in loads += 1 }
+        let current = metadata(.library(track("a", hasCover: true)))
+
+        _ = coordinator.update(for: current)
+        await provider.waitForLoads(1)
+        await settle { false }
+
+        XCTAssertEqual(loads, 0)
+        XCTAssertTrue(coordinator.update(for: current) === cached)
+    }
+
+    func testLoadFinishingAfterItemChangesIsDropped() async {
+        let provider = TestArtworkProvider()
+        provider.holdsLoads = true
+        let coordinator = NowPlayingArtworkCoordinator(provider: provider)
+        var loaded: [UIImage] = []
+        coordinator.onLoad = { loaded.append($0) }
+        let staleImage = UIImage()
+        let currentImage = UIImage()
+
+        _ = coordinator.update(for: metadata(.library(track("a", hasCover: true))))
+        await provider.waitForLoads(1)
+        XCTAssertNil(coordinator.update(for: metadata(.library(track("b", hasCover: true)))))
+        await provider.waitForLoads(2)
+        provider.releaseOldest(staleImage)
+        await settle { false }
+
+        XCTAssertTrue(loaded.isEmpty)
+        XCTAssertNil(coordinator.image)
+
+        provider.releaseOldest(currentImage)
+        await settle { !loaded.isEmpty }
+        XCTAssertEqual(loaded.count, 1)
+        XCTAssertTrue(loaded.first === currentImage)
+    }
+
+    func testClearingMetadataClearsArtwork() async {
+        let provider = TestArtworkProvider()
+        provider.cached = UIImage()
+        let coordinator = NowPlayingArtworkCoordinator(provider: provider)
+
+        XCTAssertNotNil(coordinator.update(for: metadata(.library(track("a", hasCover: true)))))
+        XCTAssertNil(coordinator.update(for: nil))
+        XCTAssertNil(coordinator.source)
+    }
+
+    /// Lets the coordinator's load task run; stops early once `done` holds.
+    private func settle(_ done: () -> Bool) async {
+        for _ in 0..<50 where !done() { await Task.yield() }
+    }
+
+    private static let episodeJSON = #"{"id":17,"show_id":9,"title":"Episode","duration_seconds":120,"enclosure_url":"https://publisher.test/audio.mp3","filename":null,"position_seconds":0,"played":false}"#
+
+    private func metadata(_ item: PlaybackItem) -> PlaybackMetadata {
+        PlaybackMetadata(item: item, position: 0, duration: 100, isPlaying: true, wantsPlayback: true,
+                         queueIndex: 0, queueCount: 1, canSkipNext: false, canSkipPrevious: false)
+    }
+
+    private func track(_ id: String, hasCover: Bool) -> LibraryTrack {
+        LibraryTrack(id: id, file: "\(id).mp3", title: id, artist: "Artist", artists: ["Artist"], album: "Album",
+                     albumArtist: "Artist", albumID: "album", artistID: "artist", trackNumber: 1, year: "2026",
+                     duration: 100, codec: "mp3", bitrate: 128_000, sampleRate: 44_100, channels: 2, size: 100,
+                     added: 0, hasCover: hasCover, isExplicit: false, playlists: [])
+    }
+
+    private func song(cover: String) throws -> CatalogSong {
+        let json = #"{"source":"youtube","song_id":"s1","name":"Song","artists":["Artist"],"url":"","cover_url":"\#(cover)"}"#
+        return try JSONDecoder().decode(CatalogSong.self, from: Data(json.utf8))
+    }
+}
+
+@MainActor
+private final class TestArtworkProvider: NowPlayingArtworkProviding {
+    var cached: UIImage?
+    var result: UIImage?
+    var holdsLoads = false
+    private(set) var loadCount = 0
+    private var held: [CheckedContinuation<UIImage?, Never>] = []
+    private var loadWaiters: [(Int, CheckedContinuation<Void, Never>)] = []
+
+    func cachedArtwork(for source: NowPlayingArtworkSource) -> UIImage? { cached }
+
+    func artwork(for source: NowPlayingArtworkSource) async -> UIImage? {
+        loadCount += 1
+        let ready = loadWaiters.filter { $0.0 <= loadCount }
+        loadWaiters.removeAll { $0.0 <= loadCount }
+        ready.forEach { $0.1.resume() }
+        guard holdsLoads else { return result }
+        return await withCheckedContinuation { held.append($0) }
+    }
+
+    func waitForLoads(_ count: Int) async {
+        guard loadCount < count else { return }
+        await withCheckedContinuation { loadWaiters.append((count, $0)) }
+    }
+
+    /// Finishes the oldest held load.
+    func releaseOldest(_ image: UIImage?) {
+        guard !held.isEmpty else { return }
+        held.removeFirst().resume(returning: image)
+    }
 }
