@@ -184,3 +184,92 @@ struct PendingAlbumAdd: Identifiable {
 
     var id: String { url }
 }
+
+/// Now Playing quick action state for liking the current song. Likes need a library track.
+struct NowPlayingLikePresentation: Equatable {
+    let isEnabled: Bool
+    let isLiked: Bool
+    let isPending: Bool
+    let systemImage: String
+    let title: String
+    let accessibilityLabel: String
+    let explanation: String?
+
+    static func make(itemTitle t: String, isInLibrary: Bool, likesAvailable: Bool,
+                     liked: Bool, pending: Bool, busy: Bool) -> Self {
+        let explanation: String?
+        if !isInLibrary {
+            explanation = String(localized: "Add to Library first")
+        } else if !likesAvailable {
+            explanation = String(localized: "Likes are unavailable")
+        } else {
+            explanation = nil
+        }
+        let liked = isInLibrary && liked
+        return Self(
+            isEnabled: explanation == nil && !busy,
+            isLiked: liked,
+            isPending: isInLibrary && pending,
+            systemImage: liked ? "heart.fill" : "heart",
+            title: liked ? String(localized: "Liked") : String(localized: "Like"),
+            accessibilityLabel: liked ? String(localized: "Unlike \(t)") : String(localized: "Like \(t)"),
+            explanation: explanation)
+    }
+}
+
+/// Now Playing quick action state for adding the current song to a playlist.
+struct NowPlayingPlaylistPresentation: Equatable {
+    let isEnabled: Bool
+    let accessibilityLabel: String
+    let explanation: String?
+
+    static func make(itemTitle t: String, isInLibrary: Bool, supportsEditing: Bool,
+                     editablePlaylistCount: Int, busy: Bool) -> Self {
+        let explanation: String?
+        if !isInLibrary {
+            explanation = String(localized: "Add to Library first")
+        } else if !supportsEditing {
+            explanation = String(localized: "This server can't edit playlists")
+        } else if editablePlaylistCount == 0 {
+            explanation = String(localized: "No playlists you can edit")
+        } else {
+            explanation = nil
+        }
+        return Self(isEnabled: explanation == nil && !busy,
+                    accessibilityLabel: String(localized: "Add \(t) to a playlist"),
+                    explanation: explanation)
+    }
+}
+
+/// Playlists that accept added tracks: manual, editable, favorites first, then by title.
+enum EditablePlaylists {
+    static func sorted(_ playlists: [LibraryPlaylist]?, supportsEditing: Bool) -> [LibraryPlaylist] {
+        guard supportsEditing else { return [] }
+        return (playlists ?? [])
+            .filter { $0.manual == true && $0.canEditTracks == true }
+            .sorted {
+                let lhsFavorite = $0.favorite == true, rhsFavorite = $1.favorite == true
+                if lhsFavorite != rhsFavorite { return lhsFavorite }
+                return $0.title.localizedStandardCompare($1.title) == .orderedAscending
+            }
+    }
+}
+
+/// What plays after the current entry when the listener taps Next.
+struct UpNextSummary: Equatable {
+    let entry: PlaybackQueueEntry
+    /// Upcoming entries after `entry` before the queue ends (or loops back to the current entry).
+    let laterCount: Int
+    /// True when `entry` is reached by looping back to the start under repeat-all.
+    let wrapsToStart: Bool
+
+    init?(queue: PlaybackQueue) {
+        guard let currentIndex = queue.currentIndex,
+              let nextID = queue.next(automatic: false),
+              nextID != queue.currentID,
+              let entry = queue.order.first(where: { $0.id == nextID }) else { return nil }
+        self.entry = entry
+        self.laterCount = max(0, queue.upcomingCount - 1)
+        self.wrapsToStart = currentIndex + 1 >= queue.order.count
+    }
+}

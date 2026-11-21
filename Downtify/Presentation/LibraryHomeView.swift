@@ -53,35 +53,35 @@ struct LibraryHomeView: View {
             NavigationStack {
                 browsePage(title: "Home") { homeContent }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback) }
+            .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback, membership: library.membership) }
             .tabItem { Label("Home", systemImage: "house") }.tag(Tab.home)
 
             NavigationStack {
                 browsePage(title: "Library") { libraryContent }
                     .searchable(text: $searchText, prompt: "Filter your library")
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback) }
+            .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback, membership: library.membership) }
             .tabItem { Label("Library", systemImage: "books.vertical").accessibilityIdentifier("tab.library") }.tag(Tab.library)
 
             NavigationStack {
                 browsePage(title: "Search") { searchContent }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback) }
+            .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback, membership: library.membership) }
             .tabItem { Label("Search", systemImage: "magnifyingglass").accessibilityIdentifier("tab.search") }.tag(Tab.search)
 
             NavigationStack {
                 browsePage(title: "Discover") { discoveryContent }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback) }
+            .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback, membership: library.membership) }
             .tabItem { Label("Discover", systemImage: "sparkles") }.tag(Tab.discover)
 
             DownloadsView(connection: connection, queue: serverDownloadQueue, serverDownloads: serverDownloads,
                           playback: playback, membership: library.membership)
-                .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback) }
+                .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback, membership: library.membership) }
                 .tabItem { Label("Downloads", systemImage: "arrow.down.circle") }.tag(Tab.downloads)
 
             PodcastsView(connection: connection, playback: playback)
-                .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback) }
+                .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback, membership: library.membership) }
                 .tabItem { Label("Podcasts", systemImage: "mic") }.tag(Tab.podcasts)
 
             if server.role?.lowercased() == "admin" {
@@ -89,7 +89,7 @@ struct LibraryHomeView: View {
                     AdminTrashView(connection: connection, role: server.role,
                                    pairingID: "\(server.serverID):\(server.deviceID):\(server.username ?? ""):\(server.role ?? "")")
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback) }
+                .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback, membership: library.membership) }
                 .tabItem { Label("Trash", systemImage: "trash") }.tag(Tab.adminTrash)
             }
 
@@ -126,7 +126,7 @@ struct LibraryHomeView: View {
                 }
                 .navigationTitle("More")
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback) }
+            .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback, membership: library.membership) }
             .tabItem { Label("More", systemImage: "ellipsis").accessibilityIdentifier("tab.more") }.tag(Tab.more)
         }
         .onChange(of: networkOperationLimit) { _, value in
@@ -1244,6 +1244,99 @@ private struct ArtistCatalogAlbumView: View {
     }
 }
 
+/// Adds one library song to a playlist the listener can edit. Shared by Now Playing and song row menus.
+struct AddToPlaylistSheet: View {
+    let track: LibraryTrack
+    /// Called with the playlist title after the server confirms the song is in the playlist.
+    let onAdded: (String) -> Void
+    @EnvironmentObject private var collections: LibraryCollectionsModel
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.downtifyPalette) private var palette
+    @State private var addingTo: String?
+    @State private var duplicate: LibraryPlaylist?
+
+    private var playlists: [LibraryPlaylist] {
+        EditablePlaylists.sorted(collections.playlists, supportsEditing: collections.supportsPlaylistEditing)
+    }
+
+    private var duplicateTitle: String { duplicate?.title ?? "" }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                PlaylistMutationFeedbackRow()
+                if playlists.isEmpty {
+                    DowntifyUnavailableView(title: "No playlists you can edit", symbol: "music.note.list")
+                        .listRowBackground(palette.surface)
+                }
+                ForEach(playlists) { playlist in
+                    let contains = playlist.trackIDs.contains(track.id)
+                    Button { choose(playlist) } label: {
+                        HStack {
+                            Label { Text(verbatim: playlist.title) } icon: {
+                                Image(systemName: playlist.favorite == true ? "star.fill" : "music.note.list")
+                            }
+                            Spacer()
+                            if addingTo == playlist.name {
+                                ProgressView()
+                            } else if contains {
+                                Image(systemName: "checkmark").foregroundStyle(DowntifyStyle.secondaryText)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .downtifyControlTarget()
+                    .disabled(collections.mutationBusy)
+                    .accessibilityValue(contains ? String(localized: "Already in this playlist") : "")
+                    .accessibilityIdentifier("addToPlaylist.\(playlist.name)")
+                    .listRowBackground(palette.surface)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(palette.background.ignoresSafeArea())
+            .toolbarBackground(palette.background, for: .navigationBar)
+            .navigationTitle("Choose Playlist")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            }
+            .confirmationDialog(String(localized: "Already in \(duplicateTitle)"),
+                                isPresented: Binding(get: { duplicate != nil }, set: { if !$0 { duplicate = nil } }),
+                                titleVisibility: .visible, presenting: duplicate) { playlist in
+                Button("Add Again") { add(to: playlist, allowDuplicates: true) }
+                Button("Cancel", role: .cancel) {}
+            } message: { _ in
+                Text("This song is already in the playlist. Add another copy?")
+            }
+        }
+        .onAppear { collections.clearPlaylistMutationError() }
+    }
+
+    private func choose(_ playlist: LibraryPlaylist) {
+        if playlist.trackIDs.contains(track.id) {
+            duplicate = playlist
+        } else {
+            add(to: playlist, allowDuplicates: false)
+        }
+    }
+
+    private func add(to playlist: LibraryPlaylist, allowDuplicates: Bool) {
+        let before = playlist.trackIDs.filter { $0 == track.id }.count
+        addingTo = playlist.name
+        Task {
+            await collections.addTracks([track.id], to: playlist.name, allowDuplicates: allowDuplicates)
+            addingTo = nil
+            // Confirm only when the refreshed playlist really holds another copy of the song.
+            let after = collections.playlist(named: playlist.name)?.trackIDs.filter { $0 == track.id }.count ?? before
+            if collections.playlistMutationError == nil, after > before {
+                onAdded(collections.playlist(named: playlist.name)?.title ?? playlist.title)
+                dismiss()
+            }
+        }
+    }
+}
+
 private struct PlaylistOccurrenceRemovalSheet: View {
     let playlist: LibraryPlaylist
     let catalog: LibraryCatalog
@@ -1350,7 +1443,7 @@ private struct PlaylistReorderSheet: View {
     }
 }
 
-private struct PlaylistMutationFeedbackRow: View {
+struct PlaylistMutationFeedbackRow: View {
     @EnvironmentObject private var collections: LibraryCollectionsModel
 
     @ViewBuilder
@@ -1431,6 +1524,11 @@ private struct LibraryTrackList: View {
     @EnvironmentObject private var downloads: OfflineDownloads
     @Environment(\.downtifyPalette) private var palette
     @State private var downloadMessage: LocalizedStringKey?
+    @State private var playlistTrack: LibraryTrack?
+
+    private var canAddToPlaylists: Bool {
+        !EditablePlaylists.sorted(collections.playlists, supportsEditing: collections.supportsPlaylistEditing).isEmpty
+    }
 
     var body: some View {
         let downloadByID = Dictionary(downloads.currentDownloads.map { ($0.track.id, $0) },
@@ -1462,13 +1560,17 @@ private struct LibraryTrackList: View {
                     }
                     Menu {
                         if collections.likedIDs != nil {
-                            Button(liked ? "Unlike song" : "Like song", systemImage: liked ? "heart.slash" : "heart") {
+                            Button(liked ? String(localized: "Unlike song") : String(localized: "Like song"), systemImage: liked ? "heart.slash" : "heart") {
                                 Task { await collections.toggleLike(track) }
                             }
                             .disabled(collections.mutationBusy)
                             if collections.hasPendingLike(track.id) { Text("Queued") }
                         }
                         Button("Add to queue", systemImage: "text.append") { playback.append([track]) }
+                        if canAddToPlaylists {
+                            Button("Add to Playlist", systemImage: "text.badge.plus") { playlistTrack = track }
+                                .disabled(collections.mutationBusy)
+                        }
                         if let onMoveToTrash {
                             Button("Move to trash", systemImage: "trash", role: .destructive) { onMoveToTrash(track) }
                         }
@@ -1492,6 +1594,14 @@ private struct LibraryTrackList: View {
             }
         }
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
+        .sheet(item: $playlistTrack) { track in
+            AddToPlaylistSheet(track: track) { title in
+                downloadMessage = "Added to \(title)"
+                AccessibilityNotification.Announcement(String(localized: "Added to \(title)")).post()
+            }
+            .presentationDragIndicator(.visible)
+            .presentationDetents([.medium, .large])
+        }
     }
 
     @ViewBuilder

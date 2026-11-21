@@ -156,7 +156,6 @@
 "Play" = "Αναπαραγωγή";
 "Play Queue" = "Σειρά αναπαραγωγής";
 "Play an artist or collection to see it here." = "Αναπαραγάγετε έναν καλλιτέχνη ή μια συλλογή για να εμφανιστεί εδώ.";
-"Play queue" = "Αναπαραγωγή σειράς";
 "Play this song and replace the current queue" = "Αναπαραγωγή του τραγουδιού και αντικατάσταση της τρέχουσας σειράς";
 "Playback position" = "Θέση αναπαραγωγής";
 "Playback position unavailable" = "Η θέση αναπαραγωγής δεν είναι διαθέσιμη";
@@ -550,3 +549,37 @@
 "This can't be undone." = "Αυτό δεν μπορεί να αναιρεθεί.";
 "Switch quality immediately" = "Άμεση αλλαγή ποιότητας";
 "When off, the current song keeps its quality when possible. The next song uses the new network’s quality." = "Όταν είναι απενεργοποιημένο, το τρέχον τραγούδι διατηρεί την ποιότητά του όπου είναι δυνατό. Το επόμενο χρησιμοποιεί την ποιότητα του νέου δικτύου.";
+
+/* Now Playing actions (issue 57) */
+"Like" = "Μου αρέσει";
+"Like %@" = "Μου αρέσει το %@";
+"Unlike %@" = "Δεν μου αρέσει πια το %@";
+"Like song" = "Μου αρέσει το τραγούδι";
+"Unlike song" = "Δεν μου αρέσει πια το τραγούδι";
+"Likes are unavailable" = "Τα «Μου αρέσει» δεν είναι διαθέσιμα";
+"Add to Playlist" = "Προσθήκη σε λίστα";
+"Add %@ to a playlist" = "Προσθήκη του %@ σε λίστα αναπαραγωγής";
+"Added to %@" = "Προστέθηκε στο %@";
+"Already in %@" = "Υπάρχει ήδη στο %@";
+"Already in this playlist" = "Υπάρχει ήδη σε αυτή τη λίστα";
+"Add Again" = "Προσθήκη ξανά";
+"This song is already in the playlist. Add another copy?" = "Αυτό το τραγούδι υπάρχει ήδη στη λίστα. Προσθήκη άλλου αντιγράφου;";
+"Choose Playlist" = "Επιλογή λίστας";
+"No playlists you can edit" = "Δεν υπάρχουν λίστες που μπορείτε να επεξεργαστείτε";
+"This server can't edit playlists" = "Αυτός ο διακομιστής δεν μπορεί να επεξεργαστεί λίστες";
+"Queue" = "Ουρά";
+"Open queue" = "Ανοίγει την ουρά";
+"Up Next" = "Ακολουθεί";
+"Up Next: %@ by %@" = "Ακολουθεί: %@ από %@";
+"Nothing up next" = "Δεν ακολουθεί τίποτα";
+"%lld more in queue" = "%lld ακόμη στην ουρά";
+"Then back to the start" = "Μετά από την αρχή";
+"Next track: %@" = "Επόμενο τραγούδι: %@";
+"Pause" = "Παύση";
+"On" = "Ενεργό";
+"Loading track" = "Φόρτωση τραγουδιού";
+"Loading episode" = "Φόρτωση επεισοδίου";
+"Lyrics could not be loaded." = "Δεν ήταν δυνατή η φόρτωση των στίχων.";
+"Lyrics are unavailable for this track." = "Δεν υπάρχουν στίχοι για αυτό το τραγούδι.";
+"Current queue entry" = "Τρέχον στοιχείο ουράς";
+"Play this queue entry" = "Αναπαραγωγή αυτού του στοιχείου";
