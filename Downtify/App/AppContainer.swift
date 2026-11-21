@@ -75,7 +75,10 @@ struct AppContainer {
         }
         library = repository
         let sessionUpdates: @Sendable () async throws -> AsyncStream<DeviceSession?> = { try await connection.sessionUpdates() }
-        let collections = LibraryCollectionsModel(database: database, sessionUpdates: sessionUpdates, verifySession: { session in
+        // Same transport as the library so harness fixture and staging guards also cover likes and playlists.
+        let collections = LibraryCollectionsModel(api: LibraryCollectionsAPI(transport: environment.transport,
+                                                                            preservesTransportErrors: true),
+                                                  database: database, sessionUpdates: sessionUpdates, verifySession: { session in
             (try? await connection.verifySession(expected: session)) == .active
         }, defaults: environment.defaults)
         self.collections = collections

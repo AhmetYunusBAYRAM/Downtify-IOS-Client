@@ -156,7 +156,6 @@
 "Play" = "Възпроизвеждане";
 "Play Queue" = "Опашка за възпроизвеждане";
 "Play an artist or collection to see it here." = "Пуснете изпълнител или колекция, за да се покаже тук.";
-"Play queue" = "Възпроизвеждане на опашката";
 "Play this song and replace the current queue" = "Пускане на песента и замяна на текущата опашка";
 "Playback position" = "Позиция на възпроизвеждане";
 "Playback position unavailable" = "Позицията на възпроизвеждане не е налична";
@@ -569,3 +568,37 @@
 "Some catalog sections could not be loaded." = "Някои раздели от каталога не можаха да се заредят.";
 "Show more" = "Покажи още";
 "Show less" = "Покажи по-малко";
+
+/* Now Playing actions (issue 57) */
+"Like" = "Харесване";
+"Like %@" = "Харесване на %@";
+"Unlike %@" = "Премахване на харесването на %@";
+"Like song" = "Харесване на песента";
+"Unlike song" = "Премахване на харесването";
+"Likes are unavailable" = "Харесванията не са налични";
+"Add to Playlist" = "Добавяне в плейлист";
+"Add %@ to a playlist" = "Добавяне на %@ в плейлист";
+"Added to %@" = "Добавено в %@";
+"Already in %@" = "Вече е в %@";
+"Already in this playlist" = "Вече е в този плейлист";
+"Add Again" = "Добавяне отново";
+"This song is already in the playlist. Add another copy?" = "Тази песен вече е в плейлиста. Да се добави ли още едно копие?";
+"Choose Playlist" = "Избор на плейлист";
+"No playlists you can edit" = "Няма плейлисти, които можете да редактирате";
+"This server can't edit playlists" = "Този сървър не може да редактира плейлисти";
+"Queue" = "Опашка";
+"Open queue" = "Отваря опашката";
+"Up Next" = "Следва";
+"Up Next: %@ by %@" = "Следва: %@ от %@";
+"Nothing up next" = "Няма следваща песен";
+"%lld more in queue" = "Още %lld в опашката";
+"Then back to the start" = "След това отначало";
+"Next track: %@" = "Следваща песен: %@";
+"Pause" = "Пауза";
+"On" = "Вкл.";
+"Loading track" = "Зареждане на песента";
+"Loading episode" = "Зареждане на епизода";
+"Lyrics could not be loaded." = "Текстът не можа да бъде зареден.";
+"Lyrics are unavailable for this track." = "Няма текст за тази песен.";
+"Current queue entry" = "Текущ елемент от опашката";
+"Play this queue entry" = "Възпроизвеждане на този елемент";

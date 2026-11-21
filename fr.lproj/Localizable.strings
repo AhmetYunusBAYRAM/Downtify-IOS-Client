@@ -156,7 +156,6 @@
 "Play" = "Lire";
 "Play Queue" = "File d’attente";
 "Play an artist or collection to see it here." = "Lancez un artiste ou une collection pour l’afficher ici.";
-"Play queue" = "Lire la file";
 "Play this song and replace the current queue" = "Lire ce titre et remplacer la file actuelle";
 "Playback position" = "Position de lecture";
 "Playback position unavailable" = "Position de lecture indisponible";
@@ -569,3 +568,37 @@
 "Some catalog sections could not be loaded." = "Certaines sections du catalogue n’ont pas pu être chargées.";
 "Show more" = "Afficher plus";
 "Show less" = "Afficher moins";
+
+/* Now Playing actions (issue 57) */
+"Like" = "J’aime";
+"Like %@" = "Aimer %@";
+"Unlike %@" = "Ne plus aimer %@";
+"Like song" = "J’aime le titre";
+"Unlike song" = "Je n’aime plus le titre";
+"Likes are unavailable" = "Les J’aime ne sont pas disponibles";
+"Add to Playlist" = "Ajouter à une playlist";
+"Add %@ to a playlist" = "Ajouter %@ à une playlist";
+"Added to %@" = "Ajouté à %@";
+"Already in %@" = "Déjà dans %@";
+"Already in this playlist" = "Déjà dans cette playlist";
+"Add Again" = "Ajouter à nouveau";
+"This song is already in the playlist. Add another copy?" = "Ce titre est déjà dans la playlist. Ajouter une autre copie ?";
+"Choose Playlist" = "Choisir une playlist";
+"No playlists you can edit" = "Aucune playlist modifiable";
+"This server can't edit playlists" = "Ce serveur ne peut pas modifier les playlists";
+"Queue" = "File d’attente";
+"Open queue" = "Ouvre la file d’attente";
+"Up Next" = "À suivre";
+"Up Next: %@ by %@" = "À suivre : %@ par %@";
+"Nothing up next" = "Rien à suivre";
+"%lld more in queue" = "%lld de plus dans la file";
+"Then back to the start" = "Puis retour au début";
+"Next track: %@" = "Titre suivant : %@";
+"Pause" = "Pause";
+"On" = "Activé";
+"Loading track" = "Chargement du titre";
+"Loading episode" = "Chargement de l’épisode";
+"Lyrics could not be loaded." = "Impossible de charger les paroles.";
+"Lyrics are unavailable for this track." = "Les paroles ne sont pas disponibles pour ce titre.";
+"Current queue entry" = "Élément actuel de la file";
+"Play this queue entry" = "Lire cet élément de la file";

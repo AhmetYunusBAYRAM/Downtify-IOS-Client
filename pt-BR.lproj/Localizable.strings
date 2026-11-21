@@ -156,7 +156,6 @@
 "Play" = "Reproduzir";
 "Play Queue" = "Fila de reprodução";
 "Play an artist or collection to see it here." = "Reproduza um artista ou coleção para vê-lo aqui.";
-"Play queue" = "Reproduzir fila";
 "Play this song and replace the current queue" = "Reproduzir esta música e substituir a fila atual";
 "Playback position" = "Posição da reprodução";
 "Playback position unavailable" = "Posição da reprodução indisponível";
@@ -569,3 +568,37 @@
 "Some catalog sections could not be loaded." = "Algumas seções do catálogo não puderam ser carregadas.";
 "Show more" = "Mostrar mais";
 "Show less" = "Mostrar menos";
+
+/* Now Playing actions (issue 57) */
+"Like" = "Curtir";
+"Like %@" = "Curtir %@";
+"Unlike %@" = "Descurtir %@";
+"Like song" = "Curtir música";
+"Unlike song" = "Descurtir música";
+"Likes are unavailable" = "As curtidas não estão disponíveis";
+"Add to Playlist" = "Adicionar à playlist";
+"Add %@ to a playlist" = "Adicionar %@ a uma playlist";
+"Added to %@" = "Adicionada a %@";
+"Already in %@" = "Já está em %@";
+"Already in this playlist" = "Já está nesta playlist";
+"Add Again" = "Adicionar novamente";
+"This song is already in the playlist. Add another copy?" = "Esta música já está na playlist. Adicionar outra cópia?";
+"Choose Playlist" = "Escolher playlist";
+"No playlists you can edit" = "Nenhuma playlist que você possa editar";
+"This server can't edit playlists" = "Este servidor não pode editar playlists";
+"Queue" = "Fila";
+"Open queue" = "Abre a fila";
+"Up Next" = "A seguir";
+"Up Next: %@ by %@" = "A seguir: %@ de %@";
+"Nothing up next" = "Nada a seguir";
+"%lld more in queue" = "Mais %lld na fila";
+"Then back to the start" = "Depois volta ao início";
+"Next track: %@" = "Próxima música: %@";
+"Pause" = "Pausar";
+"On" = "Ativado";
+"Loading track" = "Carregando música";
+"Loading episode" = "Carregando episódio";
+"Lyrics could not be loaded." = "Não foi possível carregar a letra.";
+"Lyrics are unavailable for this track." = "A letra não está disponível para esta música.";
+"Current queue entry" = "Item atual da fila";
+"Play this queue entry" = "Reproduzir este item da fila";

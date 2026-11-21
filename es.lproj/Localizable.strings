@@ -156,7 +156,6 @@
 "Play" = "Reproducir";
 "Play Queue" = "Cola de reproducción";
 "Play an artist or collection to see it here." = "Reproduce un artista o una colección para verla aquí.";
-"Play queue" = "Reproducir cola";
 "Play this song and replace the current queue" = "Reproducir esta canción y reemplazar la cola actual";
 "Playback position" = "Posición de reproducción";
 "Playback position unavailable" = "Posición de reproducción no disponible";
@@ -569,3 +568,37 @@
 "Some catalog sections could not be loaded." = "No se pudieron cargar algunas secciones del catálogo.";
 "Show more" = "Mostrar más";
 "Show less" = "Mostrar menos";
+
+/* Now Playing actions (issue 57) */
+"Like" = "Me gusta";
+"Like %@" = "Indicar que te gusta %@";
+"Unlike %@" = "Quitar Me gusta de %@";
+"Like song" = "Me gusta la canción";
+"Unlike song" = "Ya no me gusta la canción";
+"Likes are unavailable" = "Los Me gusta no están disponibles";
+"Add to Playlist" = "Añadir a lista";
+"Add %@ to a playlist" = "Añadir %@ a una lista";
+"Added to %@" = "Añadida a %@";
+"Already in %@" = "Ya está en %@";
+"Already in this playlist" = "Ya está en esta lista";
+"Add Again" = "Añadir de nuevo";
+"This song is already in the playlist. Add another copy?" = "Esta canción ya está en la lista. ¿Añadir otra copia?";
+"Choose Playlist" = "Elegir lista";
+"No playlists you can edit" = "No hay listas que puedas editar";
+"This server can't edit playlists" = "Este servidor no puede editar listas";
+"Queue" = "Cola";
+"Open queue" = "Abre la cola";
+"Up Next" = "A continuación";
+"Up Next: %@ by %@" = "A continuación: %@ de %@";
+"Nothing up next" = "No hay nada a continuación";
+"%lld more in queue" = "%lld más en la cola";
+"Then back to the start" = "Luego vuelve al principio";
+"Next track: %@" = "Siguiente canción: %@";
+"Pause" = "Pausar";
+"On" = "Activado";
+"Loading track" = "Cargando canción";
+"Loading episode" = "Cargando episodio";
+"Lyrics could not be loaded." = "No se pudieron cargar las letras.";
+"Lyrics are unavailable for this track." = "No hay letras disponibles para esta canción.";
+"Current queue entry" = "Elemento actual de la cola";
+"Play this queue entry" = "Reproducir este elemento de la cola";

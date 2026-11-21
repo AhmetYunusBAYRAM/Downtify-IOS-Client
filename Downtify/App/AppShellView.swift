@@ -99,7 +99,8 @@ struct TrackRow: View {
 /// Lives at the navigation boundary so playback updates do not invalidate library rows.
 struct PlaybackDock: View {
     @ObservedObject var playback: PlaybackController
-    /// Passed through to Now Playing's artist and album pages; not observed here.
+    /// Passed through to Now Playing's artist and album pages and its Like and Add to Playlist
+    /// actions; not observed here.
     let library: LibraryPresentationModel
     let serverDownloads: ServerDownloadPresentationModel
     @Environment(\.downtifyPalette) private var palette
@@ -171,7 +172,7 @@ private struct MiniPlayerView: View {
                         Image(systemName: isActive ? "pause.fill" : "play.fill")
                             .downtifyControlTarget()
                     }
-                    .accessibilityLabel(isActive ? "Pause" : "Play")
+                    .accessibilityLabel(isActive ? String(localized: "Pause") : String(localized: "Play"))
                     .accessibilityIdentifier("player.playPause")
                 }
                 if playback.podcast == nil {
@@ -217,6 +218,11 @@ private struct NowPlayingView: View {
     let serverDownloads: ServerDownloadPresentationModel
     @State private var path: [NowPlayingRoute] = []
     @State private var artistChoices: [NowPlayingArtistTarget] = []
+    @EnvironmentObject private var collections: LibraryCollectionsModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var showingPlaylistPicker = false
+    @State private var confirmation: String?
+    @State private var confirmationCount = 0
     @AppStorage("debug.networkOverlay.enabled") private var networkOverlayEnabled = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -231,6 +237,13 @@ private struct NowPlayingView: View {
 
     private var item: PlaybackItem? { playback.queue.current?.item }
     private var track: LibraryTrack? { item?.libraryTrack }
+    /// The library track behind the current item, including catalog songs already in the library.
+    private var actionTrack: LibraryTrack? {
+        if let track { return track }
+        guard let song = item?.catalogSong else { return nil }
+        return library.membership.track(for: song)
+    }
+    private var upNext: UpNextSummary? { UpNextSummary(queue: playback.queue) }
     private var activelyPlaying: Bool { playback.phase == .playing || playback.phase == .buffering || playback.phase == .loading }
 
     private var usesWideLayout: Bool {
@@ -263,7 +276,9 @@ private struct NowPlayingView: View {
                         timeline
                         transportControls
                         if playback.podcast == nil {
+                            actionRow
                             queueControls
+                            upNextCard
                             if track != nil { lyricsSection }
                         } else {
                             if playback.podcastProgressSaveFailed {
@@ -286,6 +301,7 @@ private struct NowPlayingView: View {
                 NetworkDebugOverlayContainer(playback: playback)
             }
             }
+            .overlay(alignment: .bottom) { confirmationBanner }
             .background(palette.background.ignoresSafeArea())
             .navigationTitle("Now Playing")
             .accessibilityIdentifier("player.full")
@@ -325,6 +341,22 @@ private struct NowPlayingView: View {
         .sheet(isPresented: $showingQueue) {
             PlaybackQueueSheet(playback: playback)
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingPlaylistPicker) {
+            if let actionTrack {
+                AddToPlaylistSheet(track: actionTrack) { title in
+                    showConfirmation(String(localized: "Added to \(title)"))
+                }
+                .presentationDragIndicator(.visible)
+                .presentationDetents([.medium, .large])
+            }
+        }
+        .sensoryFeedback(.success, trigger: confirmationCount)
+        .task(id: confirmationCount) {
+            guard confirmation != nil else { return }
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : .easeOut) { confirmation = nil }
         }
         .task(id: track?.id) { await loadLyrics() }
     }
@@ -438,7 +470,7 @@ private struct NowPlayingView: View {
                     Image(systemName: activelyPlaying ? "pause.circle.fill" : "play.circle.fill")
                         .font(.system(size: 56)).downtifyControlTarget()
                 }
-                .accessibilityLabel(activelyPlaying ? "Pause" : "Play")
+                .accessibilityLabel(activelyPlaying ? String(localized: "Pause") : String(localized: "Play"))
                 .accessibilityIdentifier("player.playPause")
                 .disabled(item == nil && playback.podcast == nil)
             }
@@ -453,10 +485,16 @@ private struct NowPlayingView: View {
                         .downtifyControlTarget()
                 }
                 .accessibilityLabel("Next track")
+                .accessibilityValue(nextTrackValue)
                 .disabled(playback.queue.next(automatic: false) == nil)
             }
         }
         .buttonStyle(.borderless)
+    }
+
+    private var nextTrackValue: String {
+        guard let title = upNext?.entry.item.displayTitle else { return "" }
+        return String(localized: "Next track: \(title)")
     }
 
     private var queueControls: some View {
@@ -472,13 +510,8 @@ private struct NowPlayingView: View {
                     }
             }
             .accessibilityLabel("Shuffle")
-            .accessibilityValue(playback.queue.shuffledIDs == nil ? "Off" : "On")
+            .accessibilityValue(playback.queue.shuffledIDs == nil ? String(localized: "Off") : String(localized: "On"))
             .accessibilityAddTraits(playback.queue.shuffledIDs == nil ? [] : .isSelected)
-
-            Button { showingQueue = true } label: {
-                Image(systemName: "list.bullet").downtifyControlTarget()
-            }
-            .accessibilityLabel("Play queue")
 
             Button { playback.setRepeat(nextRepeatMode) } label: {
                 Image(systemName: repeatSymbol)
@@ -496,6 +529,141 @@ private struct NowPlayingView: View {
         }
         .buttonStyle(.borderless)
         .font(.title3)
+    }
+
+    private var likePresentation: NowPlayingLikePresentation {
+        NowPlayingLikePresentation.make(
+            itemTitle: item?.displayTitle ?? "", isInLibrary: actionTrack != nil,
+            likesAvailable: collections.likedIDs != nil,
+            liked: actionTrack.map { collections.effectiveLike($0.id) } ?? false,
+            pending: actionTrack.map { collections.hasPendingLike($0.id) } ?? false,
+            busy: collections.mutationBusy)
+    }
+
+    private var playlistPresentation: NowPlayingPlaylistPresentation {
+        NowPlayingPlaylistPresentation.make(
+            itemTitle: item?.displayTitle ?? "", isInLibrary: actionTrack != nil,
+            supportsEditing: collections.supportsPlaylistEditing,
+            editablePlaylistCount: EditablePlaylists.sorted(
+                collections.playlists, supportsEditing: collections.supportsPlaylistEditing).count,
+            busy: collections.mutationBusy)
+    }
+
+    /// Labeled actions so Like, Add to Playlist and the queue are visible without guessing at icons.
+    private var actionRow: some View {
+        let like = likePresentation
+        let playlist = playlistPresentation
+        var explanations: [String] = []
+        for explanation in [like.explanation, playlist.explanation].compactMap({ $0 }) where !explanations.contains(explanation) {
+            explanations.append(explanation)
+        }
+        return VStack(spacing: DowntifyStyle.Space.small) {
+            HStack(alignment: .top, spacing: DowntifyStyle.Space.small) {
+                NowPlayingActionButton(title: like.title, systemImage: like.systemImage,
+                                       isHighlighted: like.isLiked, showsPending: like.isPending) {
+                    guard let actionTrack else { return }
+                    Task { await collections.toggleLike(actionTrack) }
+                }
+                .disabled(!like.isEnabled)
+                .accessibilityLabel(Text(verbatim: like.accessibilityLabel))
+                .accessibilityValue(like.isPending ? String(localized: "Queued") : "")
+                .accessibilityHint(Text(verbatim: like.explanation ?? ""))
+                .accessibilityIdentifier("player.like")
+                .sensoryFeedback(.selection, trigger: like.isLiked)
+
+                NowPlayingActionButton(title: String(localized: "Add to Playlist"), systemImage: "text.badge.plus") {
+                    showingPlaylistPicker = true
+                }
+                .disabled(!playlist.isEnabled)
+                .accessibilityLabel(Text(verbatim: playlist.accessibilityLabel))
+                .accessibilityHint(Text(verbatim: playlist.explanation ?? ""))
+                .accessibilityIdentifier("player.addToPlaylist")
+
+                NowPlayingActionButton(title: String(localized: "Queue"), systemImage: "list.bullet") {
+                    showingQueue = true
+                }
+                .accessibilityHint("Open queue")
+                .accessibilityIdentifier("player.queue")
+            }
+            if !explanations.isEmpty {
+                Text(verbatim: explanations.joined(separator: " · "))
+                    .font(.footnote)
+                    .foregroundStyle(DowntifyStyle.secondaryText)
+                    .multilineTextAlignment(.center)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    /// Shows what plays next; tapping opens the full queue.
+    private var upNextCard: some View {
+        Button { showingQueue = true } label: {
+            HStack(spacing: DowntifyStyle.Space.small) {
+                VStack(alignment: .leading, spacing: DowntifyStyle.Space.small) {
+                    Text("Up Next")
+                        .font(.headline)
+                    if let upNext {
+                        DowntifyMediaRow(title: upNext.entry.item.displayTitle, subtitle: upNext.entry.item.displayArtist,
+                                         accessibilityLineLimit: 2) {
+                            PlaybackItemArtwork(item: upNext.entry.item, size: 44)
+                        } accessory: { EmptyView() }
+                        if upNext.wrapsToStart {
+                            Text("Then back to the start")
+                                .font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
+                        } else if upNext.laterCount > 0 {
+                            Text("\(Int(upNext.laterCount)) more in queue")
+                                .font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
+                        }
+                    } else {
+                        Text("Nothing up next")
+                            .font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
+                    }
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(DowntifyStyle.secondaryText)
+            }
+            .padding(DowntifyStyle.Space.regular)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(palette.surface, in: RoundedRectangle(cornerRadius: 18))
+            .contentShape(RoundedRectangle(cornerRadius: 18))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: upNextAccessibilityLabel))
+        .accessibilityHint("Open queue")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("player.upNext")
+    }
+
+    private var upNextAccessibilityLabel: String {
+        guard let entry = upNext?.entry else { return String(localized: "Nothing up next") }
+        let title = entry.item.displayTitle
+        let artist = entry.item.displayArtist
+        return String(localized: "Up Next: \(title) by \(artist)")
+    }
+
+    @ViewBuilder
+    private var confirmationBanner: some View {
+        if let confirmation {
+            Label { Text(verbatim: confirmation) } icon: { Image(systemName: "checkmark.circle.fill") }
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, DowntifyStyle.Space.regular)
+                .padding(.vertical, DowntifyStyle.Space.small)
+                .background(palette.surface, in: Capsule())
+                .overlay(Capsule().strokeBorder(DowntifyStyle.accent.opacity(0.4)))
+                .padding(.bottom, DowntifyStyle.Space.large)
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("player.confirmation")
+        }
+    }
+
+    private func showConfirmation(_ message: String) {
+        withAnimation(reduceMotion ? nil : .spring) { confirmation = message }
+        confirmationCount += 1
+        AccessibilityNotification.Announcement(message).post()
     }
 
     private var nextRepeatMode: PlaybackRepeat {
@@ -565,7 +733,7 @@ private struct NowPlayingView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel("Plain lyrics")
             } else {
-                Text(lyricsError ? "Lyrics could not be loaded." : "Lyrics are unavailable for this track.")
+                Text(lyricsError ? String(localized: "Lyrics could not be loaded.") : String(localized: "Lyrics are unavailable for this track."))
                     .font(.subheadline)
                     .foregroundStyle(DowntifyStyle.secondaryText)
                 if lyricsError {
@@ -601,7 +769,7 @@ private struct NowPlayingView: View {
     private var phaseDescription: some View {
         switch playback.phase {
         case .idle: Text("Ready")
-        case .loading: Label(playback.podcast == nil ? "Loading track" : "Loading episode", systemImage: "hourglass")
+        case .loading: Label(playback.podcast == nil ? String(localized: "Loading track") : String(localized: "Loading episode"), systemImage: "hourglass")
         case .paused: Text("Paused")
         case .playing: Label("Playing", systemImage: "waveform")
         case .buffering: Label("Buffering", systemImage: "waveform")
@@ -633,6 +801,41 @@ private struct NowPlayingView: View {
                     .accessibilityLabel("Playback position unavailable")
             }
         }
+    }
+}
+
+/// Icon over a short label; keeps the 44 pt target and wraps at large Dynamic Type sizes.
+private struct NowPlayingActionButton: View {
+    let title: String
+    let systemImage: String
+    var isHighlighted = false
+    var showsPending = false
+    let action: () -> Void
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.title3)
+                    .frame(height: 28)
+                    .overlay(alignment: .topTrailing) {
+                        if showsPending {
+                            Image(systemName: "clock.fill")
+                                .font(.caption2)
+                                .offset(x: 8, y: -6)
+                        }
+                    }
+                Text(verbatim: title)
+                    .font(.caption.weight(.medium))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundStyle(isHighlighted ? DowntifyStyle.accent : (isEnabled ? Color.primary : DowntifyStyle.secondaryText))
+            .frame(maxWidth: .infinity, minHeight: DowntifyStyle.minimumControlSize)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
     }
 }
 
@@ -714,7 +917,7 @@ private struct QueueEntryRow: View {
             .buttonStyle(.plain)
             .accessibilityLabel(Text(entry.item.accessibleMetadata))
             .accessibilityAddTraits(isCurrent ? .isSelected : [])
-            .accessibilityHint(isCurrent ? "Current queue entry" : "Play this queue entry")
+            .accessibilityHint(isCurrent ? String(localized: "Current queue entry") : String(localized: "Play this queue entry"))
 
             Button(role: .destructive) { playback.remove(entry.id) } label: {
                 Image(systemName: "xmark.circle.fill")

@@ -8,6 +8,10 @@ final class DebugFixtureTransport: HTTPDataLoading, @unchecked Sendable {
     static let token = "fixture-token"
 
     private let faults: [DebugRoute: DebugFaultKind]
+    /// Mutable fixture state for likes and the one editable playlist; guarded by `lock`.
+    private let lock = NSLock()
+    private var likedIDs: [String] = []
+    private var playlistTrackIDs: [String] = []
 
     init(faults: [DebugRoute: DebugFaultKind]) {
         self.faults = faults
@@ -30,14 +34,14 @@ final class DebugFixtureTransport: HTTPDataLoading, @unchecked Sendable {
             let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "image/png"])!
             return (png, response)
         }
-        let response = try await respondTo(method: method, path: path, url: url)
+        let response = try await respondTo(method: method, path: path, url: url, body: request.httpBody)
         if let http = response.1 as? HTTPURLResponse {
             DebugLog.logger.info("fixture \(method, privacy: .public) \(path, privacy: .public) -> \(http.statusCode, privacy: .public)")
         }
         return response
     }
 
-    private func respondTo(method: String, path: String, url: URL) async throws -> (Data, URLResponse) {
+    private func respondTo(method: String, path: String, url: URL, body: Data?) async throws -> (Data, URLResponse) {
         switch (method, path) {
         case ("GET", "/api/server/info"):
             return respond(url, 200, Self.serverInfo)
@@ -48,12 +52,63 @@ final class DebugFixtureTransport: HTTPDataLoading, @unchecked Sendable {
         case ("GET", "/api/v1/library"):
             return respond(url, 200, Self.libraryPage, headers: ["ETag": "\"fixture-1\""])
         case ("GET", "/api/v1/playlists"):
-            return respond(url, 200, "[]")
+            return respond(url, 200, playlistsJSON())
+        case ("GET", "/api/v1/likes"):
+            return respond(url, 200, json(["track_ids": withLock { likedIDs }]))
+        case ("PUT", "/api/v1/likes"):
+            guard let change = decode(body), let id = change["track_id"] as? String,
+                  let liked = change["liked"] as? Bool else { return respond(url, 400, #"{"detail":"bad request"}"#) }
+            withLock {
+                likedIDs.removeAll { $0 == id }
+                if liked { likedIDs.append(id) }
+            }
+            return respond(url, 200, "{}")
+        case ("POST", "/api/v1/playlists/tracks"):
+            guard let edit = decode(body), edit["name"] as? String == Self.playlistName else {
+                return respond(url, 404, #"{"detail":"not found"}"#)
+            }
+            let add = edit["add"] as? [String] ?? []
+            let allowDuplicates = edit["allow_duplicates"] as? Bool ?? false
+            let (ids, added, already) = withLock { () -> ([String], Int, [String]) in
+                var added = 0
+                var already: [String] = []
+                for id in add {
+                    if playlistTrackIDs.contains(id) && !allowDuplicates { already.append(id); continue }
+                    playlistTrackIDs.append(id)
+                    added += 1
+                }
+                return (playlistTrackIDs, added, already)
+            }
+            return respond(url, 200, json(["name": Self.playlistName, "manual": true, "count": ids.count,
+                                           "track_ids": ids, "added": added, "already": already]))
         case ("GET", "/api/songs/search"):
             return respond(url, 200, "[\(Self.catalogSong)]")
         default:
             return respond(url, 404, #"{"detail":"not found"}"#)
         }
+    }
+
+    static let playlistName = "Fixture Mix"
+
+    private func withLock<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
+    }
+
+    private func decode(_ body: Data?) -> [String: Any]? {
+        body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+    }
+
+    private func json(_ object: [String: Any]) -> String {
+        (try? JSONSerialization.data(withJSONObject: object)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+    }
+
+    private func playlistsJSON() -> String {
+        let ids = withLock { playlistTrackIDs }
+        let playlist: [String: Any] = ["name": Self.playlistName, "track_ids": ids, "favorite": false, "mine": true,
+                                       "manual": true, "can_edit_tracks": true, "owner": "fixture"]
+        return (try? JSONSerialization.data(withJSONObject: [playlist])).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
     }
 
     static func route(for path: String) -> DebugRoute? {
@@ -75,7 +130,7 @@ final class DebugFixtureTransport: HTTPDataLoading, @unchecked Sendable {
     /// 1x1 transparent PNG used as the fixture cover for every track.
     static let coverPNGBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 
-    static let serverInfo = #"{"product":"Downtify","api_version":1,"server_id":"fixture-server","server_name":"Fixture","capabilities":{"password_sign_in":true,"signed_urls":false,"podcasts":false,"discover":false,"lyrics":false,"playlist_editing":false}}"#
+    static let serverInfo = #"{"product":"Downtify","api_version":1,"server_id":"fixture-server","server_name":"Fixture","capabilities":{"password_sign_in":true,"signed_urls":false,"podcasts":false,"discover":false,"lyrics":false,"playlist_editing":true}}"#
 
     static let authResponse = #"{"token":"fixture-token","device":{"id":"fixture-device"},"server":{"server_id":"fixture-server","name":"Fixture"},"user":{"username":"fixture","role":"admin"}}"#
 

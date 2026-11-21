@@ -156,7 +156,6 @@
 "Play" = "Oynat";
 "Play Queue" = "Çalma kuyruğu";
 "Play an artist or collection to see it here." = "Burada görmek için bir sanatçı veya koleksiyon çalın.";
-"Play queue" = "Kuyruğu oynat";
 "Play this song and replace the current queue" = "Bu şarkıyı çal ve geçerli kuyruğu değiştir";
 "Playback position" = "Oynatma konumu";
 "Playback position unavailable" = "Oynatma konumu kullanılamıyor";
@@ -569,3 +568,37 @@
 "Some catalog sections could not be loaded." = "Bazı katalog bölümleri yüklenemedi.";
 "Show more" = "Daha fazla göster";
 "Show less" = "Daha az göster";
+
+/* Now Playing actions (issue 57) */
+"Like" = "Beğen";
+"Like %@" = "%@ öğesini beğen";
+"Unlike %@" = "%@ beğenisini kaldır";
+"Like song" = "Şarkıyı beğen";
+"Unlike song" = "Beğeniyi kaldır";
+"Likes are unavailable" = "Beğeniler kullanılamıyor";
+"Add to Playlist" = "Listeye ekle";
+"Add %@ to a playlist" = "%@ öğesini bir çalma listesine ekle";
+"Added to %@" = "%@ listesine eklendi";
+"Already in %@" = "Zaten %@ listesinde";
+"Already in this playlist" = "Zaten bu listede";
+"Add Again" = "Yine de ekle";
+"This song is already in the playlist. Add another copy?" = "Bu şarkı zaten listede. Bir kopya daha eklensin mi?";
+"Choose Playlist" = "Liste seç";
+"No playlists you can edit" = "Düzenleyebileceğiniz liste yok";
+"This server can't edit playlists" = "Bu sunucu çalma listelerini düzenleyemez";
+"Queue" = "Kuyruk";
+"Open queue" = "Kuyruğu açar";
+"Up Next" = "Sıradaki";
+"Up Next: %@ by %@" = "Sıradaki: %@, %@";
+"Nothing up next" = "Sırada şarkı yok";
+"%lld more in queue" = "Kuyrukta %lld şarkı daha";
+"Then back to the start" = "Sonra başa döner";
+"Next track: %@" = "Sonraki parça: %@";
+"Pause" = "Duraklat";
+"On" = "Açık";
+"Loading track" = "Parça yükleniyor";
+"Loading episode" = "Bölüm yükleniyor";
+"Lyrics could not be loaded." = "Şarkı sözleri yüklenemedi.";
+"Lyrics are unavailable for this track." = "Bu parça için şarkı sözü yok.";
+"Current queue entry" = "Kuyruktaki geçerli öğe";
+"Play this queue entry" = "Kuyruktaki bu öğeyi oynat";
