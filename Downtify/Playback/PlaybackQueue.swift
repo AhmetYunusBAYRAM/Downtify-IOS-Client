@@ -119,6 +119,39 @@ struct PlaybackQueue {
         if currentID == nil { currentID = order.first?.id }
     }
 
+    /// Inserts items immediately after the current entry in play order without disturbing the current entry.
+    /// With no current entry this behaves like `append`.
+    mutating func insertNext(_ tracks: [LibraryTrack]) {
+        insertNext(tracks.map(PlaybackItem.library))
+    }
+
+    mutating func insertNext(_ items: [PlaybackItem]) {
+        guard let currentID, let entryIndex = entries.firstIndex(where: { $0.id == currentID }) else {
+            append(items)
+            return
+        }
+        let added = items.map { PlaybackQueueEntry(item: $0) }
+        entries.insert(contentsOf: added, at: entryIndex + 1)
+        if let shuffled = shuffledIDs, let shuffledIndex = shuffled.firstIndex(of: currentID) {
+            shuffledIDs?.insert(contentsOf: added.map(\.id), at: shuffledIndex + 1)
+        } else if shuffledIDs != nil {
+            shuffledIDs?.append(contentsOf: added.map(\.id))
+        }
+    }
+
+    /// Moves an upcoming entry (after the current one in play order) to a zero-based offset among the upcoming
+    /// entries. Offsets are clamped. The current entry and unknown or non-upcoming ids are never moved.
+    @discardableResult
+    mutating func moveUpcoming(_ id: UUID, toUpcomingOffset offset: Int) -> Bool {
+        guard let currentIndex else { return false }
+        let ordered = order
+        guard let from = ordered.firstIndex(where: { $0.id == id }), from > currentIndex else { return false }
+        let target = min(max(currentIndex + 1 + offset, currentIndex + 1), ordered.count - 1)
+        guard target != from else { return false }
+        move(id, to: target)
+        return true
+    }
+
     mutating func applyLibraryOnlyPolicy(_ libraryOnly: Bool, tracks: [LibraryTrack]) {
         guard libraryOnly else { return }
         let oldOrder = order

@@ -364,6 +364,26 @@ final class PlaybackController: ObservableObject {
         }
     }
 
+    func playNext(_ tracks: [LibraryTrack]) { playNext(tracks.map(PlaybackItem.library)) }
+
+    /// Inserts items right after the current entry without replacing or restarting the queue.
+    func playNext(_ items: [PlaybackItem]) {
+        guard !items.isEmpty else { return }
+        let hadCurrent = queue.current != nil
+        queue.insertNext(items)
+        if hadCurrent || podcast != nil {
+            didEditQueue()
+        } else {
+            didSelect(autoplay: false)
+        }
+    }
+
+    /// Reorders one upcoming queue entry. Playback position and the current entry are unchanged.
+    func moveUpcoming(_ id: UUID, toUpcomingOffset offset: Int) {
+        guard queue.moveUpcoming(id, toUpcomingOffset: offset) else { return }
+        didEditQueue()
+    }
+
     func applyLibraryOnlyPolicy(_ enabled: Bool, tracks: [LibraryTrack]) {
         let previousID = queue.currentID
         let previousItem = queue.current?.item
