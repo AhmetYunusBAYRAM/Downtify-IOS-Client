@@ -277,9 +277,12 @@ final class PlaybackController: ObservableObject {
         leavePodcast(publish: true)
     }
 
+    /// Transport for lyrics requests. The app container replaces it so debug fixtures and staging guards apply.
+    var lyricsTransport: any HTTPDataLoading = ConnectionHTTPTransport()
+
     func lyrics(for trackID: String) async throws -> TrackLyrics? {
         guard let session else { return nil }
-        return try await TrackLyricsAPI().fetch(trackID: trackID, session: session)
+        return try await TrackLyricsAPI(transport: lyricsTransport).fetch(trackID: trackID, session: session)
     }
 
     func lyricsOffsetKey(trackID: String) -> String {

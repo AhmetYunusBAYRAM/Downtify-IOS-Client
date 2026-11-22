@@ -39,6 +39,8 @@ Fixture credentials are test values inside the harness. Sign-in is automatic in 
 - `-DowntifyHarnessMode fixture|staging`: default `fixture`.
 - `-DowntifyFault <route>=<kind>`: repeatable. See the fault catalogue.
 - `-DowntifyFixtureTracks <n>`: fixture mode only. Generates `n` library tracks (2 to 12, default 2) named `fixture-track-1...n`, "Fixture One", "Fixture Two", and so on. The Songs list shows newest first, so the highest number is listed first.
+- `-DowntifyFixtureLyrics none|synced|plain|both|error`: fixture mode only. Default `none` keeps the lyrics capability off. The other values turn it on and serve four placeholder lines (2 s, 8 s, 14 s, 20 s) as synced and/or plain text; `error` makes the lyrics route fail with a 500.
+- `-DowntifyFixtureSimilar <pages>[,failpage=<n>]`: fixture mode only (pages 1 to 3). Turns on the discover capability and serves `/api/similar/tracks` with 20 real song titles per page. Each page's last song, used as the next seed, returns the following page. Past the last page only duplicates come back. `failpage` makes that page fail once with a 500, then succeed on retry.
 
 ### Environment (test runner)
 
@@ -79,7 +81,7 @@ A hidden accessibility element with identifier `debug.state`. Its value is redac
 
 It never contains tokens, usernames, server addresses, or track titles. Keys are always present (null when absent). UI tests decode it through `DowntifyUITestSupport.waitForState(_:timeout:where:)`.
 
-Stable accessibility identifiers used by the tests: `tab.library`, `tab.search`, `tab.more`, `library.trackRow.<id>`, `catalog.searchField`, `catalog.result.<id>`, `player.dock`, `player.full`, `player.playPause`, `player.artwork`, `connect.serverField`, `connect.signInButton`.
+Stable accessibility identifiers used by the tests: `tab.library`, `tab.search`, `tab.more`, `library.trackRow.<id>`, `catalog.searchField`, `catalog.result.<id>`, `tab.discover`, `lyrics.line.<index>`, `lyrics.modePicker`, `lyrics.plain`, `lyrics.resetOffset`, `lyrics.offsetValue`, `similar.row.<songID>`, `similar.loadingMore`, `similar.retry`, `similar.end`, `player.dock`, `player.full`, `player.playPause`, `player.artwork`, `connect.serverField`, `connect.signInButton`.
 
 ## Fault catalogue
 

@@ -119,6 +119,7 @@ struct AppContainer {
                                          verifySession: verifyPlaybackSession),
             verifySession: verifyPlaybackSession
         )
+        controller.lyricsTransport = environment.transport
         playback = controller
         Task { @MainActor in
             for await state in catalogPresentation.$policyState.values {

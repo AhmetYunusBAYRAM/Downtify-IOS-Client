@@ -43,6 +43,75 @@ final class DebugHarnessTests: XCTestCase {
         }
     }
 
+    // MARK: Fixture options (#70, #71, #72)
+
+    func testFixtureOptionDefaultsLeaveCapabilitiesOff() throws {
+        let config = try XCTUnwrap(DebugHarnessConfiguration.parse(arguments: harnessArgs, environment: [:]))
+        XCTAssertEqual(config.fixtureLyrics, .none)
+        XCTAssertNil(config.fixtureSimilar)
+        XCTAssertTrue(DebugFixtureTransport.serverInfo(lyrics: false, discover: false).contains(#""discover":false,"lyrics":false"#))
+    }
+
+    func testFixtureOptionsParse() throws {
+        let args = harnessArgs + ["-DowntifyFixtureLyrics", "both", "-DowntifyFixtureSimilar", "3,failpage=2"]
+        let config = try XCTUnwrap(DebugHarnessConfiguration.parse(arguments: args, environment: [:]))
+        XCTAssertEqual(config.fixtureLyrics, .both)
+        XCTAssertEqual(config.fixtureSimilar, .init(pages: 3, failPage: 2))
+    }
+
+    func testInvalidFixtureOptionsAreIgnored() throws {
+        let args = harnessArgs + ["-DowntifyFixtureLyrics", "weird", "-DowntifyFixtureSimilar", "0"]
+        let config = try XCTUnwrap(DebugHarnessConfiguration.parse(arguments: args, environment: [:]))
+        XCTAssertEqual(config.fixtureLyrics, .none)
+        XCTAssertNil(config.fixtureSimilar)
+        XCTAssertEqual(DebugHarnessConfiguration.parseFixtureSimilar("2,failpage=9"), .init(pages: 2, failPage: nil))
+    }
+
+    func testLyricsFixtureRoutesDecodeAsTrackLyrics() async throws {
+        let session = DeviceSession(baseAddress: "https://fixture.test", serverID: DebugFixtureTransport.serverID, serverName: "Fixture",
+                                    deviceID: "d", username: nil, role: nil, token: DebugFixtureTransport.token, allowsInsecureHTTP: false)
+        for (mode, synced, plain) in [(DebugHarnessConfiguration.FixtureLyrics.both, 4, true), (.synced, 4, false), (.plain, 0, true)] {
+            let api = TrackLyricsAPI(transport: DebugFixtureTransport(faults: [:], lyrics: mode))
+            let lyrics = try await api.fetch(trackID: "fixture-track-1", session: session)
+            XCTAssertEqual(lyrics?.lines.count, synced, "\(mode)")
+            XCTAssertEqual(lyrics?.plain.isEmpty == false, plain, "\(mode)")
+        }
+        let none = try await TrackLyricsAPI(transport: DebugFixtureTransport(faults: [:])).fetch(trackID: "fixture-track-1", session: session)
+        XCTAssertNil(none)
+        do {
+            _ = try await TrackLyricsAPI(transport: DebugFixtureTransport(faults: [:], lyrics: .error)).fetch(trackID: "fixture-track-1", session: session)
+            XCTFail("expected a failure")
+        } catch {}
+    }
+
+    func testSimilarFixturePagesAreDeterministicAndFailOnce() async throws {
+        let transport = DebugFixtureTransport(faults: [:], similar: .init(pages: 2, failPage: 2))
+        func fetch(_ track: String) async throws -> (Int, [String]) {
+            var components = URLComponents(string: "https://fixture.test/api/similar/tracks")!
+            components.queryItems = [.init(name: "artist", value: "Similar Artist"), .init(name: "track", value: track)]
+            let (data, response) = try await transport.data(for: URLRequest(url: try XCTUnwrap(components.url)))
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard status == 200 else { return (status, []) }
+            let decoded = try JSONDecoder().decode(CatalogSimilarResults.self, from: data)
+            return (status, decoded.tracks.map(\.title))
+        }
+        let first = try await fetch("Seed")
+        XCTAssertEqual(first.0, 200)
+        XCTAssertEqual(first.1.count, 20)
+        let pool = DebugFixtureTransport.similarPool.map(\.title)
+        XCTAssertEqual(first.1.last, pool[19])
+        let failed = try await fetch(pool[19])
+        XCTAssertEqual(failed.0, 500)
+        let second = try await fetch(pool[19])
+        XCTAssertEqual(second.1.first, pool[20])
+        let dry = try await fetch(pool[39])
+        XCTAssertEqual(dry.1, second.1, "past the last page only duplicates come back")
+    }
+
+    func testSimilarRouteIsFaultableThroughCatalog() {
+        XCTAssertEqual(DebugFixtureTransport.route(for: "/api/similar/tracks"), .catalog)
+    }
+
     // MARK: Fault parsing
 
     func testFaultsParsePerRoute() {

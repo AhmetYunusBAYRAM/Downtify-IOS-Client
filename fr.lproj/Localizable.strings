@@ -633,3 +633,12 @@
 "Position %lld of %lld" = "Position %lld sur %lld";
 "Touch and hold, then drag to move this song in the queue" = "Maintenez appuyé puis faites glisser pour déplacer ce titre dans la file";
 "Moved to position %lld of %lld" = "Déplacé à la position %lld sur %lld";
+"Synced" = "Synchronisées";
+"Static" = "Statiques";
+"Lyrics display" = "Affichage des paroles";
+"Reset lyrics timing" = "Réinitialiser le décalage des paroles";
+"Seek to %@ at %@" = "Aller à %@ à %@";
+"Jumps playback to this line" = "Place la lecture sur cette ligne";
+"instrumental break" = "passage instrumental";
+"Loading more…" = "Chargement…";
+"No more similar tracks" = "Plus de titres similaires";
