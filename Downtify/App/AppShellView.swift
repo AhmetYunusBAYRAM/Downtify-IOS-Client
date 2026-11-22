@@ -879,6 +879,11 @@ private struct PlaybackQueueSheet: View {
     @ObservedObject var playback: PlaybackController
     @Environment(\.dismiss) private var dismiss
     @Environment(\.downtifyPalette) private var palette
+    @State private var draggingID: UUID?
+    @State private var dragY: CGFloat = 0
+    @State private var rowFrames: [UUID: CGRect] = [:]
+
+    private static let listSpace = "playbackQueueList"
 
     private var visibleEntries: [PlaybackQueueEntry] {
         guard let currentIndex = playback.queue.currentIndex else { return [] }
@@ -886,6 +891,17 @@ private struct PlaybackQueueSheet: View {
     }
 
     private var upcomingEntries: [PlaybackQueueEntry] { Array(visibleEntries.dropFirst()) }
+
+    /// Slot (0...count) the dragged entry would be inserted before; `count` means the end of the queue.
+    private var proposedSlot: Int? {
+        guard draggingID != nil else { return nil }
+        var slot = 0
+        for entry in upcomingEntries {
+            guard let frame = rowFrames[entry.id] else { continue }
+            if dragY > frame.midY { slot += 1 } else { break }
+        }
+        return slot
+    }
 
     var body: some View {
         NavigationStack {
@@ -898,47 +914,94 @@ private struct PlaybackQueueSheet: View {
                         QueueEntryRow(entry: current, isCurrent: true, playback: playback)
                             .listRowBackground(palette.surface)
                     }
-                    ForEach(upcomingEntries) { entry in
-                        QueueEntryRow(entry: entry, isCurrent: false, playback: playback)
+                    ForEach(Array(upcomingEntries.enumerated()), id: \.element.id) { offset, entry in
+                        QueueEntryRow(
+                            entry: entry, isCurrent: false, playback: playback,
+                            reorder: QueueReorder(
+                                position: offset, count: upcomingEntries.count, coordinateSpace: Self.listSpace,
+                                move: { target in
+                                    playback.moveUpcoming(entry.id, toUpcomingOffset: target)
+                                    AccessibilityNotification.Announcement(
+                                        String(localized: "Moved to position \(Int(target + 1)) of \(Int(upcomingEntries.count))")).post()
+                                },
+                                dragChanged: { y in draggingID = entry.id; dragY = y },
+                                dragEnded: { y in
+                                    dragY = y
+                                    commitDrag(of: entry.id)
+                                }))
+                            .opacity(draggingID == entry.id ? 0.45 : 1)
                             .listRowBackground(palette.surface)
+                            .background(GeometryReader { proxy in
+                                Color.clear.preference(key: QueueRowFramesKey.self,
+                                                       value: [entry.id: proxy.frame(in: .named(Self.listSpace))])
+                            })
+                            .overlay(alignment: .top) { if proposedSlot == offset { insertionLine } }
+                            .overlay(alignment: .bottom) {
+                                if offset == upcomingEntries.count - 1, proposedSlot == upcomingEntries.count { insertionLine }
+                            }
                     }
-                    .onMove(perform: moveEntries)
                 }
             }
+            .coordinateSpace(name: Self.listSpace)
+            .onPreferenceChange(QueueRowFramesKey.self) { rowFrames = $0 }
+            .scrollDisabled(draggingID != nil)
             .scrollContentBackground(.hidden)
             .background(palette.background.ignoresSafeArea())
             .toolbarBackground(palette.background, for: .navigationBar)
             .navigationTitle("Play Queue")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { EditButton().disabled(visibleEntries.count < 2) }
                 ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
             }
+            .sensoryFeedback(.selection, trigger: proposedSlot)
         }
     }
 
-    private func moveEntries(from source: IndexSet, to destination: Int) {
-        let countBeforeDestination = source.filter { $0 < destination }.count
-        let finalDestination = max(0, min(upcomingEntries.count - source.count, destination - countBeforeDestination))
-        var reordered = upcomingEntries.map(\.id)
-        let moved = source.sorted().map { reordered[$0] }
-        for index in source.sorted(by: >) { reordered.remove(at: index) }
-        reordered.insert(contentsOf: moved, at: finalDestination)
-        guard let startIndex = playback.queue.currentIndex else { return }
-        // Resolve each target by UUID so duplicate tracks remain distinct.
-        for (offset, id) in reordered.enumerated() {
-            playback.move(id, to: startIndex + 1 + offset)
-        }
+    private var insertionLine: some View {
+        Capsule()
+            .fill(DowntifyStyle.accent)
+            .frame(height: 3)
+            .padding(.horizontal, 8)
+            .accessibilityHidden(true)
+            .accessibilityIdentifier("queue.insertionLine")
     }
+
+    /// Drops insert the dragged entry before the proposed slot (the end of the queue when the slot equals the count).
+    private func commitDrag(of id: UUID) {
+        defer { draggingID = nil }
+        guard let slot = proposedSlot, let from = upcomingEntries.firstIndex(where: { $0.id == id }) else { return }
+        let target = from < slot ? slot - 1 : slot
+        guard target != from else { return }
+        playback.moveUpcoming(id, toUpcomingOffset: target)
+    }
+}
+
+private struct QueueRowFramesKey: PreferenceKey {
+    static let defaultValue: [UUID: CGRect] = [:]
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
+/// Position of an upcoming queue entry, the action that moves it, and the drag callbacks for its handle.
+private struct QueueReorder {
+    let position: Int
+    let count: Int
+    let coordinateSpace: String
+    let move: (Int) -> Void
+    let dragChanged: (CGFloat) -> Void
+    let dragEnded: (CGFloat) -> Void
 }
 
 private struct QueueEntryRow: View {
     let entry: PlaybackQueueEntry
     let isCurrent: Bool
     @ObservedObject var playback: PlaybackController
+    var reorder: QueueReorder?
 
     var body: some View {
         HStack(spacing: DowntifyStyle.Space.small) {
+            if let reorder { handle(reorder) }
             Button { playback.select(entry.id) } label: {
                 DowntifyMediaRow(title: entry.item.displayTitle, subtitle: entry.item.displayArtist) {
                     PlaybackItemArtwork(item: entry.item, size: 44)
@@ -964,6 +1027,35 @@ private struct QueueEntryRow: View {
             .accessibilityLabel("Remove \(entry.item.displayTitle) from queue")
         }
         .padding(.vertical, 3)
+    }
+
+    /// Leading drag handle: touch and hold, then drag. VoiceOver gets Move up / Move down instead.
+    private func handle(_ reorder: QueueReorder) -> some View {
+        Image(systemName: "line.3.horizontal")
+            .foregroundStyle(DowntifyStyle.secondaryText)
+            .downtifyControlTarget()
+            .contentShape(Rectangle())
+            .gesture(
+                LongPressGesture(minimumDuration: 0.3)
+                    .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(reorder.coordinateSpace)))
+                    .onChanged { value in
+                        if case .second(true, let drag?) = value { reorder.dragChanged(drag.location.y) }
+                    }
+                    .onEnded { value in
+                        if case .second(true, let drag?) = value { reorder.dragEnded(drag.location.y) }
+                    }
+            )
+            .accessibilityElement()
+            .accessibilityLabel(Text("Reorder \(entry.item.displayTitle)"))
+            .accessibilityValue(Text("Position \(Int(reorder.position + 1)) of \(Int(reorder.count))"))
+            .accessibilityHint(Text("Touch and hold, then drag to move this song in the queue"))
+            .accessibilityIdentifier("queue.handle.\(reorder.position)")
+            .accessibilityAction(named: Text("Move up")) {
+                if reorder.position > 0 { reorder.move(reorder.position - 1) }
+            }
+            .accessibilityAction(named: Text("Move down")) {
+                if reorder.position < reorder.count - 1 { reorder.move(reorder.position + 1) }
+            }
     }
 }
 

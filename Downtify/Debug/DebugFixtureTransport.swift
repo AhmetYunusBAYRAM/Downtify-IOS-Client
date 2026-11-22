@@ -13,7 +13,10 @@ final class DebugFixtureTransport: HTTPDataLoading, @unchecked Sendable {
     private var likedIDs: [String] = []
     private var playlistTrackIDs: [String] = []
 
-    init(faults: [DebugRoute: DebugFaultKind]) {
+    private let trackCount: Int
+
+    init(faults: [DebugRoute: DebugFaultKind], trackCount: Int = 2) {
+        self.trackCount = trackCount
         self.faults = faults
     }
 
@@ -50,7 +53,7 @@ final class DebugFixtureTransport: HTTPDataLoading, @unchecked Sendable {
         case ("GET", "/api/auth/status"):
             return respond(url, 200, #"{"via":"device","signed_in":true}"#)
         case ("GET", "/api/v1/library"):
-            return respond(url, 200, Self.libraryPage, headers: ["ETag": "\"fixture-1\""])
+            return respond(url, 200, Self.libraryPage(trackCount: trackCount), headers: ["ETag": "\"fixture-1\""])
         case ("GET", "/api/v1/playlists"):
             return respond(url, 200, playlistsJSON())
         case ("GET", "/api/v1/likes"):
@@ -134,7 +137,15 @@ final class DebugFixtureTransport: HTTPDataLoading, @unchecked Sendable {
 
     static let authResponse = #"{"token":"fixture-token","device":{"id":"fixture-device"},"server":{"server_id":"fixture-server","name":"Fixture"},"user":{"username":"fixture","role":"admin"}}"#
 
-    static let libraryPage = #"{"cursor":1,"full":true,"deleted":[],"tracks":[{"id":"fixture-track-1","file":"one.wav","title":"Fixture One","artist":"Fixture Artist","artists":["Fixture Artist"],"album":"Fixture Album","album_artist":"Fixture Artist","album_id":"fixture-album","artist_id":"fixture-artist","track_number":1,"year":"2026","duration":30,"codec":"wav","bitrate":64000,"sample_rate":8000,"channels":1,"size":240044,"added":1,"has_cover":true,"explicit":false,"playlists":[]},{"id":"fixture-track-2","file":"two.wav","title":"Fixture Two","artist":"Fixture Artist","artists":["Fixture Artist"],"album":"Fixture Album","album_artist":"Fixture Artist","album_id":"fixture-album","artist_id":"fixture-artist","track_number":2,"year":"2026","duration":30,"codec":"wav","bitrate":64000,"sample_rate":8000,"channels":1,"size":240044,"added":2,"has_cover":true,"explicit":false,"playlists":[]}]}"#
+    /// Library page with `trackCount` generated tracks `fixture-track-1...n` (title "Fixture One", "Fixture Two", ...).
+    static func libraryPage(trackCount: Int) -> String {
+        let names = ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"]
+        let tracks = (1...max(1, min(trackCount, names.count))).map { n in
+            #"{"id":"fixture-track-\#(n)","file":"track\#(n).wav","title":"Fixture \#(names[n - 1])","artist":"Fixture Artist","artists":["Fixture Artist"],"album":"Fixture Album","album_artist":"Fixture Artist","album_id":"fixture-album","artist_id":"fixture-artist","track_number":\#(n),"year":"2026","duration":30,"codec":"wav","bitrate":64000,"sample_rate":8000,"channels":1,"size":240044,"added":\#(n),"has_cover":true,"explicit":false,"playlists":[]}"#
+        }
+        return #"{"cursor":1,"full":true,"deleted":[],"tracks":["# + tracks.joined(separator: ",") + #"]}"#
+    }
+    static let libraryPage = libraryPage(trackCount: 2)
 
     static let catalogSong = #"{"source":"youtube","song_id":"fixture-song-1","name":"Fixture Catalog Song","artist":"Fixture Artist","artists":["Fixture Artist"],"album_name":"Fixture Album","duration":30,"url":"https://youtube.test/watch?v=fixture-song-1"}"#
 }

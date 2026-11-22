@@ -1533,6 +1533,12 @@ private struct LibraryTrackList: View {
         !EditablePlaylists.sorted(collections.playlists, supportsEditing: collections.supportsPlaylistEditing).isEmpty
     }
 
+    /// Shows inline feedback and announces it for VoiceOver.
+    private func announceQueueChange(_ message: LocalizedStringKey, _ spoken: String) {
+        downloadMessage = message
+        AccessibilityNotification.Announcement(spoken).post()
+    }
+
     var body: some View {
         let downloadByID = Dictionary(downloads.currentDownloads.map { ($0.track.id, $0) },
                                       uniquingKeysWith: { first, _ in first })
@@ -1569,7 +1575,16 @@ private struct LibraryTrackList: View {
                             .disabled(collections.mutationBusy)
                             if collections.hasPendingLike(track.id) { Text("Queued") }
                         }
-                        Button("Add to queue", systemImage: "text.append") { playback.append([track]) }
+                        Button("Play next", systemImage: "text.insert") {
+                            playback.playNext([track])
+                            announceQueueChange("Added to play next", String(localized: "Added to play next"))
+                        }
+                        .accessibilityIdentifier("library.menu.playNext.\(track.id)")
+                        Button("Add to queue", systemImage: "text.append") {
+                            playback.append([track])
+                            announceQueueChange("Added to queue", String(localized: "Added to queue"))
+                        }
+                        .accessibilityIdentifier("library.menu.addToQueue.\(track.id)")
                         if canAddToPlaylists {
                             Button("Add to Playlist", systemImage: "text.badge.plus") { playlistTrack = track }
                                 .disabled(collections.mutationBusy)
@@ -1591,6 +1606,7 @@ private struct LibraryTrackList: View {
                         .downtifyControlTarget()
                     }
                     .accessibilityLabel("Actions for \(track.displayTitle)")
+                    .accessibilityIdentifier("library.menu.\(track.id)")
                     .accessibilityValue(liked ? Text("Liked") : Text(""))
                 }
                 if index < tracks.count - 1 { Divider().padding(.leading, 80) }

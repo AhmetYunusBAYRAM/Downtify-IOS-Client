@@ -150,6 +150,96 @@ final class PlaybackQueueTests: XCTestCase {
         try JSONDecoder().decode(CatalogSong.self, from: Data(json.utf8))
     }
 
+    private func ids(_ queue: PlaybackQueue) -> [String] { queue.order.map { $0.item.libraryTrack?.id ?? "?" } }
+
+    private func makeQueue(_ count: Int, current: Int = 0) -> PlaybackQueue {
+        var queue = PlaybackQueue()
+        queue.replace((1...count).map { libraryTrack(id: "t\($0)", file: "s.mp3") }, startingAt: current)
+        return queue
+    }
+
+    func testInsertNextPlacesItemsRightAfterCurrentAndKeepsCurrent() {
+        var queue = makeQueue(3, current: 1)
+        let currentID = queue.currentID
+        queue.insertNext([libraryTrack(id: "n1", file: "s.mp3")])
+        XCTAssertEqual(ids(queue), ["t1", "t2", "n1", "t3"])
+        XCTAssertEqual(queue.currentID, currentID)
+        queue.insertNext([libraryTrack(id: "n2", file: "s.mp3")])
+        XCTAssertEqual(ids(queue), ["t1", "t2", "n2", "n1", "t3"])
+    }
+
+    func testInsertNextIntoEmptyQueueBecomesCurrent() {
+        var queue = PlaybackQueue()
+        queue.insertNext([libraryTrack(id: "only", file: "s.mp3")])
+        XCTAssertEqual(ids(queue), ["only"])
+        XCTAssertEqual(queue.current?.item.libraryTrack?.id, "only")
+    }
+
+    func testInsertNextAllowsDuplicateTracksWithDistinctOccurrences() {
+        var queue = makeQueue(2)
+        queue.insertNext([libraryTrack(id: "t2", file: "s.mp3")])
+        XCTAssertEqual(ids(queue), ["t1", "t2", "t2"])
+        XCTAssertEqual(Set(queue.order.map(\.id)).count, 3)
+    }
+
+    func testInsertNextWhileShuffledPlaysNextAndSurvivesUnshuffle() {
+        var queue = makeQueue(5, current: 2)
+        queue.setShuffle(true)
+        let before = queue.order.map(\.id)
+        queue.insertNext([libraryTrack(id: "n1", file: "s.mp3")])
+        let after = queue.order
+        XCTAssertEqual(after[1].item.libraryTrack?.id, "n1")
+        XCTAssertEqual(after.first?.id, before.first)
+        XCTAssertEqual(queue.upcomingCount, 5)
+        queue.setShuffle(false)
+        XCTAssertEqual(queue.entries.count, 6)
+    }
+
+    func testInsertNextKeepsRepeatMode() {
+        var queue = makeQueue(2)
+        queue.repeatMode = .one
+        queue.insertNext([libraryTrack(id: "n1", file: "s.mp3")])
+        XCTAssertEqual(queue.repeatMode, .one)
+        XCTAssertEqual(ids(queue), ["t1", "n1", "t2"])
+    }
+
+    func testMoveUpcomingReordersWithoutTouchingCurrent() throws {
+        var queue = makeQueue(4, current: 1)
+        let currentID = queue.currentID
+        let last = try XCTUnwrap(queue.order.last?.id)
+        XCTAssertTrue(queue.moveUpcoming(last, toUpcomingOffset: 0))
+        XCTAssertEqual(ids(queue), ["t1", "t2", "t4", "t3"])
+        XCTAssertEqual(queue.currentID, currentID)
+        XCTAssertTrue(queue.moveUpcoming(last, toUpcomingOffset: 99))
+        XCTAssertEqual(ids(queue), ["t1", "t2", "t3", "t4"])
+        XCTAssertFalse(queue.moveUpcoming(last, toUpcomingOffset: 99), "no-op reports false")
+    }
+
+    func testMoveUpcomingRejectsCurrentAndPreviousEntries() throws {
+        var queue = makeQueue(4, current: 2)
+        let currentID = try XCTUnwrap(queue.currentID)
+        let previous = queue.order[0].id
+        XCTAssertFalse(queue.moveUpcoming(currentID, toUpcomingOffset: 0))
+        XCTAssertFalse(queue.moveUpcoming(previous, toUpcomingOffset: 0))
+        XCTAssertFalse(queue.moveUpcoming(UUID(), toUpcomingOffset: 0))
+        XCTAssertEqual(ids(queue), ["t1", "t2", "t3", "t4"])
+    }
+
+    func testMoveUpcomingHandlesDuplicatesAndShuffle() throws {
+        var queue = PlaybackQueue()
+        let dup = libraryTrack(id: "dup", file: "s.mp3")
+        queue.replace([libraryTrack(id: "a", file: "s.mp3"), dup, libraryTrack(id: "b", file: "s.mp3"), dup], startingAt: 0)
+        let secondDup = queue.order[3].id
+        XCTAssertTrue(queue.moveUpcoming(secondDup, toUpcomingOffset: 0))
+        XCTAssertEqual(queue.order[1].id, secondDup)
+        queue.setShuffle(true)
+        let currentID = queue.currentID
+        let tail = try XCTUnwrap(queue.order.last?.id)
+        XCTAssertTrue(queue.moveUpcoming(tail, toUpcomingOffset: 0))
+        XCTAssertEqual(queue.order[1].id, tail)
+        XCTAssertEqual(queue.currentID, currentID)
+    }
+
     private func libraryTrack(id: String, file: String) -> LibraryTrack {
         LibraryTrack(id: id, file: file, title: "Library title", artist: "Library artist", artists: ["Library artist"],
                      album: "Library album", albumArtist: "Library artist", albumID: "album", artistID: "artist",

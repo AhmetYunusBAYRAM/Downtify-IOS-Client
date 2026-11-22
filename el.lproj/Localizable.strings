@@ -624,3 +624,12 @@
 "Showing saved collection. Refresh failed." = "Εμφανίζεται η αποθηκευμένη συλλογή. Η ανανέωση απέτυχε.";
 "Collection unavailable." = "Η συλλογή δεν είναι διαθέσιμη.";
 "Play episode" = "Αναπαραγωγή επεισοδίου";
+"Play next" = "Αναπαραγωγή επόμενο";
+"Added to play next" = "Προστέθηκε ως επόμενο";
+"Added to queue" = "Προστέθηκε στην ουρά";
+"Move up" = "Μετακίνηση πάνω";
+"Move down" = "Μετακίνηση κάτω";
+"Reorder %@" = "Αναδιάταξη %@";
+"Position %lld of %lld" = "Θέση %lld από %lld";
+"Touch and hold, then drag to move this song in the queue" = "Πατήστε παρατεταμένα και σύρετε για να μετακινήσετε το τραγούδι στην ουρά";
+"Moved to position %lld of %lld" = "Μετακινήθηκε στη θέση %lld από %lld";

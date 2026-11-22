@@ -38,6 +38,7 @@ Fixture credentials are test values inside the harness. Sign-in is automatic in 
 - `-DowntifyHarness`: activates the harness. Without it the app behaves exactly as Release.
 - `-DowntifyHarnessMode fixture|staging`: default `fixture`.
 - `-DowntifyFault <route>=<kind>`: repeatable. See the fault catalogue.
+- `-DowntifyFixtureTracks <n>`: fixture mode only. Generates `n` library tracks (2 to 12, default 2) named `fixture-track-1...n`, "Fixture One", "Fixture Two", and so on. The Songs list shows newest first, so the highest number is listed first.
 
 ### Environment (test runner)
 
@@ -74,7 +75,7 @@ PASSWORD=<test password>
 
 A hidden accessibility element with identifier `debug.state`. Its value is redacted JSON with these keys only:
 
-`playbackPhase`, `queueCount`, `currentTrackID`, `position`, `network`, `libraryTrackCount`, `lastErrorCode`, `artworkLoaded`, `playerVisible`, `sessionActive`.
+`playbackPhase`, `queueCount`, `currentTrackID`, `position`, `network`, `libraryTrackCount`, `lastErrorCode`, `artworkLoaded`, `playerVisible`, `sessionActive`, `queueTrackIDs` (library track ids in play order; catalog items appear as `catalog`).
 
 It never contains tokens, usernames, server addresses, or track titles. Keys are always present (null when absent). UI tests decode it through `DowntifyUITestSupport.waitForState(_:timeout:where:)`.
 
