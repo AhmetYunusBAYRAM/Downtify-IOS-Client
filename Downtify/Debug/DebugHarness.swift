@@ -55,6 +55,8 @@ struct DebugHarnessConfiguration: Equatable {
     let mode: Mode
     let staging: StagingTarget?
     let faults: [DebugRoute: DebugFaultKind]
+    /// Number of generated fixture library tracks (`-DowntifyFixtureTracks <n>`, 2...12, default 2).
+    var fixtureTrackCount: Int = 2
     /// Set when staging configuration is invalid. The harness then refuses all network traffic (fail closed).
     let configurationError: DebugHarnessError?
 
@@ -66,7 +68,11 @@ struct DebugHarnessConfiguration: Equatable {
         let faults = parseFaults(arguments)
         let wantsStaging = value(after: "-DowntifyHarnessMode", in: arguments) == "staging"
         guard wantsStaging else {
-            return DebugHarnessConfiguration(mode: .fixture, staging: nil, faults: faults, configurationError: nil)
+            var config = DebugHarnessConfiguration(mode: .fixture, staging: nil, faults: faults, configurationError: nil)
+            if let raw = value(after: "-DowntifyFixtureTracks", in: arguments), let count = Int(raw), (2...12).contains(count) {
+                config.fixtureTrackCount = count
+            }
+            return config
         }
         do {
             let target = try stagingTarget(environment: environment)
@@ -261,7 +267,7 @@ struct DebugHarness {
 
     func makeTransport() -> any HTTPDataLoading {
         switch configuration.mode {
-        case .fixture: return DebugFixtureTransport(faults: configuration.faults)
+        case .fixture: return DebugFixtureTransport(faults: configuration.faults, trackCount: configuration.fixtureTrackCount)
         case .staging: return DebugGuardedTransport(configuration: configuration)
         }
     }

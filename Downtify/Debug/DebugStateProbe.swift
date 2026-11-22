@@ -14,10 +14,12 @@ struct DebugStateSnapshot: Codable, Equatable {
     var artworkLoaded: Bool
     var playerVisible: Bool
     var sessionActive: Bool
+    /// Library track ids in play order (library items only; catalog items appear as "catalog").
+    var queueTrackIDs: [String]
 
     enum CodingKeys: String, CodingKey {
         case playbackPhase, queueCount, currentTrackID, position, network, libraryTrackCount
-        case lastErrorCode, artworkLoaded, playerVisible, sessionActive
+        case lastErrorCode, artworkLoaded, playerVisible, sessionActive, queueTrackIDs
     }
 
     /// Every key is always present (null when absent) so the schema is stable for tests.
@@ -33,11 +35,12 @@ struct DebugStateSnapshot: Codable, Equatable {
         try container.encode(artworkLoaded, forKey: .artworkLoaded)
         try container.encode(playerVisible, forKey: .playerVisible)
         try container.encode(sessionActive, forKey: .sessionActive)
+        try container.encode(queueTrackIDs, forKey: .queueTrackIDs)
     }
 
     static let empty = DebugStateSnapshot(playbackPhase: "idle", queueCount: 0, currentTrackID: nil, position: nil,
                                           network: "unknown", libraryTrackCount: 0, lastErrorCode: nil,
-                                          artworkLoaded: false, playerVisible: false, sessionActive: false)
+                                          artworkLoaded: false, playerVisible: false, sessionActive: false, queueTrackIDs: [])
 
     /// Stable JSON with sorted keys so tests can compare and decode it.
     var json: String {

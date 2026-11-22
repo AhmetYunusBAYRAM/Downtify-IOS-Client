@@ -12,6 +12,7 @@ struct HarnessState: Decodable, Equatable {
     let artworkLoaded: Bool
     let playerVisible: Bool
     let sessionActive: Bool
+    let queueTrackIDs: [String]
 }
 
 enum DowntifyUITestSupport {
@@ -19,10 +20,11 @@ enum DowntifyUITestSupport {
                               "DOWNTIFY_TEST_ALLOWED_HOST", "DOWNTIFY_TEST_ALLOW_MUTATIONS"]
 
     /// Launches the app in harness mode. Staging values come from the test runner environment only.
-    static func launch(faults: [String] = [], staging: Bool = false) -> XCUIApplication {
+    static func launch(faults: [String] = [], staging: Bool = false, fixtureTracks: Int? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         var arguments = ["-DowntifyHarness"]
         if staging { arguments += ["-DowntifyHarnessMode", "staging"] }
+        if let fixtureTracks { arguments += ["-DowntifyFixtureTracks", String(fixtureTracks)] }
         for fault in faults { arguments += ["-DowntifyFault", fault] }
         app.launchArguments = arguments
         if staging {

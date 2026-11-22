@@ -77,7 +77,8 @@ private struct DebugStateHost: View {
             lastErrorCode: Self.errorCode(playback.phase),
             artworkLoaded: ArtworkLoader.debugLoadCount > 0,
             playerVisible: playback.queue.current != nil || playback.podcast != nil,
-            sessionActive: sessionActive
+            sessionActive: sessionActive,
+            queueTrackIDs: playback.queue.order.map { $0.item.libraryTrack?.id ?? "catalog" }
         )
     }
 
