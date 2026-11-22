@@ -2,7 +2,16 @@
 
 Historical record of Downtify iOS releases (version 0.1.2), newest first. Each build lists the user-facing notes shipped to TestFlight (from `release-notes/`), followed by the notable changes behind them. Issue numbers refer to the project issue tracker.
 
-Builds 0.1.2-7 and earlier predate the curated release notes; their entries are reconstructed from git history.
+Build 0.1.2-12 is still in progress. Builds 0.1.2-7 and earlier predate the curated release notes; their entries are reconstructed from git history.
+## 0.1.2 (12) — Unreleased (in progress on `release/0.1.2-12`)
+
+Changes so far (no curated release notes yet):
+- Add Play next to Library and catalog song menus, inserting songs at the front of the upcoming queue (#67)
+- Reorder upcoming queue songs with left-side drag handles and an insertion indicator; VoiceOver gets Move up / Move down actions (#68)
+- Localize Play next and queue reorder strings in all locales (#67, #68)
+- Keep bottom rows clear of the playback dock, including at accessibility text sizes, on More, About, admin Trash, podcast lists and catalog artist/album pages (#45)
+- Extend the debug harness with configurable fixture tracks and a queue order probe; add simulator UI tests, docs and check-script scenarios for Play next and queue reorder
+
 ## 0.1.2 (11) — 2026-11-21
 
 Release notes:
