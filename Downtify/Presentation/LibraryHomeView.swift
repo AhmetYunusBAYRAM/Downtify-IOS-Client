@@ -1606,6 +1606,7 @@ private struct LibraryTrackList: View {
                         .downtifyControlTarget()
                     }
                     .accessibilityLabel("Actions for \(track.displayTitle)")
+                    .accessibilityIdentifier("library.menu.\(track.id)")
                     .accessibilityValue(liked ? Text("Liked") : Text(""))
                 }
                 if index < tracks.count - 1 { Divider().padding(.leading, 80) }

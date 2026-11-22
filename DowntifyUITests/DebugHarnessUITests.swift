@@ -164,6 +164,69 @@ final class DebugHarnessUITests: XCTestCase {
         return false
     }
 
+    /// Scenario 4 (#67): Play next inserts right after the current song; Add to queue still appends.
+    func testPlayNextAndAddToQueueFromLibrarySongMenu() throws {
+        let app = DowntifyUITestSupport.launch(fixtureTracks: 4)
+        XCTAssertNotNil(DowntifyUITestSupport.waitForState(app, timeout: 30) {
+            $0.sessionActive && $0.libraryTrackCount == 4
+        })
+        DowntifyUITestSupport.openLibrarySongs(app)
+        // Songs list newest first, so tapping Fixture Four queues [4, 3, 2, 1] with Four current.
+        DowntifyUITestSupport.element(app, "library.trackRow.fixture-track-4").tap()
+        XCTAssertNotNil(DowntifyUITestSupport.waitForState(app, timeout: 30) { $0.playbackPhase == "playing" })
+
+        DowntifyUITestSupport.element(app, "library.menu.fixture-track-1").tap()
+        let playNext = DowntifyUITestSupport.element(app, "library.menu.playNext.fixture-track-1")
+        XCTAssertTrue(playNext.waitForExistence(timeout: 10), "Play next missing from the song menu")
+        playNext.tap()
+        let afterNext = DowntifyUITestSupport.waitForState(app, timeout: 10) { $0.queueCount == 5 }
+        XCTAssertEqual(afterNext?.queueTrackIDs,
+                       ["fixture-track-4", "fixture-track-1", "fixture-track-3", "fixture-track-2", "fixture-track-1"])
+        XCTAssertEqual(afterNext?.currentTrackID, "fixture-track-4")
+        XCTAssertEqual(afterNext?.playbackPhase, "playing", "Play next must not interrupt playback")
+
+        DowntifyUITestSupport.element(app, "library.menu.fixture-track-2").tap()
+        let addToQueue = DowntifyUITestSupport.element(app, "library.menu.addToQueue.fixture-track-2")
+        XCTAssertTrue(addToQueue.waitForExistence(timeout: 10))
+        addToQueue.tap()
+        let afterAdd = DowntifyUITestSupport.waitForState(app, timeout: 10) { $0.queueCount == 6 }
+        XCTAssertEqual(afterAdd?.queueTrackIDs.last, "fixture-track-2")
+        XCTAssertEqual(afterAdd?.currentTrackID, "fixture-track-4")
+    }
+
+    /// Scenario 5 (#68): drag a queue handle to reorder; the current song and playback are untouched.
+    func testQueueHandleDragReordersUpcomingSongs() throws {
+        let app = DowntifyUITestSupport.launch(fixtureTracks: 4)
+        XCTAssertNotNil(DowntifyUITestSupport.waitForState(app, timeout: 30) {
+            $0.sessionActive && $0.libraryTrackCount == 4
+        })
+        DowntifyUITestSupport.openLibrarySongs(app)
+        // Songs list newest first, so tapping Fixture Four queues [4, 3, 2, 1] with Four current.
+        DowntifyUITestSupport.element(app, "library.trackRow.fixture-track-4").tap()
+        XCTAssertNotNil(DowntifyUITestSupport.waitForState(app, timeout: 30) { $0.playbackPhase == "playing" })
+
+        DowntifyUITestSupport.element(app, "player.dock").tap()
+        let queueButton = app.buttons["player.queue"]
+        if !queueButton.waitForExistence(timeout: 10) { app.swipeUp() }
+        XCTAssertTrue(queueButton.waitForExistence(timeout: 10), "Queue button missing in the player")
+        queueButton.tap()
+
+        let lastHandle = DowntifyUITestSupport.element(app, "queue.handle.2")
+        let firstRow = DowntifyUITestSupport.element(app, "queue.handle.0")
+        XCTAssertTrue(lastHandle.waitForExistence(timeout: 10), "Drag handle missing")
+        XCTAssertEqual(lastHandle.label, "Reorder Fixture One")
+        // Drop on the top edge of the first upcoming row, which proposes the slot above it.
+        let dropPoint = firstRow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
+        lastHandle.press(forDuration: 1.0, thenDragTo: dropPoint)
+
+        let reordered = DowntifyUITestSupport.waitForState(app, timeout: 10) {
+            $0.queueTrackIDs == ["fixture-track-4", "fixture-track-1", "fixture-track-3", "fixture-track-2"]
+        }
+        XCTAssertNotNil(reordered, "queue order after drag: \(String(describing: DowntifyUITestSupport.state(of: app)?.queueTrackIDs))")
+        XCTAssertEqual(reordered?.currentTrackID, "fixture-track-4")
+        XCTAssertEqual(reordered?.playbackPhase, "playing", "Reordering must not interrupt playback")
+    }
+
     /// Scenario 3 (optional): real staging server, read-only. Skipped unless the runner provides a server.
     func testRealStagingLibraryLoadsReadOnly() throws {
         try XCTSkipIf(ProcessInfo.processInfo.environment["DOWNTIFY_TEST_SERVER"] == nil,
