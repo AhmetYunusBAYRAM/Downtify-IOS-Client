@@ -328,10 +328,43 @@ struct CatalogDiscoverView: View {
             case .empty: emptyMessage("No similar tracks found", symbol: "waveform", detail: "Try a different artist or track.")
             case .failed(let message), .unavailable(let message): statusMessage(message, symbol: "waveform", retry: loadSimilar)
             case .loaded(let result), .partial(let result, _):
-                sectionHeading("Similar to \([result.artist, result.track].filter { !$0.isEmpty }.joined(separator: " — "))", count: result.tracks.count)
-                ForEach(result.tracks) { song in songRow(song, similarAction: true) }
+                let feed = catalog.similarFeed
+                let songs = feed?.songs ?? result.tracks
+                sectionHeading("Similar to \([result.artist, result.track].filter { !$0.isEmpty }.joined(separator: " — "))", count: songs.count)
+                // Lazy so a row's appearance means it is near the screen, which is what triggers the next page.
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    ForEach(songs) { song in
+                        songRow(song, similarAction: true)
+                            .accessibilityElement(children: .contain)
+                            .accessibilityIdentifier("similar.row.\(song.id.value)")
+                            .onAppear { catalog.similarRowAppeared(song) }
+                    }
+                    similarFooter(feed)
+                }
             }
             if catalog.isLibraryOnly == true { Text("Similar results use the server's local catalog in library-only mode.").font(.footnote).foregroundStyle(.secondary) }
+        }
+    }
+
+    @ViewBuilder private func similarFooter(_ feed: SimilarFeed?) -> some View {
+        if let feed {
+            if feed.loadingMore {
+                HStack { Spacer(); ProgressView("Loading more…"); Spacer() }
+                    .accessibilityIdentifier("similar.loadingMore")
+            } else if let message = feed.failureMessage {
+                VStack(spacing: 8) {
+                    Text(message).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Button("Retry") { catalog.retrySimilarMore() }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("similar.retry")
+                }
+                .frame(maxWidth: .infinity)
+            } else if !feed.hasMore {
+                Text("No more similar tracks")
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("similar.end")
+            }
         }
     }
 

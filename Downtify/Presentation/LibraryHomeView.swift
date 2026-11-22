@@ -73,7 +73,7 @@ struct LibraryHomeView: View {
                 browsePage(title: "Discover") { discoveryContent }
             }
             .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
-            .tabItem { Label("Discover", systemImage: "sparkles") }.tag(Tab.discover)
+            .tabItem { Label("Discover", systemImage: "sparkles").accessibilityIdentifier("tab.discover") }.tag(Tab.discover)
 
             DownloadsView(connection: connection, queue: serverDownloadQueue, serverDownloads: serverDownloads,
                           playback: playback, membership: library.membership)

@@ -12,6 +12,8 @@ Changes so far (no curated release notes yet):
 - Localize Play next and queue reorder strings in all locales (#67, #68)
 - Keep bottom rows clear of the playback dock, including at accessibility text sizes, on More, About, admin Trash, podcast lists and catalog artist/album pages (#45)
 - Extend the debug harness with configurable fixture tracks and a queue order probe; add simulator UI tests, docs and check-script scenarios for Play next and queue reorder
+- Tap a timed lyric line in Now Playing to seek to it, switch between synced and static lyrics when both exist, and reset a track's saved lyric timing in one tap; lyrics requests now use the app transport so debug fixtures and staging guards apply (#71)
+- Similar results load more as you near the end of the list, seeded from unused recent results, with duplicate and repeated-seed protection, retry on failure and a visible loading and end state (#72)
 
 ## 0.1.2 (11) — 2026-11-21
 
