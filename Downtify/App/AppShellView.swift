@@ -1,4 +1,5 @@
 import SwiftUI
+import Translation
 
 struct AppShellView: View {
     let name: String
@@ -269,6 +270,8 @@ private struct NowPlayingView: View {
     @State private var lyricsLoading = false
     @State private var lyricsError = false
     @State private var lyricOffset: Double = 0
+    @StateObject private var translation = LyricsTranslationModel()
+    @Environment(\.locale) private var locale
     @Environment(\.lyricDefaults) private var lyricDefaults
 
     private var item: PlaybackItem? { playback.queue.current?.item }
@@ -395,6 +398,7 @@ private struct NowPlayingView: View {
             withAnimation(reduceMotion ? nil : .easeOut) { confirmation = nil }
         }
         .task(id: track?.id) { await loadLyrics() }
+        .modifier(LyricsTranslationSupport(model: translation))
     }
 
     @ViewBuilder
@@ -749,22 +753,32 @@ private struct NowPlayingView: View {
                     .buttonStyle(.borderless)
                 }
             }
+            if !lyricsLoading { translationControls }
             if lyricsLoading {
                 ProgressView("Loading lyrics…")
             } else if let lyrics, !lyrics.lines.isEmpty {
                 let active = activeLyricIndex(lyrics.lines)
                 VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(lyrics.lines.enumerated()), id: \.offset) { index, line in
-                        Text(line.text.isEmpty ? "♪" : line.text)
-                            .font(index == active ? .title3.weight(.bold) : .body)
-                            .foregroundStyle(index == active ? DowntifyStyle.accent : DowntifyStyle.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityAddTraits(index == active ? .isSelected : [])
+                    ForEach(Array(displayedLines(for: lyrics).enumerated()), id: \.offset) { index, line in
+                        Button {
+                            playback.seek(to: max(0, line.time + lyricOffset))
+                        } label: {
+                            Text(line.text.isEmpty ? "♪" : line.text)
+                                .font(index == active ? .title3.weight(.bold) : .body)
+                                .foregroundStyle(index == active ? DowntifyStyle.accent : DowntifyStyle.secondaryText)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Jumps to this line in the song")
+                        .accessibilityAddTraits(index == active ? .isSelected : [])
                     }
                 }
                 .accessibilityElement(children: .contain)
             } else if let lyrics, !lyrics.plain.isEmpty {
-                Text(lyrics.plain)
+                Text(displayedPlain(for: lyrics))
                     .font(.body)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel("Plain lyrics")
@@ -782,14 +796,84 @@ private struct NowPlayingView: View {
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 18))
     }
 
+    @ViewBuilder
+    private var translationControls: some View {
+        switch translation.phase {
+        case .ready:
+            Button { translation.requestTranslation() } label: {
+                Label("Translate", systemImage: "translate")
+            }
+            .buttonStyle(.borderless)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityHint("Shows the lyrics in your device language")
+        case .translating:
+            ProgressView("Translating lyrics…")
+        case .translated(let result):
+            VStack(alignment: .leading, spacing: 4) {
+                Button { translation.showOriginal() } label: {
+                    Label("Show original", systemImage: "text.quote")
+                }
+                .buttonStyle(.borderless)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityHint("Shows the lyrics in their original language")
+                if let code = result.sourceLanguage?.languageCode?.identifier,
+                   let name = locale.localizedString(forLanguageCode: code) {
+                    Text("Translated from \(name)")
+                        .font(.footnote)
+                        .foregroundStyle(DowntifyStyle.secondaryText)
+                }
+            }
+        case .failed(let failure):
+            VStack(alignment: .leading, spacing: 4) {
+                if failure == .unsupported {
+                    Text("Translation is not available for these lyrics.")
+                        .font(.footnote)
+                        .foregroundStyle(DowntifyStyle.secondaryText)
+                } else {
+                    Text("Lyrics could not be translated.")
+                        .font(.footnote)
+                        .foregroundStyle(DowntifyStyle.secondaryText)
+                    Button("Retry") { translation.requestTranslation() }
+                        .buttonStyle(.borderless)
+                }
+            }
+        case .hidden, .sameLanguage, .unsupported:
+            EmptyView()
+        }
+    }
+
+    /// Translated lines mirror the original lines one to one, so highlighting keeps using the original timestamps.
+    private func displayedLines(for lyrics: TrackLyrics) -> [LyricLine] {
+        if case .translated(let result) = translation.phase, case .timed(let lines) = result.content,
+           lines.count == lyrics.lines.count { return lines }
+        return lyrics.lines
+    }
+
+    private func displayedPlain(for lyrics: TrackLyrics) -> String {
+        if case .translated(let result) = translation.phase, case .plain(let text) = result.content { return text }
+        return lyrics.plain
+    }
+
     private func loadLyrics() async {
+        translation.configure(defaults: lyricDefaults)
+        translation.load(trackID: nil, lyrics: nil, target: nil)
         guard let track else { lyrics = nil; return }
         lyricsLoading = true
         lyricsError = false
         lyricOffset = lyricDefaults.double(forKey: playback.lyricsOffsetKey(trackID: track.id))
         defer { lyricsLoading = false }
-        do { lyrics = try await playback.lyrics(for: track.id) }
+        do {
+            let loaded = try await playback.lyrics(for: track.id)
+            guard !Task.isCancelled else { return }
+            lyrics = loaded
+            translation.load(trackID: track.id, lyrics: loaded, target: Self.systemTranslationTarget)
+        }
         catch { if !Task.isCancelled { lyricsError = true; lyrics = nil } }
+    }
+
+    /// The device's preferred language, not the in-app language override.
+    private static var systemTranslationTarget: Locale.Language? {
+        Locale.preferredLanguages.first.map { Locale.Language(identifier: $0) }
     }
 
     private func setLyricOffset(_ value: Double) {
@@ -1275,3 +1359,105 @@ private struct LibraryDesignPreviews: PreviewProvider {
     }
 }
 #endif
+
+
+// MARK: - Apple Translation integration (iOS 18+)
+
+/// Adds the translation task and availability check on iOS 18 and later. Earlier systems never resolve
+/// availability, so the model stays hidden and the existing lyrics experience is unchanged.
+private struct LyricsTranslationSupport: ViewModifier {
+    let model: LyricsTranslationModel
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.modifier(LyricsTranslationHost(model: model))
+        } else {
+            content
+        }
+    }
+}
+
+@available(iOS 18.0, *)
+private struct LyricsTranslationHost: ViewModifier {
+    @ObservedObject var model: LyricsTranslationModel
+    @State private var configuration: TranslationSession.Configuration?
+
+    func body(content: Content) -> some View {
+        content
+            .task(id: model.availabilityRequest) {
+                guard model.availabilityRequest != nil else { return }
+                await model.resolveAvailability(using: SystemLyricsAvailability())
+            }
+            .onChange(of: model.requestKey) { _, key in
+                guard key != nil, let target = model.target else {
+                    configuration = nil  // cancels any in-flight session
+                    return
+                }
+                let next = TranslationSession.Configuration(source: model.sourceLanguage, target: target)
+                if configuration == next { configuration?.invalidate() } else { configuration = next }
+            }
+            .translationTask(configuration) { session in
+                guard let key = await model.requestKey else { return }
+                await model.run(using: SessionLyricsTranslator(session: session), key: key)
+            }
+    }
+}
+
+@available(iOS 18.0, *)
+private struct SystemLyricsAvailability: LyricsLanguageAvailabilityChecking {
+    func status(sampleText: String, source: Locale.Language?, target: Locale.Language) async -> LyricsLanguageStatus {
+        let availability = LanguageAvailability()
+        let status: LanguageAvailability.Status
+        if let source {
+            status = await availability.status(from: source, to: target)
+        } else if let detected = try? await availability.status(for: sampleText, to: target) {
+            status = detected
+        } else {
+            return .unsupported
+        }
+        switch status {
+        case .installed: return .installed
+        case .supported: return .supported
+        case .unsupported: return .unsupported
+        @unknown default: return .unsupported
+        }
+    }
+}
+
+@available(iOS 18.0, *)
+private struct SessionLyricsTranslator: LyricsTranslating {
+    let session: TranslationSession
+
+    func translate(_ text: String) async throws -> String {
+        do { return try await session.translate(text).targetText }
+        catch { throw Self.map(error) }
+    }
+
+    func translate(batch: [LyricsTranslationItem]) async throws -> [LyricsTranslationItem] {
+        let requests = batch.map { TranslationSession.Request(sourceText: $0.text, clientIdentifier: $0.id) }
+        do {
+            let responses = try await session.translations(from: requests)
+            return responses.compactMap { response in
+                response.clientIdentifier.map { LyricsTranslationItem(id: $0, text: response.targetText) }
+            }
+        } catch { throw Self.map(error) }
+    }
+
+    static func map(_ error: Error) -> Error {
+        if error is CancellationError { return error }
+        switch error {
+        case TranslationError.unsupportedSourceLanguage, TranslationError.unsupportedTargetLanguage,
+             TranslationError.unsupportedLanguagePairing, TranslationError.unableToIdentifyLanguage:
+            return LyricsTranslationFailure.unsupported
+        case TranslationError.nothingToTranslate:
+            return LyricsTranslationFailure.failed
+        default:
+            // verify on device (Task 4): the error thrown when the user declines the language download sheet.
+            let nsError = error as NSError
+            if nsError.domain == NSCocoaErrorDomain, nsError.code == NSUserCancelledError {
+                return LyricsTranslationFailure.declined
+            }
+            return error
+        }
+    }
+}

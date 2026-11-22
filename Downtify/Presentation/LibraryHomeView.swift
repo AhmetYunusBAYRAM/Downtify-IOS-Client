@@ -569,6 +569,7 @@ struct NetworkDebugOverlay: View {
     @Binding var corner: String
     @Binding var selectedSize: String
     @EnvironmentObject private var downloads: OfflineDownloads
+    @AppStorage("debug.networkOverlay.enabled") private var overlayEnabled = false
     @State private var audioDeliveryRate: Double?
     @State private var preload = PlaybackPreloadCache.Snapshot()
     @State private var network = NetworkOperationSnapshot(active: 0, maximum: NetworkOperationCoordinator.defaultLimit, queued: 0,
@@ -607,6 +608,12 @@ struct NetworkDebugOverlay: View {
                         .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Move or resize debug overlay")
+                Button { overlayEnabled = false } label: {
+                    Image(systemName: "xmark")
+                        .frame(width: 32, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Close debug overlay")
             }
             Text("NET  \(network.active)/\(network.maximum)  ·  wait \(network.queued)")
             Text("FG \(network.foregroundActive) (+\(network.foregroundQueued))  BG \(network.backgroundActive) (+\(network.backgroundQueued))")

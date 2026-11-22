@@ -9,6 +9,10 @@
 		000000000000000000000A09 = { isa = PBXBuildFile; fileRef = 000000000000000000000A08; };
 		000000000000000000000A06 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingDetailModelTests.swift; sourceTree = "<group>"; };
 		000000000000000000000A07 = { isa = PBXBuildFile; fileRef = 000000000000000000000A06; };
+		000000000000000000000A0A = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricsTranslationModel.swift; sourceTree = "<group>"; };
+		000000000000000000000A0B = { isa = PBXBuildFile; fileRef = 000000000000000000000A0A; };
+		000000000000000000000A0C = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricsTranslationModelTests.swift; sourceTree = "<group>"; };
+		000000000000000000000A0D = { isa = PBXBuildFile; fileRef = 000000000000000000000A0C; };
 		000000000000000000000A04 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingDetailModel.swift; sourceTree = "<group>"; };
 		000000000000000000000A05 = { isa = PBXBuildFile; fileRef = 000000000000000000000A04; };
 		000000000000000000000A02 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingNavigationTests.swift; sourceTree = "<group>"; };
@@ -454,6 +458,7 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000A04,
+				000000000000000000000A0A,
 				0000000000000000000000A0,
 				000000000000000000000098,
 				000000000000000000000001,
@@ -534,6 +539,7 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000A06,
+				000000000000000000000A0C,
 				000000000000000000000A02,
 				000000000000000000000069,
 				000000000000000000000206,
@@ -600,6 +606,7 @@
 			files = (
 				000000000000000000000A09,
 				000000000000000000000A05,
+				000000000000000000000A0B,
 				000000000000000000000A01,
 				0000000000000000000000A1,
 				000000000000000000000301,
@@ -710,6 +717,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				000000000000000000000A07,
+				000000000000000000000A0D,
 				000000000000000000000A03,
 				00000000000000000000006A,
 				000000000000000000000207,

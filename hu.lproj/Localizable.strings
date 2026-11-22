@@ -633,3 +633,13 @@
 "Position %lld of %lld" = "%lld. pozíció / %lld";
 "Touch and hold, then drag to move this song in the queue" = "Tartsd lenyomva, majd húzd a dal áthelyezéséhez a sorban";
 "Moved to position %lld of %lld" = "Áthelyezve a(z) %lld. pozícióba / %lld";
+"Translate" = "Fordítás";
+"Show original" = "Eredeti megjelenítése";
+"Translating lyrics…" = "Dalszöveg fordítása…";
+"Translated from %@" = "Fordítva innen: %@";
+"Lyrics could not be translated." = "A dalszöveget nem sikerült lefordítani.";
+"Translation is not available for these lyrics." = "A fordítás nem érhető el ehhez a dalszöveghez.";
+"Shows the lyrics in your device language" = "A dalszöveget az eszközöd nyelvén jeleníti meg";
+"Shows the lyrics in their original language" = "A dalszöveget az eredeti nyelven jeleníti meg";
+"Jumps to this line in the song" = "Ugrás a dal ehhez a sorához";
+"Close debug overlay" = "Hibakeresési réteg bezárása";

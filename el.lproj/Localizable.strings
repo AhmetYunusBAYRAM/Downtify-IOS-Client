@@ -633,3 +633,13 @@
 "Position %lld of %lld" = "Θέση %lld από %lld";
 "Touch and hold, then drag to move this song in the queue" = "Πατήστε παρατεταμένα και σύρετε για να μετακινήσετε το τραγούδι στην ουρά";
 "Moved to position %lld of %lld" = "Μετακινήθηκε στη θέση %lld από %lld";
+"Translate" = "Μετάφραση";
+"Show original" = "Εμφάνιση πρωτοτύπου";
+"Translating lyrics…" = "Μετάφραση στίχων…";
+"Translated from %@" = "Μεταφράστηκε από: %@";
+"Lyrics could not be translated." = "Δεν ήταν δυνατή η μετάφραση των στίχων.";
+"Translation is not available for these lyrics." = "Η μετάφραση δεν είναι διαθέσιμη για αυτούς τους στίχους.";
+"Shows the lyrics in your device language" = "Εμφανίζει τους στίχους στη γλώσσα της συσκευής σας";
+"Shows the lyrics in their original language" = "Εμφανίζει τους στίχους στην αρχική γλώσσα";
+"Jumps to this line in the song" = "Μετάβαση σε αυτόν τον στίχο του τραγουδιού";
+"Close debug overlay" = "Κλείσιμο του επικαλυπτικού εντοπισμού σφαλμάτων";

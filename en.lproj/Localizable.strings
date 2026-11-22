@@ -631,3 +631,13 @@
 "Position %lld of %lld" = "Position %lld of %lld";
 "Touch and hold, then drag to move this song in the queue" = "Touch and hold, then drag to move this song in the queue";
 "Moved to position %lld of %lld" = "Moved to position %lld of %lld";
+"Translate" = "Translate";
+"Show original" = "Show original";
+"Translating lyrics…" = "Translating lyrics…";
+"Translated from %@" = "Translated from %@";
+"Lyrics could not be translated." = "Lyrics could not be translated.";
+"Translation is not available for these lyrics." = "Translation is not available for these lyrics.";
+"Shows the lyrics in your device language" = "Shows the lyrics in your device language";
+"Shows the lyrics in their original language" = "Shows the lyrics in their original language";
+"Jumps to this line in the song" = "Jumps to this line in the song";
+"Close debug overlay" = "Close debug overlay";
