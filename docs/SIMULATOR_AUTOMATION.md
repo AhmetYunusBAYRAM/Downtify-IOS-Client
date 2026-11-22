@@ -129,3 +129,11 @@ Status: **not verified in this change.** The command comes from that repository'
 - Real device behaviour (audio routes, background audio, push).
 - Long-running soak tests and real network conditions.
 - Anything that needs a human to judge sound or visual quality.
+
+## Manual GitHub Actions experiment
+
+The manual checks run the unit suite and fixture smoke tests on an iPhone simulator with Xcode 26.2. The separate compatibility workflow runs the full suite on iPhone / iOS 18.5 with Xcode 16.4 and iPad / iOS 26.2 with Xcode 26.2. Both use standard macOS runners and select an available simulator of the requested family and runtime. No server credentials are needed. Failed results are scanned before upload and retained for seven days; compressed attachments are not covered by the scan.
+
+These workflows have no automatic triggers. Their jobs only run when both the original actor and the person initiating a rerun are `michaelmoskie`, and the selected ref is `release/0.1.2-12`. This is a workflow-level safeguard: people with write access can still dispatch a run, modify workflows on branches they control, or alter this guard. Restrict repository write access for stronger control.
+
+GitHub requires a workflow file on the default branch before it can be manually dispatched, even when running a different branch. While these files exist only on the release branch, they cannot yet be dispatched through GitHub Actions. The pinned runner images and runtimes may also need updates over time.

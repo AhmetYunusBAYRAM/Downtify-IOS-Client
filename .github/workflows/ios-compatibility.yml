@@ -1,0 +1,54 @@
+name: iOS compatibility checks
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-compatibility-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  compatibility:
+    name: ${{ matrix.family }} / iOS ${{ matrix.ios }}
+    if: github.actor == 'michaelmoskie' && github.triggering_actor == 'michaelmoskie' && github.ref == 'refs/heads/release/0.1.2-12'
+    runs-on: macos-15
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - family: iPhone
+            ios: '18.5'
+            xcode: '16.4'
+          - family: iPad
+            ios: '26.2'
+            xcode: '26.2'
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_${{ matrix.xcode }}.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select simulator
+        run: python3 scripts/ci_simulator_destination.py '${{ matrix.family }}' '${{ matrix.ios }}'
+      - name: Run full test suite
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/compatibility-results"
+          xcodebuild test -project Downtify.xcodeproj -scheme Downtify \
+            -destination "$DOWNTIFY_SIM_DESTINATION" -parallel-testing-enabled NO \
+            -resultBundlePath "$RUNNER_TEMP/compatibility-results/tests.xcresult" \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/compatibility-results/test.log"
+      - name: Scan results before upload
+        if: failure()
+        id: scan
+        run: scripts/check_no_secrets_in_artifacts.sh "$RUNNER_TEMP/compatibility-results"
+      - name: Upload failed test results
+        if: failure() && steps.scan.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-${{ matrix.family }}-ios-${{ matrix.ios }}
+          path: ${{ runner.temp }}/compatibility-results
+          retention-days: 7
