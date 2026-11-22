@@ -38,7 +38,6 @@ Fixture credentials are test values inside the harness. Sign-in is automatic in 
 - `-DowntifyHarness`: activates the harness. Without it the app behaves exactly as Release.
 - `-DowntifyHarnessMode fixture|staging`: default `fixture`.
 - `-DowntifyFault <route>=<kind>`: repeatable. See the fault catalogue.
-- `-DowntifyFixtureTracks <n>`: fixture mode only. Generates `n` library tracks (2 to 12, default 2) named `fixture-track-1...n`, "Fixture One", "Fixture Two", and so on. The Songs list shows newest first, so the highest number is listed first.
 
 ### Environment (test runner)
 
@@ -75,7 +74,7 @@ PASSWORD=<test password>
 
 A hidden accessibility element with identifier `debug.state`. Its value is redacted JSON with these keys only:
 
-`playbackPhase`, `queueCount`, `currentTrackID`, `position`, `network`, `libraryTrackCount`, `lastErrorCode`, `artworkLoaded`, `playerVisible`, `sessionActive`, `queueTrackIDs` (library track ids in play order; catalog items appear as `catalog`).
+`playbackPhase`, `queueCount`, `currentTrackID`, `position`, `network`, `libraryTrackCount`, `lastErrorCode`, `artworkLoaded`, `playerVisible`, `sessionActive`.
 
 It never contains tokens, usernames, server addresses, or track titles. Keys are always present (null when absent). UI tests decode it through `DowntifyUITestSupport.waitForState(_:timeout:where:)`.
 
@@ -127,3 +126,11 @@ Status: **not verified in this change.** The command comes from that repository'
 - Real device behaviour (audio routes, background audio, push).
 - Long-running soak tests and real network conditions.
 - Anything that needs a human to judge sound or visual quality.
+
+## Manual GitHub Actions experiment
+
+The manual checks run the unit suite and fixture smoke tests on an iPhone simulator with Xcode 26.2. The separate compatibility workflow runs the full suite on iPhone / iOS 18.5 and iPad / iOS 26.2, both with Xcode 26.2. Both use standard macOS runners and select an available simulator of the requested family and runtime. No server credentials are needed. Failed results are scanned before upload and retained for seven days; compressed attachments are not covered by the scan.
+
+These workflows have no automatic triggers. Their jobs only run when both the original actor and the person initiating a rerun are `michaelmoskie`, and the selected ref is `release/0.1.2-12`. This is a workflow-level safeguard: people with write access can still dispatch a run, modify workflows on branches they control, or alter this guard. Restrict repository write access for stronger control.
+
+GitHub requires a workflow file on the default branch before it can be manually dispatched, even when running a different branch. Once these files are on the default branch, manually dispatch them using the release branch as the selected ref. The pinned runner images and runtimes may also need updates over time.

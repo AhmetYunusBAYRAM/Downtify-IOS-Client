@@ -1,0 +1,73 @@
+name: iOS manual checks
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-manual-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Build and unit tests
+    if: github.actor == 'michaelmoskie' && github.triggering_actor == 'michaelmoskie' && github.ref == 'refs/heads/release/0.1.2-12'
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select iPhone simulator
+        run: python3 scripts/ci_simulator_destination.py iPhone 26.2
+      - name: Run unit tests
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/unit-results"
+          xcodebuild test -project Downtify.xcodeproj -scheme Downtify \
+            -destination "$DOWNTIFY_SIM_DESTINATION" \
+            -only-testing:DowntifyTests -parallel-testing-enabled NO \
+            -resultBundlePath "$RUNNER_TEMP/unit-results/tests.xcresult" \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/unit-results/test.log"
+      - name: Scan results before upload
+        if: failure()
+        id: scan
+        run: scripts/check_no_secrets_in_artifacts.sh "$RUNNER_TEMP/unit-results"
+      - name: Upload failed test results
+        if: failure() && steps.scan.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: ${{ runner.temp }}/unit-results
+          retention-days: 7
+
+  fixture-smoke:
+    name: Fixture UI smoke tests
+    if: github.actor == 'michaelmoskie' && github.triggering_actor == 'michaelmoskie' && github.ref == 'refs/heads/release/0.1.2-12'
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+      DOWNTIFY_SIM_MODE: fixture
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select iPhone simulator
+        run: python3 scripts/ci_simulator_destination.py iPhone 26.2
+      - name: Run fixture checks
+        env:
+          DOWNTIFY_SIM_ARTIFACTS: ${{ runner.temp }}/smoke-results
+        run: scripts/run_simulator_checks.sh
+      - name: Scan results before upload
+        if: failure()
+        id: scan
+        run: scripts/check_no_secrets_in_artifacts.sh "$RUNNER_TEMP/smoke-results"
+      - name: Upload failed test results
+        if: failure() && steps.scan.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fixture-smoke-results
+          path: ${{ runner.temp }}/smoke-results
+          retention-days: 7

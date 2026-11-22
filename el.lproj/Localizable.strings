@@ -641,5 +641,13 @@
 "Translation is not available for these lyrics." = "Η μετάφραση δεν είναι διαθέσιμη για αυτούς τους στίχους.";
 "Shows the lyrics in your device language" = "Εμφανίζει τους στίχους στη γλώσσα της συσκευής σας";
 "Shows the lyrics in their original language" = "Εμφανίζει τους στίχους στην αρχική γλώσσα";
-"Jumps to this line in the song" = "Μετάβαση σε αυτόν τον στίχο του τραγουδιού";
 "Close debug overlay" = "Κλείσιμο του επικαλυπτικού εντοπισμού σφαλμάτων";
+"Synced" = "Συγχρονισμένοι";
+"Static" = "Στατικοί";
+"Lyrics display" = "Εμφάνιση στίχων";
+"Reset lyrics timing" = "Επαναφορά χρονισμού στίχων";
+"Seek to %@ at %@" = "Μετάβαση στο %@ στο %@";
+"Jumps playback to this line" = "Μεταφέρει την αναπαραγωγή σε αυτή τη γραμμή";
+"instrumental break" = "οργανικό μέρος";
+"Loading more…" = "Φόρτωση περισσότερων…";
+"No more similar tracks" = "Δεν υπάρχουν άλλα παρόμοια τραγούδια";

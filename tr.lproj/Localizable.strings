@@ -641,5 +641,13 @@
 "Translation is not available for these lyrics." = "Bu şarkı sözleri için çeviri kullanılamıyor.";
 "Shows the lyrics in your device language" = "Şarkı sözlerini cihazınızın dilinde gösterir";
 "Shows the lyrics in their original language" = "Şarkı sözlerini özgün dilinde gösterir";
-"Jumps to this line in the song" = "Şarkıda bu satıra atlar";
 "Close debug overlay" = "Hata ayıklama katmanını kapat";
+"Synced" = "Senkronize";
+"Static" = "Statik";
+"Lyrics display" = "Şarkı sözü görünümü";
+"Reset lyrics timing" = "Söz zamanlamasını sıfırla";
+"Seek to %@ at %@" = "%@ satırına git (%@)";
+"Jumps playback to this line" = "Oynatmayı bu satıra götürür";
+"instrumental break" = "enstrümantal bölüm";
+"Loading more…" = "Daha fazlası yükleniyor…";
+"No more similar tracks" = "Başka benzer şarkı yok";

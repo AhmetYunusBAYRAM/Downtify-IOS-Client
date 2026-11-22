@@ -2,17 +2,28 @@
 
 Historical record of Downtify iOS releases (version 0.1.2), newest first. Each build lists the user-facing notes shipped to TestFlight (from `release-notes/`), followed by the notable changes behind them. Issue numbers refer to the project issue tracker.
 
-Build 0.1.2-12 is still in progress. Builds 0.1.2-7 and earlier predate the curated release notes; their entries are reconstructed from git history.
+Builds 0.1.2-7 and earlier predate the curated release notes; their entries are reconstructed from git history.
 
-## 0.1.2 (12) — Unreleased (in progress on `release/0.1.2-12`)
+## 0.1.2 (12) — 2026-11-21
 
-Changes so far (no curated release notes yet):
+Release notes:
+- Add songs to the front of your queue with Play next, and drag upcoming songs to reorder them
+- Tap a synced lyric line in Now Playing to jump to it, and switch between synced and plain lyrics
+- Similar keeps loading more songs as you scroll
+- Rows near the bottom of screens no longer hide behind the player
+- More of the app is translated in every supported language
+
+Changes:
 - Add Play next to Library and catalog song menus, inserting songs at the front of the upcoming queue (#67)
 - Reorder upcoming queue songs with left-side drag handles and an insertion indicator; VoiceOver gets Move up / Move down actions (#68)
 - Localize Play next and queue reorder strings in all locales (#67, #68)
 - Translate lyrics into the device language on iOS 18 and later, with a toggle back to the original; the choice is remembered, and iOS 17 is unchanged (#74)
 - Keep bottom rows clear of the playback dock, including at accessibility text sizes, on More, About, admin Trash, podcast lists and catalog artist/album pages (#45)
 - Extend the debug harness with configurable fixture tracks and a queue order probe; add simulator UI tests, docs and check-script scenarios for Play next and queue reorder
+- Tap a timed lyric line in Now Playing to seek to it, switch between synced and static lyrics when both exist, and reset a track's saved lyric timing in one tap; lyrics requests now use the app transport so debug fixtures and staging guards apply (#71)
+- Similar results load more as you near the end of the list, seeded from unused recent results, with duplicate and repeated-seed protection, retry on failure and a visible loading and end state (#72)
+- Localize the lyric seek, display mode, reset and Similar load-more strings in all locales (#71, #72)
+- Extend the debug harness with fixture lyrics and fixture Similar pages (real song titles, one-shot page failure); add simulator UI tests and unit tests for lyric seek, display modes, timing reset and Similar load-more, and include them in the check script (#71, #72)
 
 ## 0.1.2 (11) — 2026-11-21
 

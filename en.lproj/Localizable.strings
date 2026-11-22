@@ -639,5 +639,13 @@
 "Translation is not available for these lyrics." = "Translation is not available for these lyrics.";
 "Shows the lyrics in your device language" = "Shows the lyrics in your device language";
 "Shows the lyrics in their original language" = "Shows the lyrics in their original language";
-"Jumps to this line in the song" = "Jumps to this line in the song";
 "Close debug overlay" = "Close debug overlay";
+"Synced" = "Synced";
+"Static" = "Static";
+"Lyrics display" = "Lyrics display";
+"Reset lyrics timing" = "Reset lyrics timing";
+"Seek to %@ at %@" = "Seek to %@ at %@";
+"Jumps playback to this line" = "Jumps playback to this line";
+"instrumental break" = "instrumental break";
+"Loading more…" = "Loading more…";
+"No more similar tracks" = "No more similar tracks";

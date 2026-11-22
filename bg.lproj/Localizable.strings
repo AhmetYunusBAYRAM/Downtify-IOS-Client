@@ -641,5 +641,13 @@
 "Translation is not available for these lyrics." = "Преводът не е наличен за този текст.";
 "Shows the lyrics in your device language" = "Показва текста на езика на устройството";
 "Shows the lyrics in their original language" = "Показва текста на оригиналния език";
-"Jumps to this line in the song" = "Преминава към този ред в песента";
 "Close debug overlay" = "Затвори дебъг наслагването";
+"Synced" = "Синхронизирани";
+"Static" = "Статични";
+"Lyrics display" = "Показване на текста";
+"Reset lyrics timing" = "Нулиране на времето на текста";
+"Seek to %@ at %@" = "Към %@ на %@";
+"Jumps playback to this line" = "Премества възпроизвеждането към този ред";
+"instrumental break" = "инструментален откъс";
+"Loading more…" = "Зареждане на още…";
+"No more similar tracks" = "Няма повече подобни песни";

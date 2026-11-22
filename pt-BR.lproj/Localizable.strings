@@ -641,5 +641,13 @@
 "Translation is not available for these lyrics." = "A tradução não está disponível para esta letra.";
 "Shows the lyrics in your device language" = "Mostra a letra no idioma do seu dispositivo";
 "Shows the lyrics in their original language" = "Mostra a letra no idioma original";
-"Jumps to this line in the song" = "Vai para esta linha da música";
 "Close debug overlay" = "Fechar a sobreposição de depuração";
+"Synced" = "Sincronizada";
+"Static" = "Estática";
+"Lyrics display" = "Exibição da letra";
+"Reset lyrics timing" = "Redefinir sincronia da letra";
+"Seek to %@ at %@" = "Ir para %@ em %@";
+"Jumps playback to this line" = "Leva a reprodução até esta linha";
+"instrumental break" = "trecho instrumental";
+"Loading more…" = "Carregando mais…";
+"No more similar tracks" = "Não há mais músicas semelhantes";

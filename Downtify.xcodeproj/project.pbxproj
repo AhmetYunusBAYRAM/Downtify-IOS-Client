@@ -15,6 +15,18 @@
 		000000000000000000000A0D = { isa = PBXBuildFile; fileRef = 000000000000000000000A0C; };
 		000000000000000000000A04 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingDetailModel.swift; sourceTree = "<group>"; };
 		000000000000000000000A05 = { isa = PBXBuildFile; fileRef = 000000000000000000000A04; };
+		00000000000000000000F00B = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimilarUITests.swift; sourceTree = "<group>"; };
+		00000000000000000000F00C = { isa = PBXBuildFile; fileRef = 00000000000000000000F00B; };
+		00000000000000000000F009 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricsUITests.swift; sourceTree = "<group>"; };
+		00000000000000000000F00A = { isa = PBXBuildFile; fileRef = 00000000000000000000F009; };
+		00000000000000000000F007 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimilarContinuationTests.swift; sourceTree = "<group>"; };
+		00000000000000000000F008 = { isa = PBXBuildFile; fileRef = 00000000000000000000F007; };
+		00000000000000000000F005 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricsPresentationTests.swift; sourceTree = "<group>"; };
+		00000000000000000000F006 = { isa = PBXBuildFile; fileRef = 00000000000000000000F005; };
+		00000000000000000000F003 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimilarContinuation.swift; sourceTree = "<group>"; };
+		00000000000000000000F004 = { isa = PBXBuildFile; fileRef = 00000000000000000000F003; };
+		00000000000000000000F001 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricsPresentation.swift; sourceTree = "<group>"; };
+		00000000000000000000F002 = { isa = PBXBuildFile; fileRef = 00000000000000000000F001; };
 		000000000000000000000A02 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingNavigationTests.swift; sourceTree = "<group>"; };
 		000000000000000000000A03 = { isa = PBXBuildFile; fileRef = 000000000000000000000A02; };
 		000000000000000000000A00 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingNavigation.swift; sourceTree = "<group>"; };
@@ -429,6 +441,8 @@
 				00000000000000000000006D,
 				000000000000000000000094,
 				000000000000000000000204,
+							00000000000000000000F001,
+							00000000000000000000F003,
 			);
 			path = Domain;
 			sourceTree = "<group>";
@@ -564,6 +578,8 @@
 				00000000000000000000005B,
 				0000000000000000000000C0,
 				000000000000000000000530,
+							00000000000000000000F005,
+							00000000000000000000F007,
 			);
 			sourceTree = "<group>";
 			path = DowntifyTests;
@@ -663,6 +679,8 @@
 				000000000000000000000511,
 				000000000000000000000513,
 				000000000000000000000515,
+							00000000000000000000F002,
+							00000000000000000000F004,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -742,6 +760,8 @@
 				00000000000000000000002C,
 				000000000000000000000034,
 				000000000000000000000531,
+							00000000000000000000F006,
+							00000000000000000000F008,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -834,7 +854,7 @@
 				DEVELOPMENT_TEAM = 54XLEESNGA;
 				PRODUCT_BUNDLE_IDENTIFIER = app.downtify.ios;
 				MARKETING_VERSION = 0.1.2;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				CODE_SIGN_STYLE = Automatic;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 			};
@@ -852,7 +872,7 @@
 				DEVELOPMENT_TEAM = 54XLEESNGA;
 				PRODUCT_BUNDLE_IDENTIFIER = app.downtify.ios;
 				MARKETING_VERSION = 0.1.2;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 12;
 				CODE_SIGN_STYLE = Automatic;
 			};
 			name = Release;
@@ -963,6 +983,8 @@
 			children = (
 				000000000000000000000521,
 				000000000000000000000523,
+							00000000000000000000F009,
+							00000000000000000000F00B,
 			);
 			path = DowntifyUITests;
 			sourceTree = "<group>";
@@ -976,6 +998,8 @@
 			files = (
 				000000000000000000000522,
 				000000000000000000000524,
+							00000000000000000000F00A,
+							00000000000000000000F00C,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

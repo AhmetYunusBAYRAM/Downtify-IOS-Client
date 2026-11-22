@@ -641,5 +641,13 @@
 "Translation is not available for these lyrics." = "A fordítás nem érhető el ehhez a dalszöveghez.";
 "Shows the lyrics in your device language" = "A dalszöveget az eszközöd nyelvén jeleníti meg";
 "Shows the lyrics in their original language" = "A dalszöveget az eredeti nyelven jeleníti meg";
-"Jumps to this line in the song" = "Ugrás a dal ehhez a sorához";
 "Close debug overlay" = "Hibakeresési réteg bezárása";
+"Synced" = "Szinkronizált";
+"Static" = "Statikus";
+"Lyrics display" = "Dalszöveg megjelenítése";
+"Reset lyrics timing" = "Dalszöveg időzítésének visszaállítása";
+"Seek to %@ at %@" = "Ugrás ide: %@ (%@)";
+"Jumps playback to this line" = "A lejátszást erre a sorra ugrasztja";
+"instrumental break" = "hangszeres rész";
+"Loading more…" = "Továbbiak betöltése…";
+"No more similar tracks" = "Nincs több hasonló szám";

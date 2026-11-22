@@ -41,6 +41,8 @@ final class CatalogPresentationModel: ObservableObject {
     @Published private(set) var finderAlbumState: CatalogLoadState<CatalogFinderAlbum> = .idle
     @Published private(set) var chartsState: CatalogLoadState<CatalogCharts> = .idle
     @Published private(set) var similarState: CatalogLoadState<CatalogSimilarResults> = .idle
+    /// Rows accumulated for the current Similar search, extended as the listener nears the end (#72).
+    @Published private(set) var similarFeed: SimilarFeed?
     @Published private(set) var discoverArtistsState: CatalogLoadState<CatalogDiscoverResults> = .idle
     @Published private(set) var deezerCollectionsState: CatalogLoadState<CatalogCollectionsResults> = .idle
     @Published private(set) var spotifyCollectionsState: CatalogLoadState<CatalogCollectionsResults> = .idle
@@ -345,13 +347,65 @@ final class CatalogPresentationModel: ObservableObject {
     }
 
     func loadSimilar(artist: String = "", track: String = "", limit: Int = 20) {
+        // A new search discards any extension still in flight and its accumulated rows.
+        requests["similar_more"]?.cancel()
+        requests["similar_more"] = nil
+        requestIDs["similar_more"] = nil
+        similarFeed = nil
         guard let session else {
             similarState = .unavailable(message: "Connect to a server to load similar tracks.")
             return
         }
         let api = self.api
         startRequest("similar", session: session, operation: { try await api.similar(artist: artist, track: track, limit: limit, session: session) },
-                     isEmpty: { $0.tracks.isEmpty }) { self.similarState = $0 }
+                     isEmpty: { $0.tracks.isEmpty }) { state in
+            self.similarState = state
+            switch state {
+            case .loaded(let result), .partial(let result, _):
+                self.similarFeed = SimilarFeed(initial: result, querySeed: .init(artist: artist, track: track))
+            default:
+                self.similarFeed = nil
+            }
+        }
+    }
+
+    /// Called when a Similar row appears. Fetches another page when the row is near the end of the list.
+    func similarRowAppeared(_ song: CatalogSong) {
+        guard let feed = similarFeed, feed.shouldLoadMore(whenShowing: song) else { return }
+        loadMoreSimilar()
+    }
+
+    /// Retries after a failed extension. The existing rows stay in place.
+    func retrySimilarMore() {
+        similarFeed?.clearFailure()
+        loadMoreSimilar()
+    }
+
+    private func loadMoreSimilar() {
+        guard let session, var feed = similarFeed, feed.canLoadMore else { return }
+        guard let seed = feed.nextSeed() else {
+            feed.exhaust()
+            similarFeed = feed
+            return
+        }
+        feed.beginMore()
+        similarFeed = feed
+        let requestID = UUID()
+        requestIDs["similar_more"] = requestID
+        let api = self.api
+        requests["similar_more"] = Task { [weak self] in
+            do {
+                let result = try await api.similar(artist: seed.artist, track: seed.track,
+                                                   limit: SimilarFeed.pageLimit, session: session)
+                guard let self, self.isCurrent("similar_more", id: requestID, session: session) else { return }
+                self.similarFeed?.finishMore(seed: seed, tracks: result.tracks)
+            } catch is CancellationError {
+                return
+            } catch {
+                guard let self, self.isCurrent("similar_more", id: requestID, session: session) else { return }
+                self.similarFeed?.failMore(message: self.message(for: error))
+            }
+        }
     }
 
     func loadDiscover(library: [CatalogLibraryArtist], albums: [CatalogLibraryAlbum], playlistNames: [String],
@@ -543,6 +597,7 @@ final class CatalogPresentationModel: ObservableObject {
         albumTracksState = .idle
         chartsState = .idle
         similarState = .idle
+        similarFeed = nil
         discoverArtistsState = .idle
         deezerCollectionsState = .idle
         spotifyCollectionsState = .idle

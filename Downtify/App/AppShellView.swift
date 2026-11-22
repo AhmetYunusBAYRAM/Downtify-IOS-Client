@@ -270,6 +270,8 @@ private struct NowPlayingView: View {
     @State private var lyricsLoading = false
     @State private var lyricsError = false
     @State private var lyricOffset: Double = 0
+    @State private var lyricsMode: LyricsDisplayMode = .synced
+    @State private var lyricsTrackID: String?
     @StateObject private var translation = LyricsTranslationModel()
     @Environment(\.locale) private var locale
     @Environment(\.lyricDefaults) private var lyricDefaults
@@ -732,23 +734,31 @@ private struct NowPlayingView: View {
     }
 
     private var lyricsSection: some View {
-        VStack(alignment: .leading, spacing: DowntifyStyle.Space.small) {
+        let mode = LyricsPresentation.effectiveMode(lyrics, requested: lyricsMode)
+        return VStack(alignment: .leading, spacing: DowntifyStyle.Space.small) {
             HStack {
                 Label("Lyrics", systemImage: "quote.bubble")
                     .font(.headline)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
-                if lyrics?.lines.isEmpty == false {
+                if mode == .synced {
                     HStack(spacing: 4) {
-                        Button { setLyricOffset(lyricOffset - 0.5) } label: {
+                        Button { setLyricOffset(lyricOffset - LyricsPresentation.offsetStep) } label: {
                             Image(systemName: "minus").downtifyControlTarget()
                         }.accessibilityLabel("Lyrics earlier by half a second")
                         Text("\(lyricOffset, format: .number.precision(.fractionLength(1)))s")
                             .font(.caption.monospacedDigit())
+                            .accessibilityIdentifier("lyrics.offsetValue")
                             .accessibilityLabel("Lyrics offset \(lyricOffset, format: .number.precision(.fractionLength(1))) seconds")
-                        Button { setLyricOffset(lyricOffset + 0.5) } label: {
+                        Button { setLyricOffset(lyricOffset + LyricsPresentation.offsetStep) } label: {
                             Image(systemName: "plus").downtifyControlTarget()
                         }.accessibilityLabel("Lyrics later by half a second")
+                        Button { resetLyricOffset() } label: {
+                            Image(systemName: "arrow.counterclockwise").downtifyControlTarget()
+                        }
+                        .disabled(lyricOffset == 0)
+                        .accessibilityIdentifier("lyrics.resetOffset")
+                        .accessibilityLabel("Reset lyrics timing")
                     }
                     .buttonStyle(.borderless)
                 }
@@ -756,32 +766,45 @@ private struct NowPlayingView: View {
             if !lyricsLoading { translationControls }
             if lyricsLoading {
                 ProgressView("Loading lyrics…")
-            } else if let lyrics, !lyrics.lines.isEmpty {
-                let active = activeLyricIndex(lyrics.lines)
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(displayedLines(for: lyrics).enumerated()), id: \.offset) { index, line in
-                        Button {
-                            playback.seek(to: max(0, line.time + lyricOffset))
-                        } label: {
-                            Text(line.text.isEmpty ? "♪" : line.text)
-                                .font(index == active ? .title3.weight(.bold) : .body)
-                                .foregroundStyle(index == active ? DowntifyStyle.accent : DowntifyStyle.secondaryText)
-                                .multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("Jumps to this line in the song")
-                        .accessibilityAddTraits(index == active ? .isSelected : [])
+            } else if let lyrics, let mode {
+                if LyricsPresentation.offersModeChoice(lyrics) {
+                    Picker("Lyrics display", selection: $lyricsMode) {
+                        Text("Synced").tag(LyricsDisplayMode.synced)
+                        Text("Static").tag(LyricsDisplayMode.static)
                     }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("lyrics.modePicker")
+                    .accessibilityLabel("Lyrics display")
                 }
-                .accessibilityElement(children: .contain)
-            } else if let lyrics, !lyrics.plain.isEmpty {
-                Text(displayedPlain(for: lyrics))
-                    .font(.body)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel("Plain lyrics")
+                if mode == .synced {
+                    let lines = lyrics.lines
+                    let active = LyricsPresentation.activeIndex(lines, position: playback.position, offset: lyricOffset)
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(Array(displayedLines(for: lyrics).enumerated()), id: \.offset) { index, line in
+                            Button { seekToLyric(line) } label: {
+                                Text(line.text.isEmpty ? "♪" : line.text)
+                                    .font(index == active ? .title3.weight(.bold) : .body)
+                                    .foregroundStyle(index == active ? DowntifyStyle.accent : DowntifyStyle.secondaryText)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("lyrics.line.\(index)")
+                            .accessibilityLabel("Seek to \(spokenLine(line)) at \(LyricsPresentation.accessibilityTime(line.time))")
+                            .accessibilityHint("Jumps playback to this line")
+                            .accessibilityAddTraits(index == active ? .isSelected : [])
+                        }
+                    }
+                    .accessibilityElement(children: .contain)
+                } else {
+                    Text(displayedPlain(for: lyrics))
+                        .font(.body)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("lyrics.plain")
+                        .accessibilityLabel("Plain lyrics")
+                }
             } else {
                 Text(lyricsError ? String(localized: "Lyrics could not be loaded.") : String(localized: "Lyrics are unavailable for this track."))
                     .font(.subheadline)
@@ -842,33 +865,20 @@ private struct NowPlayingView: View {
         }
     }
 
-    /// Translated lines mirror the original lines one to one, so highlighting keeps using the original timestamps.
+    /// Translated lines mirror the original lines one to one, so highlighting and seeking keep the original timestamps.
     private func displayedLines(for lyrics: TrackLyrics) -> [LyricLine] {
         if case .translated(let result) = translation.phase, case .timed(let lines) = result.content,
            lines.count == lyrics.lines.count { return lines }
         return lyrics.lines
     }
 
+    /// Static view: translated plain text, or the translated synced lines joined when only those were translated.
     private func displayedPlain(for lyrics: TrackLyrics) -> String {
-        if case .translated(let result) = translation.phase, case .plain(let text) = result.content { return text }
-        return lyrics.plain
-    }
-
-    private func loadLyrics() async {
-        translation.configure(defaults: lyricDefaults)
-        translation.load(trackID: nil, lyrics: nil, target: nil)
-        guard let track else { lyrics = nil; return }
-        lyricsLoading = true
-        lyricsError = false
-        lyricOffset = lyricDefaults.double(forKey: playback.lyricsOffsetKey(trackID: track.id))
-        defer { lyricsLoading = false }
-        do {
-            let loaded = try await playback.lyrics(for: track.id)
-            guard !Task.isCancelled else { return }
-            lyrics = loaded
-            translation.load(trackID: track.id, lyrics: loaded, target: Self.systemTranslationTarget)
+        guard case .translated(let result) = translation.phase else { return lyrics.plain }
+        switch result.content {
+        case .plain(let text): return text
+        case .timed(let lines): return lines.map(\.text).joined(separator: "\n")
         }
-        catch { if !Task.isCancelled { lyricsError = true; lyrics = nil } }
     }
 
     /// The device's preferred language, not the in-app language override.
@@ -876,13 +886,46 @@ private struct NowPlayingView: View {
         Locale.preferredLanguages.first.map { Locale.Language(identifier: $0) }
     }
 
+    private func loadLyrics() async {
+        translation.configure(defaults: lyricDefaults)
+        translation.load(trackID: nil, lyrics: nil, target: nil)
+        guard let track else { lyrics = nil; lyricsTrackID = nil; return }
+        lyricsLoading = true
+        lyricsError = false
+        lyrics = nil
+        lyricsTrackID = nil
+        lyricsMode = .synced
+        lyricOffset = LyricsPresentation.savedOffset(in: lyricDefaults, key: playback.lyricsOffsetKey(trackID: track.id))
+        defer { if !Task.isCancelled { lyricsLoading = false } }
+        do {
+            let loaded = try await playback.lyrics(for: track.id)
+            guard !Task.isCancelled else { return }
+            lyrics = loaded
+            lyricsTrackID = track.id
+            translation.load(trackID: track.id, lyrics: loaded, target: Self.systemTranslationTarget)
+        } catch {
+            if !Task.isCancelled { lyricsError = true; lyrics = nil }
+        }
+    }
+
     private func setLyricOffset(_ value: Double) {
-        lyricOffset = min(10, max(-10, value))
+        lyricOffset = LyricsPresentation.clampedOffset(value)
         if let track { lyricDefaults.set(lyricOffset, forKey: playback.lyricsOffsetKey(trackID: track.id)) }
     }
 
-    private func activeLyricIndex(_ lines: [LyricLine]) -> Int? {
-        lines.lastIndex { $0.time <= playback.position - lyricOffset }
+    private func spokenLine(_ line: LyricLine) -> String {
+        line.text.isEmpty ? String(localized: "instrumental break") : line.text
+    }
+
+    private func resetLyricOffset() {
+        lyricOffset = 0
+        if let track { LyricsPresentation.resetOffset(in: lyricDefaults, key: playback.lyricsOffsetKey(trackID: track.id)) }
+    }
+
+    /// Seeks so the tapped line becomes the active line. Ignored if the lines belong to a previous track.
+    private func seekToLyric(_ line: LyricLine) {
+        guard let track, lyricsTrackID == track.id else { return }
+        playback.seek(to: LyricsPresentation.seekTarget(for: line, offset: lyricOffset, duration: playback.duration))
     }
 
     @ViewBuilder
@@ -1359,7 +1402,6 @@ private struct LibraryDesignPreviews: PreviewProvider {
     }
 }
 #endif
-
 
 // MARK: - Apple Translation integration (iOS 18+)
 
