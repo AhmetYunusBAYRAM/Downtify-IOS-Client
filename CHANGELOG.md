@@ -3,6 +3,7 @@
 Historical record of Downtify iOS releases (version 0.1.2), newest first. Each build lists the user-facing notes shipped to TestFlight (from `release-notes/`), followed by the notable changes behind them. Issue numbers refer to the project issue tracker.
 
 Build 0.1.2-12 is still in progress. Builds 0.1.2-7 and earlier predate the curated release notes; their entries are reconstructed from git history.
+
 ## 0.1.2 (12) — Unreleased (in progress on `release/0.1.2-12`)
 
 Changes so far (no curated release notes yet):
