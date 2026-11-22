@@ -21,6 +21,97 @@ final class DebugHarnessTests: XCTestCase {
         XCTAssertNil(config.configurationError)
     }
 
+    func testFixtureTrackCountDefaultsToTwoAndAcceptsOverride() throws {
+        let defaults = try XCTUnwrap(DebugHarnessConfiguration.parse(arguments: harnessArgs, environment: [:]))
+        XCTAssertEqual(defaults.fixtureTrackCount, 2)
+        let five = try XCTUnwrap(DebugHarnessConfiguration.parse(arguments: harnessArgs + ["-DowntifyFixtureTracks", "5"], environment: [:]))
+        XCTAssertEqual(five.fixtureTrackCount, 5)
+        for bad in ["1", "99", "x"] {
+            let config = try XCTUnwrap(DebugHarnessConfiguration.parse(arguments: harnessArgs + ["-DowntifyFixtureTracks", bad], environment: [:]))
+            XCTAssertEqual(config.fixtureTrackCount, 2, bad)
+        }
+    }
+
+    func testFixtureLibraryPageGeneratesRequestedTracks() throws {
+        for count in [2, 5] {
+            let data = Data(DebugFixtureTransport.libraryPage(trackCount: count).utf8)
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let tracks = try XCTUnwrap(json["tracks"] as? [[String: Any]])
+            XCTAssertEqual(tracks.count, count)
+            XCTAssertEqual(tracks.first?["id"] as? String, "fixture-track-1")
+            XCTAssertEqual(tracks.last?["id"] as? String, "fixture-track-\(count)")
+        }
+    }
+
+    // MARK: Fixture options (#70, #71, #72)
+
+    func testFixtureOptionDefaultsLeaveCapabilitiesOff() throws {
+        let config = try XCTUnwrap(DebugHarnessConfiguration.parse(arguments: harnessArgs, environment: [:]))
+        XCTAssertEqual(config.fixtureLyrics, .none)
+        XCTAssertNil(config.fixtureSimilar)
+        XCTAssertTrue(DebugFixtureTransport.serverInfo(lyrics: false, discover: false).contains(#""discover":false,"lyrics":false"#))
+    }
+
+    func testFixtureOptionsParse() throws {
+        let args = harnessArgs + ["-DowntifyFixtureLyrics", "both", "-DowntifyFixtureSimilar", "3,failpage=2"]
+        let config = try XCTUnwrap(DebugHarnessConfiguration.parse(arguments: args, environment: [:]))
+        XCTAssertEqual(config.fixtureLyrics, .both)
+        XCTAssertEqual(config.fixtureSimilar, .init(pages: 3, failPage: 2))
+    }
+
+    func testInvalidFixtureOptionsAreIgnored() throws {
+        let args = harnessArgs + ["-DowntifyFixtureLyrics", "weird", "-DowntifyFixtureSimilar", "0"]
+        let config = try XCTUnwrap(DebugHarnessConfiguration.parse(arguments: args, environment: [:]))
+        XCTAssertEqual(config.fixtureLyrics, .none)
+        XCTAssertNil(config.fixtureSimilar)
+        XCTAssertEqual(DebugHarnessConfiguration.parseFixtureSimilar("2,failpage=9"), .init(pages: 2, failPage: nil))
+    }
+
+    func testLyricsFixtureRoutesDecodeAsTrackLyrics() async throws {
+        let session = DeviceSession(baseAddress: "https://fixture.test", serverID: DebugFixtureTransport.serverID, serverName: "Fixture",
+                                    deviceID: "d", username: nil, role: nil, token: DebugFixtureTransport.token, allowsInsecureHTTP: false)
+        for (mode, synced, plain) in [(DebugHarnessConfiguration.FixtureLyrics.both, 4, true), (.synced, 4, false), (.plain, 0, true)] {
+            let api = TrackLyricsAPI(transport: DebugFixtureTransport(faults: [:], lyrics: mode))
+            let lyrics = try await api.fetch(trackID: "fixture-track-1", session: session)
+            XCTAssertEqual(lyrics?.lines.count, synced, "\(mode)")
+            XCTAssertEqual(lyrics?.plain.isEmpty == false, plain, "\(mode)")
+        }
+        let none = try await TrackLyricsAPI(transport: DebugFixtureTransport(faults: [:])).fetch(trackID: "fixture-track-1", session: session)
+        XCTAssertNil(none)
+        do {
+            _ = try await TrackLyricsAPI(transport: DebugFixtureTransport(faults: [:], lyrics: .error)).fetch(trackID: "fixture-track-1", session: session)
+            XCTFail("expected a failure")
+        } catch {}
+    }
+
+    func testSimilarFixturePagesAreDeterministicAndFailOnce() async throws {
+        let transport = DebugFixtureTransport(faults: [:], similar: .init(pages: 2, failPage: 2))
+        func fetch(_ track: String) async throws -> (Int, [String]) {
+            var components = URLComponents(string: "https://fixture.test/api/similar/tracks")!
+            components.queryItems = [.init(name: "artist", value: "Similar Artist"), .init(name: "track", value: track)]
+            let (data, response) = try await transport.data(for: URLRequest(url: try XCTUnwrap(components.url)))
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard status == 200 else { return (status, []) }
+            let decoded = try JSONDecoder().decode(CatalogSimilarResults.self, from: data)
+            return (status, decoded.tracks.map(\.title))
+        }
+        let first = try await fetch("Seed")
+        XCTAssertEqual(first.0, 200)
+        XCTAssertEqual(first.1.count, 20)
+        let pool = DebugFixtureTransport.similarPool.map(\.title)
+        XCTAssertEqual(first.1.last, pool[19])
+        let failed = try await fetch(pool[19])
+        XCTAssertEqual(failed.0, 500)
+        let second = try await fetch(pool[19])
+        XCTAssertEqual(second.1.first, pool[20])
+        let dry = try await fetch(pool[39])
+        XCTAssertEqual(dry.1, second.1, "past the last page only duplicates come back")
+    }
+
+    func testSimilarRouteIsFaultableThroughCatalog() {
+        XCTAssertEqual(DebugFixtureTransport.route(for: "/api/similar/tracks"), .catalog)
+    }
+
     // MARK: Fault parsing
 
     func testFaultsParsePerRoute() {
@@ -142,11 +233,12 @@ final class DebugHarnessTests: XCTestCase {
     func testSnapshotContainsOnlyApprovedKeysAndNoSecrets() throws {
         let snapshot = DebugStateSnapshot(playbackPhase: "playing", queueCount: 2, currentTrackID: "fixture-track-1",
                                           position: 1.5, network: "wifiOrWired", libraryTrackCount: 2,
-                                          lastErrorCode: nil, artworkLoaded: true, playerVisible: true, sessionActive: true)
+                                          lastErrorCode: nil, artworkLoaded: true, playerVisible: true, sessionActive: true,
+                                          queueTrackIDs: ["fixture-track-1", "fixture-track-2"])
         let json = snapshot.json
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
         XCTAssertEqual(Set(object.keys), ["playbackPhase", "queueCount", "currentTrackID", "position", "network",
-                                          "libraryTrackCount", "lastErrorCode", "artworkLoaded", "playerVisible", "sessionActive"])
+                                          "libraryTrackCount", "lastErrorCode", "artworkLoaded", "playerVisible", "sessionActive", "queueTrackIDs"])
         for forbidden in ["token", "username", "password", "http", "server", "title", DebugFixtureTransport.token, "fixture-server"] {
             XCTAssertFalse(json.lowercased().contains(forbidden.lowercased()), forbidden)
         }

@@ -43,6 +43,54 @@ final class PlaybackDockScrollTests: XCTestCase {
                                  "The final download action should remain fully visible above Now Playing")
     }
 
+    /// Issue #45: the More tab's form left its final rows under the dock, and a fixed clearance was too
+    /// short for the stacked accessibility-size dock.
+    func testFinalFormRowCanScrollAboveTallPlaybackDock() {
+        let dockHeight: CGFloat = 180
+        let content = NavigationStack {
+            Form {
+                ForEach(0..<30, id: \.self) { Text("Row \($0)") }
+                Text("Version").background(LayoutProbe(tag: 1))
+            }
+            .downtifyScrollEndClearance()
+        }
+        .environment(\.playbackDockHeight, dockHeight)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            LayoutProbe(tag: 2).frame(height: dockHeight)
+        }
+
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = UIHostingController(rootView: content)
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+
+        guard let scrollView = descendants(of: window).compactMap({ $0 as? UIScrollView })
+            .first(where: { $0.contentSize.height > $0.bounds.height }),
+              let dock = descendants(of: window).first(where: { $0.tag == 2 }) else {
+            XCTFail("Expected a scroll view and playback dock")
+            return
+        }
+
+        let bottomOffset = scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom
+        scrollView.setContentOffset(CGPoint(x: 0, y: max(0, bottomOffset)), animated: false)
+        window.layoutIfNeeded()
+
+        guard let finalRow = descendants(of: window).first(where: { $0.tag == 1 }) else {
+            XCTFail("Expected the final form row to be laid out at the end of the scroll range")
+            return
+        }
+        let rowFrame = finalRow.convert(finalRow.bounds, to: window)
+        let dockFrame = dock.convert(dock.bounds, to: window)
+        XCTAssertLessThanOrEqual(rowFrame.maxY, dockFrame.minY,
+                                 "The final form row should scroll fully above a tall Now Playing dock")
+    }
+
+    func testClearanceGrowsWithDockHeight() {
+        XCTAssertEqual(DowntifyStyle.scrollEndClearance(dockHeight: 0), DowntifyStyle.Space.scrollEnd)
+        XCTAssertEqual(DowntifyStyle.scrollEndClearance(dockHeight: 72), DowntifyStyle.Space.scrollEnd)
+        XCTAssertEqual(DowntifyStyle.scrollEndClearance(dockHeight: 180), 180 + DowntifyStyle.Space.regular)
+    }
+
     private func descendants(of view: UIView) -> [UIView] {
         [view] + view.subviews.flatMap(descendants)
     }

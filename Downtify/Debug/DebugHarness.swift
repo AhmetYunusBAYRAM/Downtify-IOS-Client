@@ -55,8 +55,24 @@ struct DebugHarnessConfiguration: Equatable {
     let mode: Mode
     let staging: StagingTarget?
     let faults: [DebugRoute: DebugFaultKind]
+    /// Number of generated fixture library tracks (`-DowntifyFixtureTracks <n>`, 2...12, default 2).
+    var fixtureTrackCount: Int = 2
     /// Set when staging configuration is invalid. The harness then refuses all network traffic (fail closed).
     let configurationError: DebugHarnessError?
+    /// `-DowntifyFixtureLyrics none|synced|plain|both|error`. `none` (default) keeps the lyrics capability off.
+    var fixtureLyrics: FixtureLyrics = .none
+    /// `-DowntifyFixtureSimilar <pages>[,failpage=<n>]`. Absent keeps the discover capability off.
+    var fixtureSimilar: FixtureSimilar?
+
+    enum FixtureLyrics: String, Equatable {
+        case none, synced, plain, both, error
+    }
+
+    struct FixtureSimilar: Equatable {
+        let pages: Int
+        /// This page's first request fails once with a 500, then succeeds on retry.
+        let failPage: Int?
+    }
 
     static let flag = "-DowntifyHarness"
 
@@ -66,7 +82,15 @@ struct DebugHarnessConfiguration: Equatable {
         let faults = parseFaults(arguments)
         let wantsStaging = value(after: "-DowntifyHarnessMode", in: arguments) == "staging"
         guard wantsStaging else {
-            return DebugHarnessConfiguration(mode: .fixture, staging: nil, faults: faults, configurationError: nil)
+            var fixture = DebugHarnessConfiguration(mode: .fixture, staging: nil, faults: faults, configurationError: nil)
+            if let raw = value(after: "-DowntifyFixtureTracks", in: arguments), let count = Int(raw), (2...12).contains(count) {
+                fixture.fixtureTrackCount = count
+            }
+            if let raw = value(after: "-DowntifyFixtureLyrics", in: arguments), let lyrics = FixtureLyrics(rawValue: raw) {
+                fixture.fixtureLyrics = lyrics
+            }
+            fixture.fixtureSimilar = value(after: "-DowntifyFixtureSimilar", in: arguments).flatMap(parseFixtureSimilar)
+            return fixture
         }
         do {
             let target = try stagingTarget(environment: environment)
@@ -76,6 +100,16 @@ struct DebugHarnessConfiguration: Equatable {
         } catch {
             return DebugHarnessConfiguration(mode: .staging, staging: nil, faults: faults, configurationError: .missingStagingServer)
         }
+    }
+
+    static func parseFixtureSimilar(_ raw: String) -> FixtureSimilar? {
+        let parts = raw.split(separator: ",").map(String.init)
+        guard let first = parts.first, let pages = Int(first), (1...DebugFixtureTransport.similarMaxPages).contains(pages) else { return nil }
+        var failPage: Int?
+        for part in parts.dropFirst() where part.hasPrefix("failpage=") {
+            failPage = Int(part.dropFirst("failpage=".count)).flatMap { (1...pages).contains($0) ? $0 : nil }
+        }
+        return FixtureSimilar(pages: pages, failPage: failPage)
     }
 
     static func parseFaults(_ arguments: [String]) -> [DebugRoute: DebugFaultKind] {
@@ -261,7 +295,8 @@ struct DebugHarness {
 
     func makeTransport() -> any HTTPDataLoading {
         switch configuration.mode {
-        case .fixture: return DebugFixtureTransport(faults: configuration.faults)
+        case .fixture: return DebugFixtureTransport(faults: configuration.faults, trackCount: configuration.fixtureTrackCount,
+                                                    lyrics: configuration.fixtureLyrics, similar: configuration.fixtureSimilar)
         case .staging: return DebugGuardedTransport(configuration: configuration)
         }
     }

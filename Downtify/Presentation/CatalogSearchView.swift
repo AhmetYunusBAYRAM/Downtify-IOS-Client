@@ -18,6 +18,7 @@ struct CatalogSearchView: View {
 
     @State private var category: SearchCategory = .songs
     @State private var query = ""
+    @State private var queueMessage: LocalizedStringKey?
     @State private var link = ""
     @State private var pendingAlbumAdd: PendingAlbumAdd?
     @FocusState private var searchFocused: Bool
@@ -138,9 +139,11 @@ struct CatalogSearchView: View {
     @ViewBuilder private var localResults: some View {
         if category == .songs && !localSongs.isEmpty {
             sectionHeader("In your library")
+            queueFeedback
             ForEach(localSongs) { track in
                 NowPlayingReader { nowPlaying in
                     let isCurrent = nowPlaying.isCurrent(track)
+                    HStack(spacing: 0) {
                     Button { playback.replaceQueue(localSongs, startingAt: localSongs.firstIndex(of: track) ?? 0) } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
@@ -155,6 +158,8 @@ struct CatalogSearchView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Play \(track.title)")
                     .downtifyCurrentRowAccessibility(isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
+                    queueMenu(for: .library(track), title: track.title, idKey: track.id)
+                    }
                     .padding(.vertical, 4)
                 }
             }
@@ -369,6 +374,7 @@ struct CatalogSearchView: View {
     @ViewBuilder private func songResults(_ songs: [CatalogSong], queueAlbum: Bool = false) -> some View {
         if !songs.isEmpty {
             sectionHeader("Catalog songs")
+            queueFeedback
             ForEach(songs) { song in
                 NowPlayingReader { nowPlaying in
                     let isCurrent = nowPlaying.isCurrent(song)
@@ -406,6 +412,9 @@ struct CatalogSearchView: View {
                             serverDownloadButton(for: song)
                         }
                         deviceButton(for: song)
+                        if let item = queueItem(for: song) {
+                            queueMenu(for: item, title: song.title, idKey: song.id.description)
+                        }
                     }
                     .padding(.vertical, 4)
                 }
@@ -484,6 +493,39 @@ struct CatalogSearchView: View {
     private var artistArtworkPlaceholder: some View {
         Image(systemName: "person.crop.circle").font(.title3).foregroundStyle(.secondary)
             .frame(width: 48, height: 48).background(palette.background)
+    }
+
+    @ViewBuilder private var queueFeedback: some View {
+        if let queueMessage { Text(queueMessage).font(.subheadline).foregroundStyle(.secondary) }
+    }
+
+    /// Library-sourced catalog results that no longer resolve to a library track cannot be queued.
+    private func queueItem(for song: CatalogSong) -> PlaybackItem? {
+        if song.source == "library" {
+            return song.libraryTrack(in: library.tracks).map(PlaybackItem.library)
+        }
+        return PlaybackItem.resolving(song, in: library.tracks)
+    }
+
+    private func queueMenu(for item: PlaybackItem, title: String, idKey: String) -> some View {
+        Menu {
+            Button("Play next", systemImage: "text.insert") {
+                playback.playNext([item])
+                queueMessage = "Added to play next"
+                AccessibilityNotification.Announcement(String(localized: "Added to play next")).post()
+            }
+            .accessibilityIdentifier("catalog.menu.playNext.\(idKey)")
+            Button("Add to queue", systemImage: "text.append") {
+                playback.append([item])
+                queueMessage = "Added to queue"
+                AccessibilityNotification.Announcement(String(localized: "Added to queue")).post()
+            }
+            .accessibilityIdentifier("catalog.menu.addToQueue.\(idKey)")
+        } label: {
+            Image(systemName: "ellipsis").frame(width: 44, height: 44)
+        }
+        .accessibilityLabel("More options for \(title)")
+        .accessibilityIdentifier("catalog.menu.\(idKey)")
     }
 
     @ViewBuilder private func deviceButton(for song: CatalogSong) -> some View {

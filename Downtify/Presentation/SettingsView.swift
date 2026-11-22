@@ -150,6 +150,7 @@ struct AboutView: View {
             }
         }
         .navigationTitle("About")
+        .downtifyScrollEndClearance()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if showsDoneButton {

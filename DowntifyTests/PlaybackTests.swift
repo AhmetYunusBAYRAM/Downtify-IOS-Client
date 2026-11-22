@@ -1217,6 +1217,29 @@ final class PlaybackTests: XCTestCase {
         XCTAssertNil(indicator.currentID)
     }
 
+    @MainActor
+    func testPlayNextAndMoveUpcomingKeepCurrentEntryAndPersist() {
+        let fixture = PlaybackFixture()
+        let tracks = ["a", "b", "c"].map { track($0) }
+        fixture.controller.replaceQueue(tracks, autoplay: false)
+        let currentID = fixture.controller.queue.currentID
+        fixture.controller.playNext([track("n")])
+        XCTAssertEqual(fixture.controller.queue.order.map { $0.item.libraryTrack?.id }, ["a", "n", "b", "c"])
+        XCTAssertEqual(fixture.controller.queue.currentID, currentID)
+        let last = fixture.controller.queue.order[3].id
+        fixture.controller.moveUpcoming(last, toUpcomingOffset: 0)
+        XCTAssertEqual(fixture.controller.queue.order.map { $0.item.libraryTrack?.id }, ["a", "c", "n", "b"])
+        XCTAssertEqual(fixture.controller.queue.currentID, currentID)
+    }
+
+    @MainActor
+    func testPlayNextOnEmptyQueueSelectsWithoutAutoplay() {
+        let fixture = PlaybackFixture()
+        fixture.controller.playNext([track("solo")])
+        XCTAssertEqual(fixture.controller.queue.current?.item.libraryTrack?.id, "solo")
+        XCTAssertNotEqual(fixture.controller.phase, .playing)
+    }
+
     private func track(_ id: String) -> LibraryTrack {
         LibraryTrack(id: id, file: "\(id).mp3", title: id, artist: "Artist", artists: ["Artist"], album: "Album",
                      albumArtist: "Artist", albumID: "album", artistID: "artist", trackNumber: 1, year: "2026",

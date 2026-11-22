@@ -96,6 +96,32 @@ struct TrackRow: View {
     }
 }
 
+extension View {
+    /// Shows the playback dock below this tab and publishes its height to the tab's scroll views
+    /// (`playbackDockHeight`) so their final rows can scroll clear of it.
+    func playbackDock(playback: PlaybackController, library: LibraryPresentationModel,
+                      serverDownloads: ServerDownloadPresentationModel) -> some View {
+        modifier(PlaybackDockInset(playback: playback, library: library, serverDownloads: serverDownloads))
+    }
+}
+
+private struct PlaybackDockInset: ViewModifier {
+    let playback: PlaybackController
+    let library: LibraryPresentationModel
+    let serverDownloads: ServerDownloadPresentationModel
+    /// Per tab, so a hidden tab's dock appearing or disappearing cannot change the visible tab's clearance.
+    @State private var dockHeight: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.playbackDockHeight, dockHeight)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                PlaybackDock(playback: playback, library: library, serverDownloads: serverDownloads,
+                             height: $dockHeight)
+            }
+    }
+}
+
 /// Lives at the navigation boundary so playback updates do not invalidate library rows.
 struct PlaybackDock: View {
     @ObservedObject var playback: PlaybackController
@@ -103,6 +129,8 @@ struct PlaybackDock: View {
     /// actions; not observed here.
     let library: LibraryPresentationModel
     let serverDownloads: ServerDownloadPresentationModel
+    /// Measured height of the visible dock; 0 while it is hidden.
+    @Binding var height: CGFloat
     @Environment(\.downtifyPalette) private var palette
     @State private var showingNowPlaying = false
 
@@ -115,6 +143,14 @@ struct PlaybackDock: View {
                     .padding(.vertical, DowntifyStyle.Space.small)
                     .frame(maxWidth: .infinity)
                     .background(palette.background)
+                    .background {
+                        GeometryReader { proxy in
+                            Color.clear
+                                .onAppear { height = proxy.size.height }
+                                .onChange(of: proxy.size.height) { _, newHeight in height = newHeight }
+                        }
+                    }
+                    .onDisappear { height = 0 }
                     .accessibilityIdentifier("player.dock")
             }
         }
@@ -233,6 +269,8 @@ private struct NowPlayingView: View {
     @State private var lyricsLoading = false
     @State private var lyricsError = false
     @State private var lyricOffset: Double = 0
+    @State private var lyricsMode: LyricsDisplayMode = .synced
+    @State private var lyricsTrackID: String?
     @Environment(\.lyricDefaults) private var lyricDefaults
 
     private var item: PlaybackItem? { playback.queue.current?.item }
@@ -692,46 +730,76 @@ private struct NowPlayingView: View {
     }
 
     private var lyricsSection: some View {
-        VStack(alignment: .leading, spacing: DowntifyStyle.Space.small) {
+        let mode = LyricsPresentation.effectiveMode(lyrics, requested: lyricsMode)
+        return VStack(alignment: .leading, spacing: DowntifyStyle.Space.small) {
             HStack {
                 Label("Lyrics", systemImage: "quote.bubble")
                     .font(.headline)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
-                if lyrics?.lines.isEmpty == false {
+                if mode == .synced {
                     HStack(spacing: 4) {
-                        Button { setLyricOffset(lyricOffset - 0.5) } label: {
+                        Button { setLyricOffset(lyricOffset - LyricsPresentation.offsetStep) } label: {
                             Image(systemName: "minus").downtifyControlTarget()
                         }.accessibilityLabel("Lyrics earlier by half a second")
                         Text("\(lyricOffset, format: .number.precision(.fractionLength(1)))s")
                             .font(.caption.monospacedDigit())
+                            .accessibilityIdentifier("lyrics.offsetValue")
                             .accessibilityLabel("Lyrics offset \(lyricOffset, format: .number.precision(.fractionLength(1))) seconds")
-                        Button { setLyricOffset(lyricOffset + 0.5) } label: {
+                        Button { setLyricOffset(lyricOffset + LyricsPresentation.offsetStep) } label: {
                             Image(systemName: "plus").downtifyControlTarget()
                         }.accessibilityLabel("Lyrics later by half a second")
+                        Button { resetLyricOffset() } label: {
+                            Image(systemName: "arrow.counterclockwise").downtifyControlTarget()
+                        }
+                        .disabled(lyricOffset == 0)
+                        .accessibilityIdentifier("lyrics.resetOffset")
+                        .accessibilityLabel("Reset lyrics timing")
                     }
                     .buttonStyle(.borderless)
                 }
             }
             if lyricsLoading {
                 ProgressView("Loading lyrics…")
-            } else if let lyrics, !lyrics.lines.isEmpty {
-                let active = activeLyricIndex(lyrics.lines)
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(lyrics.lines.enumerated()), id: \.offset) { index, line in
-                        Text(line.text.isEmpty ? "♪" : line.text)
-                            .font(index == active ? .title3.weight(.bold) : .body)
-                            .foregroundStyle(index == active ? DowntifyStyle.accent : DowntifyStyle.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityAddTraits(index == active ? .isSelected : [])
+            } else if let lyrics, let mode {
+                if LyricsPresentation.offersModeChoice(lyrics) {
+                    Picker("Lyrics display", selection: $lyricsMode) {
+                        Text("Synced").tag(LyricsDisplayMode.synced)
+                        Text("Static").tag(LyricsDisplayMode.static)
                     }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("lyrics.modePicker")
+                    .accessibilityLabel("Lyrics display")
                 }
-                .accessibilityElement(children: .contain)
-            } else if let lyrics, !lyrics.plain.isEmpty {
-                Text(lyrics.plain)
-                    .font(.body)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel("Plain lyrics")
+                if mode == .synced {
+                    let lines = lyrics.lines
+                    let active = LyricsPresentation.activeIndex(lines, position: playback.position, offset: lyricOffset)
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                            Button { seekToLyric(line) } label: {
+                                Text(line.text.isEmpty ? "♪" : line.text)
+                                    .font(index == active ? .title3.weight(.bold) : .body)
+                                    .foregroundStyle(index == active ? DowntifyStyle.accent : DowntifyStyle.secondaryText)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("lyrics.line.\(index)")
+                            .accessibilityLabel("Seek to \(spokenLine(line)) at \(LyricsPresentation.accessibilityTime(line.time))")
+                            .accessibilityHint("Jumps playback to this line")
+                            .accessibilityAddTraits(index == active ? .isSelected : [])
+                        }
+                    }
+                    .accessibilityElement(children: .contain)
+                } else {
+                    Text(lyrics.plain)
+                        .font(.body)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("lyrics.plain")
+                        .accessibilityLabel("Plain lyrics")
+                }
             } else {
                 Text(lyricsError ? String(localized: "Lyrics could not be loaded.") : String(localized: "Lyrics are unavailable for this track."))
                     .font(.subheadline)
@@ -747,22 +815,42 @@ private struct NowPlayingView: View {
     }
 
     private func loadLyrics() async {
-        guard let track else { lyrics = nil; return }
+        guard let track else { lyrics = nil; lyricsTrackID = nil; return }
         lyricsLoading = true
         lyricsError = false
-        lyricOffset = lyricDefaults.double(forKey: playback.lyricsOffsetKey(trackID: track.id))
-        defer { lyricsLoading = false }
-        do { lyrics = try await playback.lyrics(for: track.id) }
-        catch { if !Task.isCancelled { lyricsError = true; lyrics = nil } }
+        lyrics = nil
+        lyricsTrackID = nil
+        lyricsMode = .synced
+        lyricOffset = LyricsPresentation.savedOffset(in: lyricDefaults, key: playback.lyricsOffsetKey(trackID: track.id))
+        defer { if !Task.isCancelled { lyricsLoading = false } }
+        do {
+            let loaded = try await playback.lyrics(for: track.id)
+            guard !Task.isCancelled else { return }
+            lyrics = loaded
+            lyricsTrackID = track.id
+        } catch {
+            if !Task.isCancelled { lyricsError = true; lyrics = nil }
+        }
     }
 
     private func setLyricOffset(_ value: Double) {
-        lyricOffset = min(10, max(-10, value))
+        lyricOffset = LyricsPresentation.clampedOffset(value)
         if let track { lyricDefaults.set(lyricOffset, forKey: playback.lyricsOffsetKey(trackID: track.id)) }
     }
 
-    private func activeLyricIndex(_ lines: [LyricLine]) -> Int? {
-        lines.lastIndex { $0.time <= playback.position - lyricOffset }
+    private func spokenLine(_ line: LyricLine) -> String {
+        line.text.isEmpty ? String(localized: "instrumental break") : line.text
+    }
+
+    private func resetLyricOffset() {
+        lyricOffset = 0
+        if let track { LyricsPresentation.resetOffset(in: lyricDefaults, key: playback.lyricsOffsetKey(trackID: track.id)) }
+    }
+
+    /// Seeks so the tapped line becomes the active line. Ignored if the lines belong to a previous track.
+    private func seekToLyric(_ line: LyricLine) {
+        guard let track, lyricsTrackID == track.id else { return }
+        playback.seek(to: LyricsPresentation.seekTarget(for: line, offset: lyricOffset, duration: playback.duration))
     }
 
     @ViewBuilder
@@ -843,6 +931,11 @@ private struct PlaybackQueueSheet: View {
     @ObservedObject var playback: PlaybackController
     @Environment(\.dismiss) private var dismiss
     @Environment(\.downtifyPalette) private var palette
+    @State private var draggingID: UUID?
+    @State private var dragY: CGFloat = 0
+    @State private var rowFrames: [UUID: CGRect] = [:]
+
+    private static let listSpace = "playbackQueueList"
 
     private var visibleEntries: [PlaybackQueueEntry] {
         guard let currentIndex = playback.queue.currentIndex else { return [] }
@@ -850,6 +943,17 @@ private struct PlaybackQueueSheet: View {
     }
 
     private var upcomingEntries: [PlaybackQueueEntry] { Array(visibleEntries.dropFirst()) }
+
+    /// Slot (0...count) the dragged entry would be inserted before; `count` means the end of the queue.
+    private var proposedSlot: Int? {
+        guard draggingID != nil else { return nil }
+        var slot = 0
+        for entry in upcomingEntries {
+            guard let frame = rowFrames[entry.id] else { continue }
+            if dragY > frame.midY { slot += 1 } else { break }
+        }
+        return slot
+    }
 
     var body: some View {
         NavigationStack {
@@ -862,47 +966,94 @@ private struct PlaybackQueueSheet: View {
                         QueueEntryRow(entry: current, isCurrent: true, playback: playback)
                             .listRowBackground(palette.surface)
                     }
-                    ForEach(upcomingEntries) { entry in
-                        QueueEntryRow(entry: entry, isCurrent: false, playback: playback)
+                    ForEach(Array(upcomingEntries.enumerated()), id: \.element.id) { offset, entry in
+                        QueueEntryRow(
+                            entry: entry, isCurrent: false, playback: playback,
+                            reorder: QueueReorder(
+                                position: offset, count: upcomingEntries.count, coordinateSpace: Self.listSpace,
+                                move: { target in
+                                    playback.moveUpcoming(entry.id, toUpcomingOffset: target)
+                                    AccessibilityNotification.Announcement(
+                                        String(localized: "Moved to position \(Int(target + 1)) of \(Int(upcomingEntries.count))")).post()
+                                },
+                                dragChanged: { y in draggingID = entry.id; dragY = y },
+                                dragEnded: { y in
+                                    dragY = y
+                                    commitDrag(of: entry.id)
+                                }))
+                            .opacity(draggingID == entry.id ? 0.45 : 1)
                             .listRowBackground(palette.surface)
+                            .background(GeometryReader { proxy in
+                                Color.clear.preference(key: QueueRowFramesKey.self,
+                                                       value: [entry.id: proxy.frame(in: .named(Self.listSpace))])
+                            })
+                            .overlay(alignment: .top) { if proposedSlot == offset { insertionLine } }
+                            .overlay(alignment: .bottom) {
+                                if offset == upcomingEntries.count - 1, proposedSlot == upcomingEntries.count { insertionLine }
+                            }
                     }
-                    .onMove(perform: moveEntries)
                 }
             }
+            .coordinateSpace(name: Self.listSpace)
+            .onPreferenceChange(QueueRowFramesKey.self) { rowFrames = $0 }
+            .scrollDisabled(draggingID != nil)
             .scrollContentBackground(.hidden)
             .background(palette.background.ignoresSafeArea())
             .toolbarBackground(palette.background, for: .navigationBar)
             .navigationTitle("Play Queue")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { EditButton().disabled(visibleEntries.count < 2) }
                 ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
             }
+            .sensoryFeedback(.selection, trigger: proposedSlot)
         }
     }
 
-    private func moveEntries(from source: IndexSet, to destination: Int) {
-        let countBeforeDestination = source.filter { $0 < destination }.count
-        let finalDestination = max(0, min(upcomingEntries.count - source.count, destination - countBeforeDestination))
-        var reordered = upcomingEntries.map(\.id)
-        let moved = source.sorted().map { reordered[$0] }
-        for index in source.sorted(by: >) { reordered.remove(at: index) }
-        reordered.insert(contentsOf: moved, at: finalDestination)
-        guard let startIndex = playback.queue.currentIndex else { return }
-        // Resolve each target by UUID so duplicate tracks remain distinct.
-        for (offset, id) in reordered.enumerated() {
-            playback.move(id, to: startIndex + 1 + offset)
-        }
+    private var insertionLine: some View {
+        Capsule()
+            .fill(DowntifyStyle.accent)
+            .frame(height: 3)
+            .padding(.horizontal, 8)
+            .accessibilityHidden(true)
+            .accessibilityIdentifier("queue.insertionLine")
     }
+
+    /// Drops insert the dragged entry before the proposed slot (the end of the queue when the slot equals the count).
+    private func commitDrag(of id: UUID) {
+        defer { draggingID = nil }
+        guard let slot = proposedSlot, let from = upcomingEntries.firstIndex(where: { $0.id == id }) else { return }
+        let target = from < slot ? slot - 1 : slot
+        guard target != from else { return }
+        playback.moveUpcoming(id, toUpcomingOffset: target)
+    }
+}
+
+private struct QueueRowFramesKey: PreferenceKey {
+    static let defaultValue: [UUID: CGRect] = [:]
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
+/// Position of an upcoming queue entry, the action that moves it, and the drag callbacks for its handle.
+private struct QueueReorder {
+    let position: Int
+    let count: Int
+    let coordinateSpace: String
+    let move: (Int) -> Void
+    let dragChanged: (CGFloat) -> Void
+    let dragEnded: (CGFloat) -> Void
 }
 
 private struct QueueEntryRow: View {
     let entry: PlaybackQueueEntry
     let isCurrent: Bool
     @ObservedObject var playback: PlaybackController
+    var reorder: QueueReorder?
 
     var body: some View {
         HStack(spacing: DowntifyStyle.Space.small) {
+            if let reorder { handle(reorder) }
             Button { playback.select(entry.id) } label: {
                 DowntifyMediaRow(title: entry.item.displayTitle, subtitle: entry.item.displayArtist) {
                     PlaybackItemArtwork(item: entry.item, size: 44)
@@ -928,6 +1079,35 @@ private struct QueueEntryRow: View {
             .accessibilityLabel("Remove \(entry.item.displayTitle) from queue")
         }
         .padding(.vertical, 3)
+    }
+
+    /// Leading drag handle: touch and hold, then drag. VoiceOver gets Move up / Move down instead.
+    private func handle(_ reorder: QueueReorder) -> some View {
+        Image(systemName: "line.3.horizontal")
+            .foregroundStyle(DowntifyStyle.secondaryText)
+            .downtifyControlTarget()
+            .contentShape(Rectangle())
+            .gesture(
+                LongPressGesture(minimumDuration: 0.3)
+                    .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(reorder.coordinateSpace)))
+                    .onChanged { value in
+                        if case .second(true, let drag?) = value { reorder.dragChanged(drag.location.y) }
+                    }
+                    .onEnded { value in
+                        if case .second(true, let drag?) = value { reorder.dragEnded(drag.location.y) }
+                    }
+            )
+            .accessibilityElement()
+            .accessibilityLabel(Text("Reorder \(entry.item.displayTitle)"))
+            .accessibilityValue(Text("Position \(Int(reorder.position + 1)) of \(Int(reorder.count))"))
+            .accessibilityHint(Text("Touch and hold, then drag to move this song in the queue"))
+            .accessibilityIdentifier("queue.handle.\(reorder.position)")
+            .accessibilityAction(named: Text("Move up")) {
+                if reorder.position > 0 { reorder.move(reorder.position - 1) }
+            }
+            .accessibilityAction(named: Text("Move down")) {
+                if reorder.position < reorder.count - 1 { reorder.move(reorder.position + 1) }
+            }
     }
 }
 

@@ -53,35 +53,35 @@ struct LibraryHomeView: View {
             NavigationStack {
                 browsePage(title: "Home") { homeContent }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback, library: library, serverDownloads: serverDownloads) }
+            .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
             .tabItem { Label("Home", systemImage: "house") }.tag(Tab.home)
 
             NavigationStack {
                 browsePage(title: "Library") { libraryContent }
                     .searchable(text: $searchText, prompt: "Filter your library")
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback, library: library, serverDownloads: serverDownloads) }
+            .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
             .tabItem { Label("Library", systemImage: "books.vertical").accessibilityIdentifier("tab.library") }.tag(Tab.library)
 
             NavigationStack {
                 browsePage(title: "Search") { searchContent }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback, library: library, serverDownloads: serverDownloads) }
+            .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
             .tabItem { Label("Search", systemImage: "magnifyingglass").accessibilityIdentifier("tab.search") }.tag(Tab.search)
 
             NavigationStack {
                 browsePage(title: "Discover") { discoveryContent }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback, library: library, serverDownloads: serverDownloads) }
-            .tabItem { Label("Discover", systemImage: "sparkles") }.tag(Tab.discover)
+            .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
+            .tabItem { Label("Discover", systemImage: "sparkles").accessibilityIdentifier("tab.discover") }.tag(Tab.discover)
 
             DownloadsView(connection: connection, queue: serverDownloadQueue, serverDownloads: serverDownloads,
                           playback: playback, membership: library.membership)
-                .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback, library: library, serverDownloads: serverDownloads) }
+                .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
                 .tabItem { Label("Downloads", systemImage: "arrow.down.circle") }.tag(Tab.downloads)
 
             PodcastsView(connection: connection, playback: playback)
-                .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback, library: library, serverDownloads: serverDownloads) }
+                .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
                 .tabItem { Label("Podcasts", systemImage: "mic") }.tag(Tab.podcasts)
 
             if server.role?.lowercased() == "admin" {
@@ -89,7 +89,7 @@ struct LibraryHomeView: View {
                     AdminTrashView(connection: connection, role: server.role,
                                    pairingID: "\(server.serverID):\(server.deviceID):\(server.username ?? ""):\(server.role ?? "")")
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback, library: library, serverDownloads: serverDownloads) }
+                .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
                 .tabItem { Label("Trash", systemImage: "trash") }.tag(Tab.adminTrash)
             }
 
@@ -125,8 +125,9 @@ struct LibraryHomeView: View {
                     }
                 }
                 .navigationTitle("More")
+                .downtifyScrollEndClearance()
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { PlaybackDock(playback: playback, library: library, serverDownloads: serverDownloads) }
+            .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
             .tabItem { Label("More", systemImage: "ellipsis").accessibilityIdentifier("tab.more") }.tag(Tab.more)
         }
         .onChange(of: networkOperationLimit) { _, value in
@@ -1079,6 +1080,7 @@ private struct ArtistCatalogAlbumsView: View {
             }
         }
         .navigationTitle(artist)
+        .downtifyScrollEndClearance()
         .task(id: catalog.session) {
             albums = []
             error = nil
@@ -1219,6 +1221,7 @@ private struct ArtistCatalogAlbumView: View {
             }
         }
         .navigationTitle(album.title)
+        .downtifyScrollEndClearance()
         .task(id: catalog.session) {
             songs = []
             error = nil
@@ -1530,6 +1533,12 @@ private struct LibraryTrackList: View {
         !EditablePlaylists.sorted(collections.playlists, supportsEditing: collections.supportsPlaylistEditing).isEmpty
     }
 
+    /// Shows inline feedback and announces it for VoiceOver.
+    private func announceQueueChange(_ message: LocalizedStringKey, _ spoken: String) {
+        downloadMessage = message
+        AccessibilityNotification.Announcement(spoken).post()
+    }
+
     var body: some View {
         let downloadByID = Dictionary(downloads.currentDownloads.map { ($0.track.id, $0) },
                                       uniquingKeysWith: { first, _ in first })
@@ -1566,7 +1575,16 @@ private struct LibraryTrackList: View {
                             .disabled(collections.mutationBusy)
                             if collections.hasPendingLike(track.id) { Text("Queued") }
                         }
-                        Button("Add to queue", systemImage: "text.append") { playback.append([track]) }
+                        Button("Play next", systemImage: "text.insert") {
+                            playback.playNext([track])
+                            announceQueueChange("Added to play next", String(localized: "Added to play next"))
+                        }
+                        .accessibilityIdentifier("library.menu.playNext.\(track.id)")
+                        Button("Add to queue", systemImage: "text.append") {
+                            playback.append([track])
+                            announceQueueChange("Added to queue", String(localized: "Added to queue"))
+                        }
+                        .accessibilityIdentifier("library.menu.addToQueue.\(track.id)")
                         if canAddToPlaylists {
                             Button("Add to Playlist", systemImage: "text.badge.plus") { playlistTrack = track }
                                 .disabled(collections.mutationBusy)
@@ -1588,6 +1606,7 @@ private struct LibraryTrackList: View {
                         .downtifyControlTarget()
                     }
                     .accessibilityLabel("Actions for \(track.displayTitle)")
+                    .accessibilityIdentifier("library.menu.\(track.id)")
                     .accessibilityValue(liked ? Text("Liked") : Text(""))
                 }
                 if index < tracks.count - 1 { Divider().padding(.leading, 80) }

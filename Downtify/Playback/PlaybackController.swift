@@ -277,9 +277,12 @@ final class PlaybackController: ObservableObject {
         leavePodcast(publish: true)
     }
 
+    /// Transport for lyrics requests. The app container replaces it so debug fixtures and staging guards apply.
+    var lyricsTransport: any HTTPDataLoading = ConnectionHTTPTransport()
+
     func lyrics(for trackID: String) async throws -> TrackLyrics? {
         guard let session else { return nil }
-        return try await TrackLyricsAPI().fetch(trackID: trackID, session: session)
+        return try await TrackLyricsAPI(transport: lyricsTransport).fetch(trackID: trackID, session: session)
     }
 
     func lyricsOffsetKey(trackID: String) -> String {
@@ -362,6 +365,26 @@ final class PlaybackController: ObservableObject {
         } else {
             didSelect(autoplay: false)
         }
+    }
+
+    func playNext(_ tracks: [LibraryTrack]) { playNext(tracks.map(PlaybackItem.library)) }
+
+    /// Inserts items right after the current entry without replacing or restarting the queue.
+    func playNext(_ items: [PlaybackItem]) {
+        guard !items.isEmpty else { return }
+        let hadCurrent = queue.current != nil
+        queue.insertNext(items)
+        if hadCurrent || podcast != nil {
+            didEditQueue()
+        } else {
+            didSelect(autoplay: false)
+        }
+    }
+
+    /// Reorders one upcoming queue entry. Playback position and the current entry are unchanged.
+    func moveUpcoming(_ id: UUID, toUpcomingOffset offset: Int) {
+        guard queue.moveUpcoming(id, toUpcomingOffset: offset) else { return }
+        didEditQueue()
     }
 
     func applyLibraryOnlyPolicy(_ enabled: Bool, tracks: [LibraryTrack]) {
