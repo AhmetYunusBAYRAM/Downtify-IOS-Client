@@ -2,11 +2,18 @@
 
 Historical record of Downtify iOS releases (version 0.1.2), newest first. Each build lists the user-facing notes shipped to TestFlight (from `release-notes/`), followed by the notable changes behind them. Issue numbers refer to the project issue tracker.
 
-Build 0.1.2-12 is still in progress. Builds 0.1.2-7 and earlier predate the curated release notes; their entries are reconstructed from git history.
+Builds 0.1.2-7 and earlier predate the curated release notes; their entries are reconstructed from git history.
 
-## 0.1.2 (12) — Unreleased (in progress on `release/0.1.2-12`)
+## 0.1.2 (12) — 2026-11-21
 
-Changes so far (no curated release notes yet):
+Release notes:
+- Add songs to the front of your queue with Play next, and drag upcoming songs to reorder them
+- Tap a synced lyric line in Now Playing to jump to it, and switch between synced and plain lyrics
+- Similar keeps loading more songs as you scroll
+- Rows near the bottom of screens no longer hide behind the player
+- More of the app is translated in every supported language
+
+Changes:
 - Add Play next to Library and catalog song menus, inserting songs at the front of the upcoming queue (#67)
 - Reorder upcoming queue songs with left-side drag handles and an insertion indicator; VoiceOver gets Move up / Move down actions (#68)
 - Localize Play next and queue reorder strings in all locales (#67, #68)
