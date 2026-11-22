@@ -624,3 +624,12 @@
 "Showing saved collection. Refresh failed." = "Mostrando a coleção salva. Falha ao atualizar.";
 "Collection unavailable." = "Coleção indisponível.";
 "Play episode" = "Reproduzir episódio";
+"Play next" = "Tocar a seguir";
+"Added to play next" = "Adicionada para tocar a seguir";
+"Added to queue" = "Adicionada à fila";
+"Move up" = "Mover para cima";
+"Move down" = "Mover para baixo";
+"Reorder %@" = "Reordenar %@";
+"Position %lld of %lld" = "Posição %lld de %lld";
+"Touch and hold, then drag to move this song in the queue" = "Mantenha pressionado e arraste para mover esta música na fila";
+"Moved to position %lld of %lld" = "Movida para a posição %lld de %lld";
