@@ -217,7 +217,7 @@ final class DebugHarnessUITests: XCTestCase {
         XCTAssertEqual(lastHandle.label, "Reorder Fixture One")
         // Drop on the top edge of the first upcoming row, which proposes the slot above it.
         let dropPoint = firstRow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
-        lastHandle.press(forDuration: 1.0, thenDragTo: dropPoint)
+        lastHandle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 1.0, thenDragTo: dropPoint)
 
         let reordered = DowntifyUITestSupport.waitForState(app, timeout: 10) {
             $0.queueTrackIDs == ["fixture-track-4", "fixture-track-1", "fixture-track-3", "fixture-track-2"]

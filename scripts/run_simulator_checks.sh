@@ -73,7 +73,9 @@ run catalog-player-unit -only-testing:DowntifyTests/CatalogPlaybackIntegrationTe
 run fixture-ui -only-testing:DowntifyUITests/DebugHarnessUITests/testFixtureLibraryPlaybackEndToEnd \
   -only-testing:DowntifyUITests/DebugHarnessUITests/testInjectedStreamFaultReportsFailure \
   -only-testing:DowntifyUITests/DebugHarnessUITests/testCurrentSongHighlightFollowsQueue \
-  -only-testing:DowntifyUITests/DebugHarnessUITests/testNowPlayingActionsAreDiscoverable || status=1
+  -only-testing:DowntifyUITests/DebugHarnessUITests/testNowPlayingActionsAreDiscoverable \
+  -only-testing:DowntifyUITests/DebugHarnessUITests/testPlayNextAndAddToQueueFromLibrarySongMenu \
+  -only-testing:DowntifyUITests/DebugHarnessUITests/testQueueHandleDragReordersUpcomingSongs || status=1
 if [[ "$MODE" == "staging" ]]; then
   run staging-ui -only-testing:DowntifyUITests/DebugHarnessUITests/testRealStagingLibraryLoadsReadOnly || status=1
 fi
