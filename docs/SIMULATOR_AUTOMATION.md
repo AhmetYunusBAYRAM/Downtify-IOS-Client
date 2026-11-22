@@ -38,9 +38,6 @@ Fixture credentials are test values inside the harness. Sign-in is automatic in 
 - `-DowntifyHarness`: activates the harness. Without it the app behaves exactly as Release.
 - `-DowntifyHarnessMode fixture|staging`: default `fixture`.
 - `-DowntifyFault <route>=<kind>`: repeatable. See the fault catalogue.
-- `-DowntifyFixtureTracks <n>`: fixture mode only. Generates `n` library tracks (2 to 12, default 2) named `fixture-track-1...n`, "Fixture One", "Fixture Two", and so on. The Songs list shows newest first, so the highest number is listed first.
-- `-DowntifyFixtureLyrics none|synced|plain|both|error`: fixture mode only. Default `none` keeps the lyrics capability off. The other values turn it on and serve four placeholder lines (2 s, 8 s, 14 s, 20 s) as synced and/or plain text; `error` makes the lyrics route fail with a 500.
-- `-DowntifyFixtureSimilar <pages>[,failpage=<n>]`: fixture mode only (pages 1 to 3). Turns on the discover capability and serves `/api/similar/tracks` with 20 real song titles per page. Each page's last song, used as the next seed, returns the following page. Past the last page only duplicates come back. `failpage` makes that page fail once with a 500, then succeed on retry.
 
 ### Environment (test runner)
 
@@ -77,11 +74,11 @@ PASSWORD=<test password>
 
 A hidden accessibility element with identifier `debug.state`. Its value is redacted JSON with these keys only:
 
-`playbackPhase`, `queueCount`, `currentTrackID`, `position`, `network`, `libraryTrackCount`, `lastErrorCode`, `artworkLoaded`, `playerVisible`, `sessionActive`, `queueTrackIDs` (library track ids in play order; catalog items appear as `catalog`).
+`playbackPhase`, `queueCount`, `currentTrackID`, `position`, `network`, `libraryTrackCount`, `lastErrorCode`, `artworkLoaded`, `playerVisible`, `sessionActive`.
 
 It never contains tokens, usernames, server addresses, or track titles. Keys are always present (null when absent). UI tests decode it through `DowntifyUITestSupport.waitForState(_:timeout:where:)`.
 
-Stable accessibility identifiers used by the tests: `tab.library`, `tab.search`, `tab.more`, `library.trackRow.<id>`, `catalog.searchField`, `catalog.result.<id>`, `tab.discover`, `lyrics.line.<index>`, `lyrics.modePicker`, `lyrics.plain`, `lyrics.resetOffset`, `lyrics.offsetValue`, `similar.row.<songID>`, `similar.loadingMore`, `similar.retry`, `similar.end`, `player.dock`, `player.full`, `player.playPause`, `player.artwork`, `connect.serverField`, `connect.signInButton`.
+Stable accessibility identifiers used by the tests: `tab.library`, `tab.search`, `tab.more`, `library.trackRow.<id>`, `catalog.searchField`, `catalog.result.<id>`, `player.dock`, `player.full`, `player.playPause`, `player.artwork`, `connect.serverField`, `connect.signInButton`.
 
 ## Fault catalogue
 
@@ -132,8 +129,8 @@ Status: **not verified in this change.** The command comes from that repository'
 
 ## Manual GitHub Actions experiment
 
-The manual checks run the unit suite and fixture smoke tests on an iPhone simulator with Xcode 26.2. The separate compatibility workflow runs the full suite on iPhone / iOS 18.5 with Xcode 16.4 and iPad / iOS 26.2 with Xcode 26.2. Both use standard macOS runners and select an available simulator of the requested family and runtime. No server credentials are needed. Failed results are scanned before upload and retained for seven days; compressed attachments are not covered by the scan.
+The manual checks run the unit suite and fixture smoke tests on an iPhone simulator with Xcode 26.2. The separate compatibility workflow runs the full suite on iPhone / iOS 18.5 and iPad / iOS 26.2, both with Xcode 26.2. Both use standard macOS runners and select an available simulator of the requested family and runtime. No server credentials are needed. Failed results are scanned before upload and retained for seven days; compressed attachments are not covered by the scan.
 
 These workflows have no automatic triggers. Their jobs only run when both the original actor and the person initiating a rerun are `michaelmoskie`, and the selected ref is `release/0.1.2-12`. This is a workflow-level safeguard: people with write access can still dispatch a run, modify workflows on branches they control, or alter this guard. Restrict repository write access for stronger control.
 
-GitHub requires a workflow file on the default branch before it can be manually dispatched, even when running a different branch. While these files exist only on the release branch, they cannot yet be dispatched through GitHub Actions. The pinned runner images and runtimes may also need updates over time.
+GitHub requires a workflow file on the default branch before it can be manually dispatched, even when running a different branch. Once these files are on the default branch, manually dispatch them using the release branch as the selected ref. The pinned runner images and runtimes may also need updates over time.
