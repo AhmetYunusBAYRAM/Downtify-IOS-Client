@@ -133,4 +133,4 @@ The manual checks run the unit suite and fixture smoke tests on an iPhone simula
 
 These workflows have no automatic triggers. Their jobs only run when both the original actor and the person initiating a rerun are `michaelmoskie`, and the selected ref is `release/0.1.2-12`. This is a workflow-level safeguard: people with write access can still dispatch a run, modify workflows on branches they control, or alter this guard. Restrict repository write access for stronger control.
 
-GitHub requires a workflow file on the default branch before it can be manually dispatched, even when running a different branch. While these files exist only on the release branch, they cannot yet be dispatched through GitHub Actions. The pinned runner images and runtimes may also need updates over time.
+GitHub requires a workflow file on the default branch before it can be manually dispatched, even when running a different branch. Once these files are on the default branch, manually dispatch them using the release branch as the selected ref. The pinned runner images and runtimes may also need updates over time.
