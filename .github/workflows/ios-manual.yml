@@ -52,17 +52,18 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
       DOWNTIFY_SIM_MODE: fixture
-      DOWNTIFY_SIM_ARTIFACTS: ${{ runner.temp }}/smoke-results
     steps:
       - uses: actions/checkout@v4
       - name: Select iPhone simulator
         run: python3 scripts/ci_simulator_destination.py iPhone 26.2
       - name: Run fixture checks
+        env:
+          DOWNTIFY_SIM_ARTIFACTS: ${{ runner.temp }}/smoke-results
         run: scripts/run_simulator_checks.sh
       - name: Scan results before upload
         if: failure()
         id: scan
-        run: scripts/check_no_secrets_in_artifacts.sh "$DOWNTIFY_SIM_ARTIFACTS"
+        run: scripts/check_no_secrets_in_artifacts.sh "$RUNNER_TEMP/smoke-results"
       - name: Upload failed test results
         if: failure() && steps.scan.outcome == 'success'
         uses: actions/upload-artifact@v4
