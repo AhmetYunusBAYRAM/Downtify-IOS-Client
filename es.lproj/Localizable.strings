@@ -633,6 +633,15 @@
 "Position %lld of %lld" = "Posición %lld de %lld";
 "Touch and hold, then drag to move this song in the queue" = "Mantén pulsado y arrastra para mover esta canción en la cola";
 "Moved to position %lld of %lld" = "Movida a la posición %lld de %lld";
+"Translate" = "Traducir";
+"Show original" = "Mostrar original";
+"Translating lyrics…" = "Traduciendo letras…";
+"Translated from %@" = "Traducido desde: %@";
+"Lyrics could not be translated." = "No se pudieron traducir las letras.";
+"Translation is not available for these lyrics." = "La traducción no está disponible para esta letra.";
+"Shows the lyrics in your device language" = "Muestra la letra en el idioma de tu dispositivo";
+"Shows the lyrics in their original language" = "Muestra la letra en su idioma original";
+"Close debug overlay" = "Cerrar la superposición de depuración";
 "Synced" = "Sincronizada";
 "Static" = "Estática";
 "Lyrics display" = "Mostrar letras";
