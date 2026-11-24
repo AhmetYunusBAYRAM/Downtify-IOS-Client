@@ -1,6 +1,27 @@
-# Downtify iOS
+<p align="center"><img width="80" src="https://github.com/user-attachments/assets/628d4334-7326-446e-9f2a-4d3ab4fc95c3" alt="Downtify logo"></p>
+<h1 align="center">Downtify for iOS</h1>
+<p align="center">
+  <a href="#install-the-beta-with-testflight">Install</a> •
+  <a href="#features">Features</a> •
+  <a href="#downtify-server">Downtify Server</a> •
+  <a href="#build-and-test-on-a-mac">Build &amp; Test</a> •
+  <a href="#project-documents">Documentation</a>
+</p>
 
-Downtify is a SwiftUI iPhone and iPad app targeting iOS 17 and later. It includes server connection and library flows, local library sync, and a playback experience with a persistent mixed library/catalog queue, queue editing, shuffle/repeat, and background and lock-screen controls. Search covers the synced library and server catalog; Discover includes Finder, personalized suggestions, charts and similar tracks. Catalog results can be played and submitted to the server download queue. Device offline files and server-side download jobs are shown separately. Automated tests use synthetic fixtures; live server behavior still requires a reachable compatible server.
+<p align="center">Your self-hosted Downtify library on iPhone and iPad.<br>Browse, discover and listen wherever you go.</p>
+
+## Overview
+
+Downtify for iOS is a SwiftUI app for connecting to your own Downtify server. Browse and play your library, discover music in the server catalog and keep tracks on your device for offline listening. The app requires iOS or iPadOS 17 or later and a reachable compatible server for server-backed features.
+
+## Features
+
+| | |
+| --- | --- |
+| **Library** | Connect to your server, sync your library and browse your music on iPhone or iPad. |
+| **Playback** | Listen with a persistent library and catalog queue, queue editing, shuffle, repeat, and background and lock-screen controls. |
+| **Search and discover** | Search your synced library and the server catalog; explore Finder, personalized suggestions, charts and similar tracks. |
+| **Downloads** | Submit catalog tracks to the server download queue or save available tracks to your device for offline listening. Server jobs and device downloads are shown separately. |
 
 ## Screenshots
 
@@ -49,9 +70,13 @@ Run the test suite above for deterministic playback, persistence, network-contra
 
 Manual server-backed playback, catalog discovery, server download queue updates, persistence across an app relaunch, and lock-screen behavior require a reachable server and device/simulator interaction; automated fixture tests alone do not verify these end-to-end steps. See [the parity audit](docs/WEBUI_PARITY_AUDIT.md) and [execution handoff](docs/EXECUTION_HANDOFF.md) for current implementation and verification status.
 
-## Server instance
+## Downtify Server
 
-You can test the app with your own reachable Downtify server instance.
+[Downtify](https://github.com/henriquesebastiao/downtify) is the original self-hosted server project by [Henrique Sebastião](https://github.com/henriquesebastiao). It downloads and organizes music, provides a web interface and exposes the API used by this app. Set up your own server and connect the app to an address reachable from your device.
+
+Repository: **[henriquesebastiao/downtify](https://github.com/henriquesebastiao/downtify)**
+
+Getting started: **[Downtify installation guide](https://downtify.henriquesebastiao.com/getting-started/installation/)**
 
 ## License
 
