@@ -21,6 +21,7 @@ struct LibraryHomeView: View {
     @EnvironmentObject private var catalogPresentation: CatalogPresentationModel
     @EnvironmentObject private var offlineDownloads: OfflineDownloads
     @EnvironmentObject private var storageModel: StorageSettingsModel
+    @EnvironmentObject private var reachability: ServerReachabilityModel
     @Environment(\.openURL) private var openURL
     @Environment(\.downtifyPalette) private var palette
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -166,12 +167,13 @@ struct LibraryHomeView: View {
     private var drawerShell: some View {
         ZStack {
             TabView(selection: $tab) {
-                tabStack(path: $homePath) {
+                tabStack(path: $homePath, showsServerBanner: true) {
                     pageHeader(palette.redesign("home") ? greeting : "Home") {
                         headerIcon("arrow.down.circle", label: "Downloads", badge: activeDeviceDownloads) { open(.downloads) }
                         headerIcon("gearshape", label: "Settings") { open(.settings) }
                     }
-                    syncStatus
+                    // The yellow banner already says the server is down.
+                    if !reachability.isUnreachable { syncStatus }
                     if palette.redesign("home") { redesignHomeContent } else { homeContent }
                 }
                 .tabItem { Label("Home", systemImage: "house.fill").accessibilityIdentifier("tab.home") }
@@ -215,9 +217,11 @@ struct LibraryHomeView: View {
         }
     }
 
-    private func tabStack<Content: View>(path: Binding<NavigationPath>, @ViewBuilder content: () -> Content) -> some View {
+    private func tabStack<Content: View>(path: Binding<NavigationPath>, showsServerBanner: Bool = false,
+                                         @ViewBuilder content: () -> Content) -> some View {
         NavigationStack(path: path) {
             rootPage(content: content)
+                .serverConnectionBanner(isEnabled: showsServerBanner)
                 .navigationDestination(for: LibraryContext.self) { context in
                     LibraryContextView(context: context, library: library, playback: playback,
                                        serverDownloads: serverDownloads,
@@ -450,6 +454,7 @@ struct LibraryHomeView: View {
         TabView(selection: $tab) {
             NavigationStack {
                 browsePage(title: "Home") { homeContent }
+                    .serverConnectionBanner()
             }
             .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
             .tabItem { Label("Home", systemImage: "house") }.tag(Tab.home)

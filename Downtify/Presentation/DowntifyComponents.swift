@@ -521,3 +521,54 @@ struct DowntifyScrubber: View {
         }
     }
 }
+
+// MARK: Server connection banner
+
+/// Thin yellow strip shown while the server cannot be reached. Tapping it checks again.
+struct ServerConnectionBanner: View {
+    @EnvironmentObject private var reachability: ServerReachabilityModel
+
+    var body: some View {
+        Button { reachability.check() } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                Text("Server connection lost")
+            }
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(Color.black)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            // Stays below the status bar so the clock keeps its contrast.
+            .background(Color(red: 1.0, green: 0.8, blue: 0.0), ignoresSafeAreaEdges: [])
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(Text("Checks the connection again"))
+        .accessibilityIdentifier("home.serverOffline")
+    }
+}
+
+private struct ServerConnectionBannerModifier: ViewModifier {
+    let isEnabled: Bool
+    @EnvironmentObject private var reachability: ServerReachabilityModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var showsBanner: Bool { isEnabled && reachability.isUnreachable }
+
+    func body(content: Content) -> some View {
+        content
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if showsBanner {
+                    ServerConnectionBanner()
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: showsBanner)
+    }
+}
+
+extension View {
+    /// Pins `ServerConnectionBanner` above the content while the server is unreachable.
+    func serverConnectionBanner(isEnabled: Bool = true) -> some View {
+        modifier(ServerConnectionBannerModifier(isEnabled: isEnabled))
+    }
+}

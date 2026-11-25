@@ -1978,6 +1978,8 @@ final class ArtworkLoader: ObservableObject {
     private let transport: any HTTPDataLoading
     private let cache = NSCache<NSString, UIImage>()
     private var cachedSession: DeviceSession?
+    /// Covers saved with downloaded songs; checked before the server so they show offline.
+    weak var savedCovers: (any OfflineCoverProviding)?
 
     init(connection: ConnectionService, transport: any HTTPDataLoading = ConnectionHTTPTransport()) {
         self.connection = connection
@@ -2010,7 +2012,15 @@ final class ArtworkLoader: ObservableObject {
 
     func image(for track: LibraryTrack, size: Int) async -> UIImage? {
         guard track.hasCover, !track.id.isEmpty else { return nil }
-        return await image(key: "track:\(track.id):\(size)") { address in
+        let saved: () async -> UIImage? = { [weak self] in
+            guard let cover = self?.savedCovers?.savedCover(for: track.id) else { return nil }
+            let longest = max(cover.size.width, cover.size.height) * cover.scale
+            guard longest > CGFloat(size) else { return cover }
+            let scale = CGFloat(size) / longest
+            let target = CGSize(width: cover.size.width * cover.scale * scale, height: cover.size.height * cover.scale * scale)
+            return await cover.byPreparingThumbnail(ofSize: target) ?? cover
+        }
+        return await image(key: "track:\(track.id):\(size)", saved: saved) { address in
             let url = address.url(for: "/api/v1/tracks").appendingPathComponent(track.id).appendingPathComponent("cover")
             return (url, URLQueryItem(name: "size", value: String(size)))
         }
@@ -2029,7 +2039,8 @@ final class ArtworkLoader: ObservableObject {
         }
     }
 
-    private func image(key: String, route: (ServerAddress) -> (URL, URLQueryItem)) async -> UIImage? {
+    private func image(key: String, saved: (() async -> UIImage?)? = nil,
+                       route: (ServerAddress) -> (URL, URLQueryItem)) async -> UIImage? {
         do {
             guard let session = try await connection.restoreSession() else {
                 cache.removeAllObjects()
@@ -2041,6 +2052,11 @@ final class ArtworkLoader: ObservableObject {
                 cachedSession = session
             }
             if let image = cache.object(forKey: key as NSString) { return image }
+            if let image = await saved?() {
+                guard !Task.isCancelled, cachedSession == session else { return nil }
+                cache.setObject(image, forKey: key as NSString, cost: Int(image.size.width * image.scale * image.size.height * image.scale))
+                return image
+            }
             let address = try await LibraryAPIClient(transport: transport).verifiedAddress(for: session)
             let (url, query) = route(address)
             guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }

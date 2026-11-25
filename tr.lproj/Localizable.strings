@@ -750,3 +750,5 @@
 "Username" = "Kullanıcı adı";
 "Open navigation menu" = "Gezinme menüsünü aç";
 "Close navigation menu" = "Gezinme menüsünü kapat";
+"Server connection lost" = "Sunucu bağlantısı koptu";
+"Checks the connection again" = "Bağlantıyı yeniden dener";
