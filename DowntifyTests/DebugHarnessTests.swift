@@ -53,6 +53,29 @@ final class DebugHarnessTests: XCTestCase {
         XCTAssertThrowsError(try DowntifyTheme.decode(Data(repeating: 32, count: 16_385)))
     }
 
+    func testHomeSectionsAcceptOptionalCardsAndKeepOlderFilesComplete() throws {
+        func decode(_ sections: [String]) throws -> DowntifyTheme {
+            var theme = DowntifyTheme.example
+            theme.homeSections = sections
+            return try DowntifyTheme.decode(JSONEncoder().encode(theme))
+        }
+        // Listed optional sections are shown exactly as ordered; leaving one out hides it.
+        XCTAssertEqual(try decode(["artists", "recent", "new", "favorites"]).resolvedHomeSections,
+                       ["artists", "recent", "new", "favorites"])
+        XCTAssertEqual(try decode(["downloaded", "favorites", "new", "recent", "discover"]).resolvedHomeSections,
+                       ["downloaded", "favorites", "new", "recent", "discover"])
+        // A file from before the optional sections existed gets all three after its own.
+        XCTAssertEqual(try decode(["favorites", "recent", "new"]).resolvedHomeSections,
+                       ["favorites", "recent", "new", "discover", "artists", "downloaded"])
+        XCTAssertEqual(try DowntifyTheme.bundled("original").resolvedHomeSections,
+                       ["recent", "new", "favorites", "discover", "artists", "downloaded"])
+        XCTAssertEqual(try DowntifyTheme.bundled("redesign").resolvedHomeSections, DowntifyTheme.standardHomeSections)
+
+        XCTAssertThrowsError(try decode(["recent", "new", "discover"]), "a required section is missing")
+        XCTAssertThrowsError(try decode(["recent", "new", "favorites", "artists", "artists"]), "listed twice")
+        XCTAssertThrowsError(try decode(["recent", "new", "favorites", "podcasts"]), "unknown section")
+    }
+
     func testEqualizerThemeColorsAreOptionalPairsWithPaletteFallbacks() throws {
         func rgb(_ color: Color, _ style: UIUserInterfaceStyle) -> [Int] {
             let resolved = UIColor(color).resolvedColor(with: UITraitCollection(userInterfaceStyle: style))

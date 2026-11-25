@@ -29,6 +29,13 @@ enum PlaybackItem: Sendable, Equatable {
     }
 
     var title: String { libraryTrack?.title ?? catalogSong?.title ?? "" }
+
+    /// First credited artist, without featured names joined by ";", "," or "&"; used to seed similar songs.
+    var leadArtist: String {
+        let first = artists.first { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? artist
+        return first.components(separatedBy: CharacterSet(charactersIn: ";,&")).first?
+            .trimmingCharacters(in: .whitespaces) ?? first
+    }
     var artist: String { libraryTrack?.artist ?? catalogSong?.artist ?? "" }
     var artists: [String] { libraryTrack?.artists ?? catalogSong?.artists ?? [] }
     var album: String { libraryTrack?.album ?? catalogSong?.albumName ?? "" }
@@ -348,6 +355,21 @@ struct SavedPlaybackQueue: Codable, Equatable {
     let listen: PlaybackListenProgress?
 }
 
+enum PlaybackCrossfade {
+    static let maximum: TimeInterval = 12
+
+    /// Crossfade is skipped between consecutive tracks of one album, so live and concept albums stay
+    /// seamless, and when either song is too short to overlap without cutting into it.
+    static func applies(from current: PlaybackItem, to next: PlaybackItem, seconds: TimeInterval,
+                        currentDuration: TimeInterval) -> Bool {
+        guard seconds > 0, currentDuration > seconds * 2 + 5 else { return false }
+        if let nextDuration = next.duration, nextDuration > 0, nextDuration <= seconds * 2 + 5 { return false }
+        if let a = current.libraryTrack, let b = next.libraryTrack, !a.albumID.isEmpty, a.albumID == b.albumID,
+           a.trackNumber > 0, b.trackNumber == a.trackNumber + 1 { return false }
+        return true
+    }
+}
+
 @MainActor
 protocol PlaybackStateStoring {
     func load(for scope: LibraryScope) -> SavedPlaybackQueue?
@@ -362,6 +384,10 @@ protocol PlaybackStateStoring {
     func saveEqualizer(_ equalizer: PlaybackEqualizer)
     func loadNormalization() -> PlaybackNormalization
     func saveNormalization(_ normalization: PlaybackNormalization)
+    func loadAutoplay() -> Bool
+    func saveAutoplay(_ enabled: Bool)
+    func loadCrossfade() -> TimeInterval
+    func saveCrossfade(_ seconds: TimeInterval)
 }
 
 extension PlaybackStateStoring {
@@ -373,6 +399,10 @@ extension PlaybackStateStoring {
     func saveEqualizer(_ equalizer: PlaybackEqualizer) {}
     func loadNormalization() -> PlaybackNormalization { .off }
     func saveNormalization(_ normalization: PlaybackNormalization) {}
+    func loadAutoplay() -> Bool { false }
+    func saveAutoplay(_ enabled: Bool) {}
+    func loadCrossfade() -> TimeInterval { 0 }
+    func saveCrossfade(_ seconds: TimeInterval) {}
 }
 
 struct PlaybackStateStore: PlaybackStateStoring {
@@ -391,6 +421,14 @@ struct PlaybackStateStore: PlaybackStateStoring {
     func saveEqualizer(_ equalizer: PlaybackEqualizer) { save(equalizer, key: "playback.equalizer") }
     func loadNormalization() -> PlaybackNormalization { load("playback.normalization") ?? .off }
     func saveNormalization(_ normalization: PlaybackNormalization) { save(normalization, key: "playback.normalization") }
+    /// Autoplay is on unless the listener turned it off.
+    func loadAutoplay() -> Bool { defaults.object(forKey: "playback.autoplay") as? Bool ?? true }
+    func saveAutoplay(_ enabled: Bool) { defaults.set(enabled, forKey: "playback.autoplay") }
+    /// Seconds two songs overlap; 0 (the default) plays them back to back.
+    func loadCrossfade() -> TimeInterval {
+        min(max(defaults.double(forKey: "playback.crossfade"), 0), PlaybackCrossfade.maximum)
+    }
+    func saveCrossfade(_ seconds: TimeInterval) { defaults.set(seconds, forKey: "playback.crossfade") }
 
     func removeAllSavedQueues() {
         for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("playback.queue.") {
