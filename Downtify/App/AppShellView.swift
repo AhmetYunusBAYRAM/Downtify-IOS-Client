@@ -1,4 +1,5 @@
 import SwiftUI
+import Translation
 
 struct AppShellView: View {
     let name: String
@@ -271,6 +272,8 @@ private struct NowPlayingView: View {
     @State private var lyricOffset: Double = 0
     @State private var lyricsMode: LyricsDisplayMode = .synced
     @State private var lyricsTrackID: String?
+    @StateObject private var translation = LyricsTranslationModel()
+    @Environment(\.locale) private var locale
     @Environment(\.lyricDefaults) private var lyricDefaults
 
     private var item: PlaybackItem? { playback.queue.current?.item }
@@ -397,6 +400,7 @@ private struct NowPlayingView: View {
             withAnimation(reduceMotion ? nil : .easeOut) { confirmation = nil }
         }
         .task(id: track?.id) { await loadLyrics() }
+        .modifier(LyricsTranslationSupport(model: translation))
     }
 
     @ViewBuilder
@@ -759,6 +763,7 @@ private struct NowPlayingView: View {
                     .buttonStyle(.borderless)
                 }
             }
+            if !lyricsLoading { translationControls }
             if lyricsLoading {
                 ProgressView("Loading lyrics…")
             } else if let lyrics, let mode {
@@ -775,7 +780,7 @@ private struct NowPlayingView: View {
                     let lines = lyrics.lines
                     let active = LyricsPresentation.activeIndex(lines, position: playback.position, offset: lyricOffset)
                     VStack(alignment: .leading, spacing: 12) {
-                        ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                        ForEach(Array(displayedLines(for: lyrics).enumerated()), id: \.offset) { index, line in
                             Button { seekToLyric(line) } label: {
                                 Text(line.text.isEmpty ? "♪" : line.text)
                                     .font(index == active ? .title3.weight(.bold) : .body)
@@ -794,7 +799,7 @@ private struct NowPlayingView: View {
                     }
                     .accessibilityElement(children: .contain)
                 } else {
-                    Text(lyrics.plain)
+                    Text(displayedPlain(for: lyrics))
                         .font(.body)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("lyrics.plain")
@@ -814,7 +819,76 @@ private struct NowPlayingView: View {
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 18))
     }
 
+    @ViewBuilder
+    private var translationControls: some View {
+        switch translation.phase {
+        case .ready:
+            Button { translation.requestTranslation() } label: {
+                Label("Translate", systemImage: "translate")
+            }
+            .buttonStyle(.borderless)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityHint("Shows the lyrics in your device language")
+        case .translating:
+            ProgressView("Translating lyrics…")
+        case .translated(let result):
+            VStack(alignment: .leading, spacing: 4) {
+                Button { translation.showOriginal() } label: {
+                    Label("Show original", systemImage: "text.quote")
+                }
+                .buttonStyle(.borderless)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityHint("Shows the lyrics in their original language")
+                if let code = result.sourceLanguage?.languageCode?.identifier,
+                   let name = locale.localizedString(forLanguageCode: code) {
+                    Text("Translated from \(name)")
+                        .font(.footnote)
+                        .foregroundStyle(DowntifyStyle.secondaryText)
+                }
+            }
+        case .failed(let failure):
+            VStack(alignment: .leading, spacing: 4) {
+                if failure == .unsupported {
+                    Text("Translation is not available for these lyrics.")
+                        .font(.footnote)
+                        .foregroundStyle(DowntifyStyle.secondaryText)
+                } else {
+                    Text("Lyrics could not be translated.")
+                        .font(.footnote)
+                        .foregroundStyle(DowntifyStyle.secondaryText)
+                    Button("Retry") { translation.requestTranslation() }
+                        .buttonStyle(.borderless)
+                }
+            }
+        case .hidden, .sameLanguage, .unsupported:
+            EmptyView()
+        }
+    }
+
+    /// Translated lines mirror the original lines one to one, so highlighting and seeking keep the original timestamps.
+    private func displayedLines(for lyrics: TrackLyrics) -> [LyricLine] {
+        if case .translated(let result) = translation.phase, case .timed(let lines) = result.content,
+           lines.count == lyrics.lines.count { return lines }
+        return lyrics.lines
+    }
+
+    /// Static view: translated plain text, or the translated synced lines joined when only those were translated.
+    private func displayedPlain(for lyrics: TrackLyrics) -> String {
+        guard case .translated(let result) = translation.phase else { return lyrics.plain }
+        switch result.content {
+        case .plain(let text): return text
+        case .timed(let lines): return lines.map(\.text).joined(separator: "\n")
+        }
+    }
+
+    /// The device's preferred language, not the in-app language override.
+    private static var systemTranslationTarget: Locale.Language? {
+        Locale.preferredLanguages.first.map { Locale.Language(identifier: $0) }
+    }
+
     private func loadLyrics() async {
+        translation.configure(defaults: lyricDefaults)
+        translation.load(trackID: nil, lyrics: nil, target: nil)
         guard let track else { lyrics = nil; lyricsTrackID = nil; return }
         lyricsLoading = true
         lyricsError = false
@@ -828,6 +902,7 @@ private struct NowPlayingView: View {
             guard !Task.isCancelled else { return }
             lyrics = loaded
             lyricsTrackID = track.id
+            translation.load(trackID: track.id, lyrics: loaded, target: Self.systemTranslationTarget)
         } catch {
             if !Task.isCancelled { lyricsError = true; lyrics = nil }
         }
@@ -931,11 +1006,16 @@ private struct PlaybackQueueSheet: View {
     @ObservedObject var playback: PlaybackController
     @Environment(\.dismiss) private var dismiss
     @Environment(\.downtifyPalette) private var palette
-    @State private var draggingID: UUID?
-    @State private var dragY: CGFloat = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var drag: QueueDrag?
+    /// Vertical finger travel since the lift.
+    @State private var dragOffset: CGFloat = 0
+    /// Global frames: named coordinate spaces report rows inside a lazy stack inconsistently.
     @State private var rowFrames: [UUID: CGRect] = [:]
 
-    private static let listSpace = "playbackQueueList"
+    /// A stack, not a List: List cells clip rows that slide out of them and end the drag gesture
+    /// when the dragged row's cell moves, so live reflow needs plain views.
+    private static let cardRadius: CGFloat = 10
 
     private var visibleEntries: [PlaybackQueueEntry] {
         guard let currentIndex = playback.queue.currentIndex else { return [] }
@@ -944,60 +1024,37 @@ private struct PlaybackQueueSheet: View {
 
     private var upcomingEntries: [PlaybackQueueEntry] { Array(visibleEntries.dropFirst()) }
 
-    /// Slot (0...count) the dragged entry would be inserted before; `count` means the end of the queue.
-    private var proposedSlot: Int? {
-        guard draggingID != nil else { return nil }
-        var slot = 0
-        for entry in upcomingEntries {
-            guard let frame = rowFrames[entry.id] else { continue }
-            if dragY > frame.midY { slot += 1 } else { break }
-        }
-        return slot
+    /// Live placement of the dragged row: its centre, moved by the finger, against the rows captured at lift.
+    private var placement: QueueDragPlacement? {
+        guard let drag else { return nil }
+        return QueueDragPlacement(midYs: drag.midYs, rowHeights: drag.rowHeights, from: drag.from,
+                                  dragY: drag.midYs[drag.from] + dragOffset)
     }
+
+    private var reflowAnimation: Animation? { reduceMotion ? nil : .spring(duration: 0.22, bounce: 0.1) }
 
     var body: some View {
         NavigationStack {
-            List {
-                if visibleEntries.isEmpty {
-                    DowntifyUnavailableView(title: "Queue is empty", symbol: "music.note.list")
-                        .listRowBackground(palette.surface)
-                } else {
-                    if let current = visibleEntries.first {
-                        QueueEntryRow(entry: current, isCurrent: true, playback: playback)
-                            .listRowBackground(palette.surface)
-                    }
-                    ForEach(Array(upcomingEntries.enumerated()), id: \.element.id) { offset, entry in
-                        QueueEntryRow(
-                            entry: entry, isCurrent: false, playback: playback,
-                            reorder: QueueReorder(
-                                position: offset, count: upcomingEntries.count, coordinateSpace: Self.listSpace,
-                                move: { target in
-                                    playback.moveUpcoming(entry.id, toUpcomingOffset: target)
-                                    AccessibilityNotification.Announcement(
-                                        String(localized: "Moved to position \(Int(target + 1)) of \(Int(upcomingEntries.count))")).post()
-                                },
-                                dragChanged: { y in draggingID = entry.id; dragY = y },
-                                dragEnded: { y in
-                                    dragY = y
-                                    commitDrag(of: entry.id)
-                                }))
-                            .opacity(draggingID == entry.id ? 0.45 : 1)
-                            .listRowBackground(palette.surface)
-                            .background(GeometryReader { proxy in
-                                Color.clear.preference(key: QueueRowFramesKey.self,
-                                                       value: [entry.id: proxy.frame(in: .named(Self.listSpace))])
-                            })
-                            .overlay(alignment: .top) { if proposedSlot == offset { insertionLine } }
-                            .overlay(alignment: .bottom) {
-                                if offset == upcomingEntries.count - 1, proposedSlot == upcomingEntries.count { insertionLine }
-                            }
+            ScrollView {
+                Group {
+                    if visibleEntries.isEmpty {
+                        DowntifyUnavailableView(title: "Queue is empty", symbol: "music.note.list")
+                            .padding(.vertical, DowntifyStyle.Space.large)
+                            .frame(maxWidth: .infinity)
+                            .background(palette.surface, in: RoundedRectangle(cornerRadius: Self.cardRadius))
+                    } else {
+                        queueCard
                     }
                 }
+                .padding(.horizontal, DowntifyStyle.Space.regular)
+                .padding(.vertical, DowntifyStyle.Space.small)
             }
-            .coordinateSpace(name: Self.listSpace)
             .onPreferenceChange(QueueRowFramesKey.self) { rowFrames = $0 }
-            .scrollDisabled(draggingID != nil)
-            .scrollContentBackground(.hidden)
+            .onChange(of: upcomingEntries.map(\.id)) { _, ids in
+                // The queue changed under the finger (track advanced, removal, Play next): drop the drag unapplied.
+                if let drag, drag.entryIDs != ids { self.drag = nil; dragOffset = 0 }
+            }
+            .scrollDisabled(drag != nil)
             .background(palette.background.ignoresSafeArea())
             .toolbarBackground(palette.background, for: .navigationBar)
             .navigationTitle("Play Queue")
@@ -1005,27 +1062,148 @@ private struct PlaybackQueueSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
             }
-            .sensoryFeedback(.selection, trigger: proposedSlot)
+            .sensoryFeedback(.selection, trigger: placement?.target)
         }
     }
 
-    private var insertionLine: some View {
-        Capsule()
-            .fill(DowntifyStyle.accent)
-            .frame(height: 3)
-            .padding(.horizontal, 8)
-            .accessibilityHidden(true)
-            .accessibilityIdentifier("queue.insertionLine")
+    /// Rows on one rounded surface with inset separators, matching the grouped list used elsewhere.
+    private var queueCard: some View {
+        LazyVStack(spacing: 0) {
+            if let current = visibleEntries.first {
+                QueueEntryRow(entry: current, isCurrent: true, playback: playback)
+                    .modifier(QueueRowChrome(showsSeparator: !upcomingEntries.isEmpty))
+            }
+            ForEach(Array(upcomingEntries.enumerated()), id: \.element.id) { offset, entry in
+                let isDragged = drag?.id == entry.id
+                QueueEntryRow(
+                    entry: entry, isCurrent: false, playback: playback,
+                    reorder: QueueReorder(
+                        position: offset, count: upcomingEntries.count,
+                        move: { target in
+                            playback.moveUpcoming(entry.id, toUpcomingOffset: target)
+                            AccessibilityNotification.Announcement(
+                                String(localized: "Moved to position \(Int(target + 1)) of \(Int(upcomingEntries.count))")).post()
+                        },
+                        dragChanged: { translation in
+                            beginDragIfNeeded(of: entry.id)
+                            dragOffset = translation
+                        },
+                        dragEnded: { translation in
+                            dragOffset = translation
+                            commitDrag(of: entry.id)
+                        },
+                        dragCancelled: { cancelDragIfStale(of: entry.id) }))
+                    .modifier(QueueRowChrome(showsSeparator: offset < upcomingEntries.count - 1))
+                    .background(GeometryReader { proxy in
+                        Color.clear.preference(key: QueueRowFramesKey.self,
+                                               value: [entry.id: proxy.frame(in: .global)])
+                    })
+                    // The lifted copy in the card overlay stands in for the dragged row (it keeps the gesture);
+                    // the others slide, animated, to open a gap at the target.
+                    .opacity(isDragged ? 0 : 1)
+                    .offset(y: isDragged ? 0 : placement?.offset(for: offset) ?? 0)
+                    .animation(reflowAnimation, value: placement?.target)
+            }
+        }
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: Self.cardRadius, style: .continuous))
+        // Drawn above the stack because a lazy stack does not honour zIndex between its rows.
+        .overlay { GeometryReader { proxy in liftedRow(cardOrigin: proxy.frame(in: .global).origin) } }
     }
 
-    /// Drops insert the dragged entry before the proposed slot (the end of the queue when the slot equals the count).
-    private func commitDrag(of id: UUID) {
-        defer { draggingID = nil }
-        guard let slot = proposedSlot, let from = upcomingEntries.firstIndex(where: { $0.id == id }) else { return }
-        let target = from < slot ? slot - 1 : slot
-        guard target != from else { return }
-        playback.moveUpcoming(id, toUpcomingOffset: target)
+    /// The dragged row, raised and following the finger 1:1.
+    @ViewBuilder private func liftedRow(cardOrigin: CGPoint) -> some View {
+        if let drag {
+            QueueEntryRow(entry: drag.entry, isCurrent: false, playback: playback, isLifted: true)
+                .modifier(QueueRowChrome(showsSeparator: false))
+                .frame(width: drag.frame.width, height: drag.frame.height)
+                .background {
+                    RoundedRectangle(cornerRadius: Self.cardRadius, style: .continuous)
+                        .fill(palette.surface)
+                        .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
+                }
+                .scaleEffect(1.03)
+                .offset(x: drag.frame.minX - cardOrigin.x, y: drag.frame.minY - cardOrigin.y + dragOffset)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
+
+    /// Captures row geometry once, so rows reflowing under the finger do not feed back into the placement.
+    private func beginDragIfNeeded(of id: UUID) {
+        guard drag?.id != id || drag?.isSettling == true else { return }
+        let entries = upcomingEntries
+        guard let from = entries.firstIndex(where: { $0.id == id }), let frame = rowFrames[id] else { return }
+        // Rows the lazy stack has not rendered lie wholly above or below the visible ones; scrolling is off while dragging.
+        let firstKnown = entries.firstIndex { rowFrames[$0.id] != nil } ?? from
+        let midYs = entries.indices.map { index in
+            rowFrames[entries[index].id]?.midY ?? (index < firstKnown ? -.infinity : .infinity)
+        }
+        let heights = entries.map { rowFrames[$0.id]?.height ?? frame.height }
+        drag = QueueDrag(id: id, entry: entries[from], from: from, frame: frame,
+                         midYs: midYs, rowHeights: heights, entryIDs: entries.map(\.id))
+    }
+
+    /// Drops move the dragged entry to the live target, with the reflow already on screen, so nothing animates again.
+    private func commitDrag(of id: UUID) {
+        guard let drag, drag.id == id else { return }
+        let target = placement?.target ?? drag.from
+        guard target != drag.from else {
+            guard let animation = reflowAnimation else { self.drag = nil; dragOffset = 0; return }
+            self.drag?.isSettling = true
+            withAnimation(animation) { dragOffset = 0 } completion: {
+                if self.drag?.id == id, self.drag?.isSettling == true { self.drag = nil }
+            }
+            return
+        }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            self.drag = nil
+            dragOffset = 0
+            playback.moveUpcoming(id, toUpcomingOffset: target)
+        }
+    }
+
+    /// Clears a drag whose gesture was cancelled without ending (sheet dismissed, system interruption).
+    /// Runs on the next main-queue turn so a normal drop's `dragEnded` has already committed.
+    private func cancelDragIfStale(of id: UUID) {
+        DispatchQueue.main.async {
+            guard let drag, drag.id == id, !drag.isSettling else { return }
+            self.drag = nil
+            dragOffset = 0
+        }
+    }
+}
+
+/// Row padding and an inset separator, standing in for grouped List row chrome.
+private struct QueueRowChrome: ViewModifier {
+    let showsSeparator: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, DowntifyStyle.Space.regular)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .overlay(alignment: .bottom) {
+                if showsSeparator {
+                    Divider().padding(.leading, DowntifyStyle.Space.regular)
+                }
+            }
+    }
+}
+
+/// Geometry and identity of the row being dragged, captured at lift.
+private struct QueueDrag {
+    let id: UUID
+    let entry: PlaybackQueueEntry
+    let from: Int
+    let frame: CGRect
+    let midYs: [CGFloat]
+    let rowHeights: [CGFloat]
+    let entryIDs: [UUID]
+    /// Animating back to its own slot after a drop that changed nothing.
+    var isSettling = false
 }
 
 private struct QueueRowFramesKey: PreferenceKey {
@@ -1036,13 +1214,14 @@ private struct QueueRowFramesKey: PreferenceKey {
 }
 
 /// Position of an upcoming queue entry, the action that moves it, and the drag callbacks for its handle.
+/// Drag callbacks carry the vertical translation since the lift.
 private struct QueueReorder {
     let position: Int
     let count: Int
-    let coordinateSpace: String
     let move: (Int) -> Void
     let dragChanged: (CGFloat) -> Void
     let dragEnded: (CGFloat) -> Void
+    let dragCancelled: () -> Void
 }
 
 private struct QueueEntryRow: View {
@@ -1050,10 +1229,13 @@ private struct QueueEntryRow: View {
     let isCurrent: Bool
     @ObservedObject var playback: PlaybackController
     var reorder: QueueReorder?
+    /// Non-interactive copy drawn under the finger while this entry is dragged.
+    var isLifted = false
+    @GestureState private var isHandleDragging = false
 
     var body: some View {
         HStack(spacing: DowntifyStyle.Space.small) {
-            if let reorder { handle(reorder) }
+            if let reorder { handle(reorder) } else if isLifted { handleIcon }
             Button { playback.select(entry.id) } label: {
                 DowntifyMediaRow(title: entry.item.displayTitle, subtitle: entry.item.displayArtist) {
                     PlaybackItemArtwork(item: entry.item, size: 44)
@@ -1081,22 +1263,33 @@ private struct QueueEntryRow: View {
         .padding(.vertical, 3)
     }
 
-    /// Leading drag handle: touch and hold, then drag. VoiceOver gets Move up / Move down instead.
-    private func handle(_ reorder: QueueReorder) -> some View {
+    private var handleIcon: some View {
         Image(systemName: "line.3.horizontal")
             .foregroundStyle(DowntifyStyle.secondaryText)
             .downtifyControlTarget()
+    }
+
+    /// Leading drag handle: touch and hold, then drag. VoiceOver gets Move up / Move down instead.
+    private func handle(_ reorder: QueueReorder) -> some View {
+        handleIcon
             .contentShape(Rectangle())
             .gesture(
                 LongPressGesture(minimumDuration: 0.3)
-                    .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(reorder.coordinateSpace)))
+                    .sequenced(before: DragGesture(minimumDistance: 0))
+                    // Resets on end and on cancel; a cancel never calls onEnded, so the sheet is told separately.
+                    .updating($isHandleDragging) { value, state, _ in
+                        if case .second(true, _?) = value { state = true }
+                    }
                     .onChanged { value in
-                        if case .second(true, let drag?) = value { reorder.dragChanged(drag.location.y) }
+                        if case .second(true, let drag?) = value { reorder.dragChanged(drag.translation.height) }
                     }
                     .onEnded { value in
-                        if case .second(true, let drag?) = value { reorder.dragEnded(drag.location.y) }
+                        if case .second(true, let drag?) = value { reorder.dragEnded(drag.translation.height) }
                     }
             )
+            .onChange(of: isHandleDragging) { _, dragging in
+                if !dragging { reorder.dragCancelled() }
+            }
             .accessibilityElement()
             .accessibilityLabel(Text("Reorder \(entry.item.displayTitle)"))
             .accessibilityValue(Text("Position \(Int(reorder.position + 1)) of \(Int(reorder.count))"))
@@ -1327,3 +1520,104 @@ private struct LibraryDesignPreviews: PreviewProvider {
     }
 }
 #endif
+
+// MARK: - Apple Translation integration (iOS 18+)
+
+/// Adds the translation task and availability check on iOS 18 and later. Earlier systems never resolve
+/// availability, so the model stays hidden and the existing lyrics experience is unchanged.
+private struct LyricsTranslationSupport: ViewModifier {
+    let model: LyricsTranslationModel
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.modifier(LyricsTranslationHost(model: model))
+        } else {
+            content
+        }
+    }
+}
+
+@available(iOS 18.0, *)
+private struct LyricsTranslationHost: ViewModifier {
+    @ObservedObject var model: LyricsTranslationModel
+    @State private var configuration: TranslationSession.Configuration?
+
+    func body(content: Content) -> some View {
+        content
+            .task(id: model.availabilityRequest) {
+                guard model.availabilityRequest != nil else { return }
+                await model.resolveAvailability(using: SystemLyricsAvailability())
+            }
+            .onChange(of: model.requestKey) { _, key in
+                guard key != nil, let target = model.target else {
+                    configuration = nil  // cancels any in-flight session
+                    return
+                }
+                let next = TranslationSession.Configuration(source: model.sourceLanguage, target: target)
+                if configuration == next { configuration?.invalidate() } else { configuration = next }
+            }
+            .translationTask(configuration) { session in
+                guard let key = await model.requestKey else { return }
+                await model.run(using: SessionLyricsTranslator(session: session), key: key)
+            }
+    }
+}
+
+@available(iOS 18.0, *)
+private struct SystemLyricsAvailability: LyricsLanguageAvailabilityChecking {
+    func status(sampleText: String, source: Locale.Language?, target: Locale.Language) async -> LyricsLanguageStatus {
+        let availability = LanguageAvailability()
+        let status: LanguageAvailability.Status
+        if let source {
+            status = await availability.status(from: source, to: target)
+        } else if let detected = try? await availability.status(for: sampleText, to: target) {
+            status = detected
+        } else {
+            return .unsupported
+        }
+        switch status {
+        case .installed: return .installed
+        case .supported: return .supported
+        case .unsupported: return .unsupported
+        @unknown default: return .unsupported
+        }
+    }
+}
+
+@available(iOS 18.0, *)
+private struct SessionLyricsTranslator: LyricsTranslating {
+    let session: TranslationSession
+
+    func translate(_ text: String) async throws -> String {
+        do { return try await session.translate(text).targetText }
+        catch { throw Self.map(error) }
+    }
+
+    func translate(batch: [LyricsTranslationItem]) async throws -> [LyricsTranslationItem] {
+        let requests = batch.map { TranslationSession.Request(sourceText: $0.text, clientIdentifier: $0.id) }
+        do {
+            let responses = try await session.translations(from: requests)
+            return responses.compactMap { response in
+                response.clientIdentifier.map { LyricsTranslationItem(id: $0, text: response.targetText) }
+            }
+        } catch { throw Self.map(error) }
+    }
+
+    static func map(_ error: Error) -> Error {
+        if error is CancellationError { return error }
+        switch error {
+        case TranslationError.unsupportedSourceLanguage, TranslationError.unsupportedTargetLanguage,
+             TranslationError.unsupportedLanguagePairing, TranslationError.unableToIdentifyLanguage:
+            return LyricsTranslationFailure.unsupported
+        case TranslationError.nothingToTranslate:
+            return LyricsTranslationFailure.failed
+        default:
+            // verify on device (Task 4): the error thrown when the user declines the language download sheet.
+            let nsError = error as NSError
+            if nsError.domain == NSCocoaErrorDomain, nsError.code == NSUserCancelledError {
+                return LyricsTranslationFailure.declined
+            }
+            return error
+        }
+    }
+}

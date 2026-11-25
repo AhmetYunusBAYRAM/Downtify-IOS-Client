@@ -215,6 +215,52 @@ final class PlaybackQueueTests: XCTestCase {
         XCTAssertFalse(queue.moveUpcoming(last, toUpcomingOffset: 99), "no-op reports false")
     }
 
+    private func placement(from: Int, dragY: CGFloat, rows: Int = 4) -> QueueDragPlacement {
+        QueueDragPlacement(midYs: (0..<rows).map { CGFloat($0) * 60 + 30 },
+                           rowHeights: Array(repeating: 60, count: rows), from: from, dragY: dragY)
+    }
+
+    func testDragPlacementMovingDownShiftsRowsUp() {
+        let drag = placement(from: 0, dragY: 100)
+        XCTAssertEqual(drag.target, 1)
+        XCTAssertEqual((0..<4).map(drag.offset(for:)), [0, -60, 0, 0])
+    }
+
+    func testDragPlacementMovingUpShiftsRowsDown() {
+        let drag = placement(from: 3, dragY: 40)
+        XCTAssertEqual(drag.target, 1)
+        XCTAssertEqual((0..<4).map(drag.offset(for:)), [0, 60, 60, 0])
+    }
+
+    func testDragPlacementAtOwnMidpointDoesNotMove() {
+        let drag = placement(from: 2, dragY: 150)
+        XCTAssertEqual(drag.target, 2)
+        XCTAssertEqual((0..<4).map(drag.offset(for:)), [0, 0, 0, 0])
+    }
+
+    func testDragPlacementClampsBeyondEnds() {
+        XCTAssertEqual(placement(from: 2, dragY: -500).target, 0)
+        XCTAssertEqual(placement(from: 1, dragY: 5000).target, 3)
+        XCTAssertEqual(placement(from: 0, dragY: 90).target, 0, "a finger exactly on a midpoint stays above it")
+    }
+
+    func testDragPlacementTreatsUnrenderedRowsAsOutsideTheScreen() {
+        let drag = QueueDragPlacement(midYs: [-.infinity, 90, 150, .infinity], rowHeights: [60, 60, 60, 60],
+                                      from: 1, dragY: 5000)
+        XCTAssertEqual(drag.target, 2, "rows the stack has not rendered are never passed")
+    }
+
+    func testDragPlacementIgnoresInvalidInput() {
+        let empty = placement(from: 0, dragY: 100, rows: 0)
+        XCTAssertEqual(empty.target, 0)
+        XCTAssertEqual(empty.offset(for: 0), 0)
+        let outOfRange = placement(from: 7, dragY: 100)
+        XCTAssertEqual(outOfRange.target, 7)
+        XCTAssertEqual((0..<4).map(outOfRange.offset(for:)), [0, 0, 0, 0])
+        let mismatched = QueueDragPlacement(midYs: [30, 90], rowHeights: [60], from: 0, dragY: 100)
+        XCTAssertEqual(mismatched.target, 0)
+    }
+
     func testMoveUpcomingRejectsCurrentAndPreviousEntries() throws {
         var queue = makeQueue(4, current: 2)
         let currentID = try XCTUnwrap(queue.currentID)

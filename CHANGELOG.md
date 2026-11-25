@@ -17,6 +17,7 @@ Changes:
 - Add Play next to Library and catalog song menus, inserting songs at the front of the upcoming queue (#67)
 - Reorder upcoming queue songs with left-side drag handles and an insertion indicator; VoiceOver gets Move up / Move down actions (#68)
 - Localize Play next and queue reorder strings in all locales (#67, #68)
+- Translate lyrics into the device language on iOS 18 and later, with a toggle back to the original; the choice is remembered, and iOS 17 is unchanged (#74)
 - Keep bottom rows clear of the playback dock, including at accessibility text sizes, on More, About, admin Trash, podcast lists and catalog artist/album pages (#45)
 - Extend the debug harness with configurable fixture tracks and a queue order probe; add simulator UI tests, docs and check-script scenarios for Play next and queue reorder
 - Tap a timed lyric line in Now Playing to seek to it, switch between synced and static lyrics when both exist, and reset a track's saved lyric timing in one tap; lyrics requests now use the app transport so debug fixtures and staging guards apply (#71)

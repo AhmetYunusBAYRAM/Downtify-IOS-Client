@@ -1,3 +1,4 @@
+import CoreGraphics
 import CryptoKit
 import Foundation
 
@@ -403,5 +404,35 @@ struct PlaybackStateStore: PlaybackStateStoring {
 
     private func save<Value: Encodable>(_ value: Value, key: String) {
         if let data = try? JSONEncoder().encode(value) { defaults.set(data, forKey: key) }
+    }
+}
+
+/// Where a dragged upcoming queue row would land, and how far the other rows slide to open a gap there.
+/// Row geometry is captured when the drag starts so the answer does not change as rows move.
+struct QueueDragPlacement: Equatable {
+    let midYs: [CGFloat]
+    let rowHeights: [CGFloat]
+    let from: Int
+    let dragY: CGFloat
+
+    private var isValid: Bool {
+        !midYs.isEmpty && midYs.count == rowHeights.count && midYs.indices.contains(from)
+    }
+
+    /// Final index of the dragged row (0...count-1): the number of other rows whose midpoint is above the finger.
+    var target: Int {
+        guard isValid else { return from }
+        return midYs.indices.reduce(0) { count, index in
+            index != from && dragY > midYs[index] ? count + 1 : count
+        }
+    }
+
+    /// Vertical shift for a row that is not being dragged: rows between the origin and the target move by the dragged row's height.
+    func offset(for index: Int) -> CGFloat {
+        guard isValid, index != from else { return 0 }
+        let target = target
+        if from < target, (from + 1...target).contains(index) { return -rowHeights[from] }
+        if target < from, (target..<from).contains(index) { return rowHeights[from] }
+        return 0
     }
 }

@@ -633,6 +633,15 @@
 "Position %lld of %lld" = "Позиция %lld от %lld";
 "Touch and hold, then drag to move this song in the queue" = "Задръжте и плъзнете, за да преместите песента в опашката";
 "Moved to position %lld of %lld" = "Преместена на позиция %lld от %lld";
+"Translate" = "Преведи";
+"Show original" = "Покажи оригинала";
+"Translating lyrics…" = "Превеждане на текстовете…";
+"Translated from %@" = "Преведено от %@";
+"Lyrics could not be translated." = "Текстът не можа да бъде преведен.";
+"Translation is not available for these lyrics." = "Преводът не е наличен за този текст.";
+"Shows the lyrics in your device language" = "Показва текста на езика на устройството";
+"Shows the lyrics in their original language" = "Показва текста на оригиналния език";
+"Close debug overlay" = "Затвори дебъг наслагването";
 "Synced" = "Синхронизирани";
 "Static" = "Статични";
 "Lyrics display" = "Показване на текста";
