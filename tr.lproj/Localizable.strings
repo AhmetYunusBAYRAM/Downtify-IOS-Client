@@ -642,6 +642,15 @@
 "Shows the lyrics in your device language" = "Şarkı sözlerini cihazınızın dilinde gösterir";
 "Shows the lyrics in their original language" = "Şarkı sözlerini özgün dilinde gösterir";
 "Close debug overlay" = "Hata ayıklama katmanını kapat";
+/* Home: Discover, Your artists, Downloaded */
+"Your artists" = "Sanatçıların";
+"Made for you" = "Senin için";
+"Discover something new" = "Yeni bir şeyler keşfet";
+"Suggestions, charts and similar songs" = "Öneriler, listeler ve benzer şarkılar";
+"Opens Discover" = "Keşfet'i açar";
+"Downloaded to this device" = "Bu cihaza indirildi";
+"Opens Downloads" = "İndirilenleri açar";
+"Play downloaded songs" = "İndirilen şarkıları çal";
 /* Playback: Equalizer */
 "Equalizer" = "Ekolayzer";
 "Shape the sound to your headphones and taste." = "Sesi kulaklığına ve zevkine göre ayarla.";

@@ -439,7 +439,10 @@ struct LibraryHomeView: View {
             (collections.playlists ?? []).filter { $0.favorite == true && $0.liked != true }.map(playlistEntry),
             descending: false
         )
-        ForEach(palette.theme?.homeSections ?? ["recent", "new", "favorites"], id: \.self) { section in
+        let artists = Array(library.catalog.artistsByID.values
+            .sorted { $0.count == $1.count ? $0.title.localizedStandardCompare($1.title) == .orderedAscending : $0.count > $1.count }
+            .prefix(12))
+        ForEach(palette.theme?.resolvedHomeSections ?? DowntifyTheme.standardHomeSections, id: \.self) { section in
             switch section {
             case "recent":
                 if !jump.isEmpty {
@@ -452,6 +455,9 @@ struct LibraryHomeView: View {
                 }
             case "new": if !newest.isEmpty { shelf("Recently added", entries: newest) }
             case "favorites": if !favorites.isEmpty { shelf("Favorite playlists", entries: favorites) }
+            case "discover": discoverCard
+            case "artists": if artists.count > 1 { shelf("Your artists", entries: artists) }
+            case "downloaded": downloadedCard
             default: EmptyView()
             }
         }
@@ -474,6 +480,91 @@ struct LibraryHomeView: View {
             Text(title).font(.title2.bold()).accessibilityAddTraits(.isHeader)
             LibraryEntryList(entries: entries, grid: !dynamicTypeSize.isAccessibilitySize && palette.theme?.shelfLayout != "list",
                              carousel: carousel)
+        }
+    }
+
+    private var homeCardShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: palette.cardCornerRadius(default: 10), style: .continuous)
+    }
+
+    /// Opens Discover's personalised suggestions. The artwork uses the theme's For You color, as the Search tile does.
+    private var discoverCard: some View {
+        let hex = palette.theme?.browseColors?["For You"].flatMap { UInt32($0, radix: 16) } ?? 0x203562
+        let tile = DowntifyStyle.adaptive(light: hex, dark: hex)
+        return Button {
+            UserDefaults.standard.set("For You", forKey: "catalog.discover.section")
+            tab = .discover
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "sparkles")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 64, height: 64)
+                    .background(LinearGradient(colors: [tile, tile.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                in: RoundedRectangle(cornerRadius: min(palette.cardCornerRadius(default: 10), 8), style: .continuous))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Made for you").font(.caption.weight(.semibold)).foregroundStyle(DowntifyStyle.secondaryText)
+                    Text("Discover something new").font(.headline)
+                    Text("Suggestions, charts and similar songs").font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right").font(.footnote.weight(.bold)).foregroundStyle(DowntifyStyle.secondaryText)
+                    .accessibilityHidden(true)
+            }
+            .padding(palette.cardPadding(default: 10))
+            .background(palette.surface, in: homeCardShape)
+            .contentShape(homeCardShape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens Discover")
+        .accessibilityIdentifier("home.discover")
+    }
+
+    /// Songs saved on this device, with a button that plays them in order. Tapping the card opens Downloads.
+    @ViewBuilder
+    private var downloadedCard: some View {
+        let ready = offlineDownloads.currentDownloads.filter { $0.state == .ready }
+        if !ready.isEmpty {
+            HStack(spacing: 14) {
+                Button { tab = .downloads } label: {
+                    HStack(spacing: 14) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.title)
+                            .foregroundStyle(palette.accent)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Downloaded to this device").font(.headline)
+                            Text(ready.count == 1 ? String(localized: "1 song") : String(localized: "\(ready.count) songs"))
+                                .font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityHint("Opens Downloads")
+                Button {
+                    playback.setShuffle(false)
+                    playback.replaceQueue(ready.map(\.track))
+                } label: {
+                    Image(systemName: "play.fill")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(palette.onBrand)
+                        .frame(width: 48, height: 48)
+                        .background(palette.brand, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Play downloaded songs")
+                .accessibilityIdentifier("home.playDownloaded")
+            }
+            .padding(palette.cardPadding(default: 12))
+            .background(palette.surface, in: homeCardShape)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("home.downloaded")
         }
     }
 

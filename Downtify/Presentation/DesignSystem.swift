@@ -68,11 +68,25 @@ struct DowntifyTheme: Codable, Equatable {
     var equalizerGridDark: String? = nil
 
     static let storageKey = "downtify.theme.json"
+    /// Home sections every theme lists once, in its chosen order.
+    static let requiredHomeSections = ["recent", "new", "favorites"]
+    /// Home sections a theme may list once, or leave out to hide: the Discover card, the Your artists shelf,
+    /// and the card for songs downloaded to this device.
+    static let optionalHomeSections = ["discover", "artists", "downloaded"]
+    /// Home without a theme.
+    static let standardHomeSections = ["recent", "new", "discover", "favorites", "artists", "downloaded"]
+
+    /// The Home sections to show, in order. Files written before the optional sections existed list none
+    /// of them; they show all three after their own sections.
+    var resolvedHomeSections: [String] {
+        homeSections.contains(where: Self.optionalHomeSections.contains)
+            ? homeSections : homeSections + Self.optionalHomeSections
+    }
     static let example = DowntifyTheme(version: 1, name: "Redesign",
         accentLight: "14833B", accentDark: "1ED760", backgroundLight: "FFFFFF",
         backgroundDark: "121212", surfaceLight: "F3F3F3", surfaceDark: "1E1E1E",
         cardCornerRadius: 8, cardPadding: 16, rowSpacing: 12, albumGridMinimum: 142,
-        homeSections: ["recent", "new", "favorites"], shelfLayout: "carousel",
+        homeSections: ["recent", "new", "discover", "favorites", "artists", "downloaded"], shelfLayout: "carousel",
         navigationStyle: "drawer", headerStyle: "profile", recentStyle: "tiles", playerStyle: "compact",
         componentStyles: ["home": "redesign", "library": "redesign", "search": "redesign",
                           "collection": "redesign", "downloads": "redesign", "player": "redesign",
@@ -113,7 +127,9 @@ struct DowntifyTheme: Codable, Equatable {
         let componentNames = Set(["home", "library", "search", "collection", "downloads", "player", "settings", "connection", "discover", "podcasts", "queue"])
         guard componentStyles?.allSatisfy({ componentNames.contains($0.key) && ["standard", "redesign"].contains($0.value) }) ?? true,
               [nil, "system", "rounded", "serif", "monospaced"].contains(fontDesign) else { throw ThemeError.invalid }
-        guard Set(homeSections) == Set(["recent", "new", "favorites"]), homeSections.count == 3,
+        guard Set(Self.requiredHomeSections).isSubset(of: homeSections),
+              Set(homeSections).isSubset(of: Self.requiredHomeSections + Self.optionalHomeSections),
+              Set(homeSections).count == homeSections.count,
               ["grid", "list", "carousel"].contains(shelfLayout) else { throw ThemeError.invalid }
         guard [nil, "system", "custom"].contains(surfaceStyle),
               [nil, "system", "drawer"].contains(navigationStyle),
