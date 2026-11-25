@@ -190,14 +190,15 @@ struct CatalogSearchView: View {
                     let isCurrent = nowPlaying.isCurrent(track)
                     HStack(spacing: 0) {
                     Button { playback.replaceQueue(localSongs, startingAt: localSongs.firstIndex(of: track) ?? 0) } label: {
-                        HStack {
+                        HStack(spacing: 12) {
+                            TrackArtwork(track: track, size: 48).accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 3) {
                                 currentTitle(track.title, isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
-                                Text(track.artist).font(.subheadline).foregroundStyle(.secondary)
+                                Text(track.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                             }
-                            Spacer()
-                            Image(systemName: "play.fill").frame(minWidth: 44, minHeight: 44)
+                            Spacer(minLength: 4)
                         }
+                        .frame(minHeight: DowntifyStyle.minimumControlSize)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -212,19 +213,15 @@ struct CatalogSearchView: View {
         if category == .albums && !localAlbums.isEmpty {
             sectionHeader("Library albums")
             ForEach(localAlbums) { entry in
-                NavigationLink(value: entry.context) {
-                    Label("\(entry.title) · \(entry.artist)", systemImage: "square.stack")
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                }
+                NavigationLink(value: entry.context) { LibraryListRow(entry: entry) }
+                    .buttonStyle(.plain)
             }
         }
         if category == .artists && !localArtists.isEmpty {
             sectionHeader("Library artists")
             ForEach(localArtists) { entry in
-                NavigationLink(value: entry.context) {
-                    Label(entry.title, systemImage: "person")
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                }
+                NavigationLink(value: entry.context) { LibraryListRow(entry: entry) }
+                    .buttonStyle(.plain)
             }
         }
     }
@@ -253,8 +250,16 @@ struct CatalogSearchView: View {
                     ForEach(albums) { album in
                         HStack {
                             NavigationLink { albumDetail(album) } label: {
-                                Label("\(album.title) · \(album.artist)", systemImage: "square.stack")
-                                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                HStack(spacing: 12) {
+                                    CatalogCoverImage(imageURL: album.coverURL, size: 48, symbol: "opticaldisc")
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(album.title).lineLimit(1)
+                                        Text(album.artist.isEmpty ? String(localized: "Album") : String(localized: "Album · \(album.artist)"))
+                                            .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                                .contentShape(Rectangle())
                             }.buttonStyle(.plain)
                             if canRequestAlbumDownload(album), let url = album.url {
                                 serverAlbumDownloadButton(url: url, album: album)
@@ -277,7 +282,10 @@ struct CatalogSearchView: View {
                         NavigationLink { artistDetail(artist) } label: {
                             HStack(spacing: 12) {
                                 artistArtwork(artist.coverURL)
-                                Text(artist.name)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(artist.name).lineLimit(1)
+                                    Text("Artist").font(.subheadline).foregroundStyle(.secondary)
+                                }
                             }
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                             .contentShape(Rectangle())
@@ -437,15 +445,16 @@ struct CatalogSearchView: View {
                             }
                             playback.replaceQueue([PlaybackItem.resolving(song, in: library.tracks)])
                         } label: {
-                            HStack {
+                            HStack(spacing: 12) {
+                                songArtwork(song)
                                 VStack(alignment: .leading, spacing: 3) {
                                     currentTitle(song.title, isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
                                     Text([song.artist, song.albumName].filter { !$0.isEmpty }.joined(separator: " · "))
-                                        .font(.subheadline).foregroundStyle(.secondary)
+                                        .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                                 }
                                 Spacer(minLength: 4)
-                                Image(systemName: "play.fill").frame(minWidth: 44, minHeight: 44)
                             }
+                            .frame(minHeight: DowntifyStyle.minimumControlSize)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -464,6 +473,16 @@ struct CatalogSearchView: View {
                     .padding(.vertical, 4)
                 }
             }
+        }
+    }
+
+    /// The result's cover, or the library copy's cover when the catalog has none.
+    @ViewBuilder private func songArtwork(_ song: CatalogSong) -> some View {
+        let url = song.coverURL ?? song.previewURL
+        if url == nil, song.source == "library", let track = song.libraryTrack(in: library.tracks) {
+            TrackArtwork(track: track, size: 48).accessibilityHidden(true)
+        } else {
+            CatalogCoverImage(imageURL: url, size: 48)
         }
     }
 
