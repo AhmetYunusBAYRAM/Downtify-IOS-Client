@@ -26,7 +26,7 @@ struct SettingsView: View {
         Form {
             Section {
                 Toggle("Autoplay", isOn: Binding(get: { playback.autoplay }, set: { playback.setAutoplay($0) }))
-                    .tint(DowntifyStyle.accent)
+                    .tint(palette.brand)
                 Text("When your music ends, keep playing similar songs.")
                     .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 VStack(alignment: .leading, spacing: 6) {
@@ -41,7 +41,7 @@ struct SettingsView: View {
                     }
                     Slider(value: Binding(get: { playback.crossfade }, set: { playback.setCrossfade($0) }),
                            in: 0...PlaybackCrossfade.maximum, step: 1)
-                        .tint(DowntifyStyle.accent)
+                        .tint(palette.brand)
                         .accessibilityLabel("Crossfade")
                         .accessibilityValue(playback.crossfade == 0 ? String(localized: "Off")
                                             : String(localized: "\(Int(playback.crossfade)) seconds"))

@@ -674,6 +674,7 @@
 "Reset lyrics timing" = "Söz zamanlamasını sıfırla";
 "Seek to %@ at %@" = "%@ satırına git (%@)";
 /* Playback: Autoplay, Crossfade */
+"Paused while repeat is on." = "Tekrar açıkken duraklatıldı.";
 "Autoplay" = "Otomatik çalma";
 "When your music ends, keep playing similar songs." = "Müziğin bitince benzer şarkıları çalmaya devam et.";
 "Autoplay will continue with similar songs" = "Otomatik çalma benzer şarkılarla devam edecek";

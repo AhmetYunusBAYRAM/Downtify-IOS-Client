@@ -689,9 +689,16 @@ private struct NowPlayingView: View {
                             Text("\(Int(upNext.laterCount)) more in queue")
                                 .font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
                         }
+                    } else if autoplayContinues {
+                        Label {
+                            Text("Autoplay will continue with similar songs")
+                                .foregroundStyle(DowntifyStyle.secondaryText)
+                        } icon: {
+                            Image(systemName: "infinity").foregroundStyle(palette.accent)
+                        }
+                        .font(.subheadline)
                     } else {
-                        Text(playback.autoplay && playback.queue.repeatMode == .off
-                             ? "Autoplay will continue with similar songs" : "Nothing up next")
+                        Text("Nothing up next")
                             .font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
                     }
                 }
@@ -713,8 +720,17 @@ private struct NowPlayingView: View {
         .accessibilityIdentifier("player.upNext")
     }
 
+    /// Autoplay will add similar songs to follow this, the last song in the queue. Once playback has ended,
+    /// Autoplay found nothing to add.
+    private var autoplayContinues: Bool {
+        playback.autoplay && playback.queue.repeatMode == .off && playback.podcast == nil && playback.phase != .ended
+    }
+
     private var upNextAccessibilityLabel: String {
-        guard let entry = upNext?.entry else { return String(localized: "Nothing up next") }
+        guard let entry = upNext?.entry else {
+            return autoplayContinues ? String(localized: "Autoplay will continue with similar songs")
+                : String(localized: "Nothing up next")
+        }
         let title = entry.item.displayTitle
         let artist = entry.item.displayArtist
         return String(localized: "Up Next: \(title) by \(artist)")
@@ -1078,7 +1094,10 @@ private struct PlaybackQueueSheet: View {
                             .frame(maxWidth: .infinity)
                             .background(palette.surface, in: RoundedRectangle(cornerRadius: cardRadius))
                     } else {
-                        queueCard
+                        VStack(spacing: DowntifyStyle.Space.regular) {
+                            queueCard
+                            if playback.podcast == nil { autoplayCard }
+                        }
                     }
                 }
                 .padding(.horizontal, DowntifyStyle.Space.regular)
@@ -1143,6 +1162,31 @@ private struct PlaybackQueueSheet: View {
         .background(palette.surface, in: RoundedRectangle(cornerRadius: cardRadius, style: .continuous))
         // Drawn above the stack because a lazy stack does not honour zIndex between its rows.
         .overlay { GeometryReader { proxy in liftedRow(cardOrigin: proxy.frame(in: .global).origin) } }
+    }
+
+    /// After the last song: whether Autoplay will continue with similar songs, with a switch for it.
+    private var autoplayCard: some View {
+        HStack(spacing: DowntifyStyle.Space.regular) {
+            Image(systemName: "infinity")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(playback.autoplay ? palette.accent : DowntifyStyle.secondaryText)
+                .frame(width: 32, height: 32)
+                .background(palette.elevated, in: Circle())
+                .accessibilityHidden(true)
+            Toggle(isOn: Binding(get: { playback.autoplay }, set: { playback.setAutoplay($0) })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Autoplay").font(.body.weight(.semibold))
+                    Text(playback.queue.repeatMode != .off ? "Paused while repeat is on."
+                         : "When your music ends, keep playing similar songs.")
+                        .font(.footnote).foregroundStyle(DowntifyStyle.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .tint(palette.brand)
+        }
+        .padding(palette.cardPadding(default: DowntifyStyle.Space.regular))
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: cardRadius, style: .continuous))
+        .accessibilityIdentifier("queue.autoplay")
     }
 
     /// The dragged row, raised and following the finger 1:1.
