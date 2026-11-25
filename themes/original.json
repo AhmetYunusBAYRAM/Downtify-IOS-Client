@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "name": "Original",
+  "accentLight": "17623E",
+  "accentDark": "72D9A0",
+  "backgroundLight": "F2F3F5",
+  "backgroundDark": "141618",
+  "surfaceLight": "FFFFFF",
+  "surfaceDark": "1C1C1E",
+  "surfaceStyle": "system",
+  "cardCornerRadius": 20,
+  "cardPadding": 16,
+  "rowSpacing": 12,
+  "albumGridMinimum": 142,
+  "homeSections": [
+    "recent",
+    "new",
+    "favorites"
+  ],
+  "shelfLayout": "grid",
+  "navigationStyle": "system",
+  "headerStyle": "system",
+  "recentStyle": "shelf",
+  "playerStyle": "standard"
+}

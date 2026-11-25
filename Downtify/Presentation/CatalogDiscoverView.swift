@@ -36,11 +36,28 @@ struct CatalogDiscoverView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Picker("Explore", selection: $selectedSection) {
-                ForEach(Section.allCases) { Text(LocalizedStringKey($0.rawValue)).tag($0.rawValue) }
+            if palette.redesign("discover") {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(Section.allCases) { section in
+                            Button { selectedSection = section.rawValue } label: {
+                                Text(LocalizedStringKey(section.rawValue)).font(.subheadline.weight(.medium))
+                                    .padding(.horizontal, 14).frame(minHeight: 40)
+                                    .foregroundStyle(selectedSection == section.rawValue ? palette.onBrand : Color.primary)
+                                    .background(selectedSection == section.rawValue ? palette.brand : palette.elevated, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(selectedSection == section.rawValue ? .isSelected : [])
+                        }
+                    }
+                }.scrollIndicators(.hidden)
+            } else {
+                Picker("Explore", selection: $selectedSection) {
+                    ForEach(Section.allCases) { Text(LocalizedStringKey($0.rawValue)).tag($0.rawValue) }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityLabel("Discovery section")
             }
-            .pickerStyle(.segmented)
-            .accessibilityLabel("Discovery section")
 
             switch Section(rawValue: selectedSection) ?? .finder {
             case .finder: finderContent
@@ -376,7 +393,7 @@ struct CatalogDiscoverView: View {
                     DowntifyMediaRow(title: song.title, subtitle: song.artists.joined(separator: ", ").isEmpty ? song.artist : song.artists.joined(separator: ", "), detail: song.albumName.isEmpty ? nil : song.albumName,
                                      isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying) {
                         artwork(song.coverURL ?? song.previewURL, fallback: "music.note")
-                    } accessory: { Image(systemName: "play.fill").foregroundStyle(DowntifyStyle.accent).frame(width: 44, height: 44) }
+                    } accessory: { Image(systemName: "play.fill").foregroundStyle(palette.accent).frame(width: 44, height: 44) }
                 }.buttonStyle(.plain).accessibilityLabel("Play \(song.title) by \(song.artist)")
                     .downtifyCurrentRowAccessibility(isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
                     .disabled(song.source == "library" && song.libraryTrack(in: libraryTracks) == nil)
@@ -496,7 +513,7 @@ struct CatalogDiscoverView: View {
     private func heroCard(title: String, subtitle: String, symbol: String) -> some View {
         DowntifyCard {
             HStack(spacing: 14) {
-                Image(systemName: symbol).font(.title2).foregroundStyle(DowntifyStyle.accent).frame(width: 44, height: 44).background(DowntifyStyle.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 13))
+                Image(systemName: symbol).font(.title2).foregroundStyle(palette.accent).frame(width: 44, height: 44).background(palette.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 13))
                 VStack(alignment: .leading, spacing: 4) { Text(title).font(.headline); Text(subtitle).font(.subheadline).foregroundStyle(.secondary) }
             }
         }

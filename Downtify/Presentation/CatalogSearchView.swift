@@ -11,6 +11,7 @@ struct CatalogSearchView: View {
     var downloadState: (CatalogSong) -> ServerDownloadActionState = { _ in .idle }
     var onAddToDevice: (CatalogSong) -> Void = { _ in }
     var deviceState: (CatalogSong) -> DeviceSaveState = { _ in .unavailable(.notInLibrary) }
+    var onBrowse: (String) -> Void = { _ in }
 
     private enum SearchCategory: String, CaseIterable {
         case songs, artists, albums
@@ -31,7 +32,8 @@ struct CatalogSearchView: View {
          onDownload: @escaping (CatalogSong) -> Void = { _ in },
          downloadState: @escaping (CatalogSong) -> ServerDownloadActionState = { _ in .idle },
          onAddToDevice: @escaping (CatalogSong) -> Void = { _ in },
-         deviceState: @escaping (CatalogSong) -> DeviceSaveState = { _ in .unavailable(.notInLibrary) }) {
+         deviceState: @escaping (CatalogSong) -> DeviceSaveState = { _ in .unavailable(.notInLibrary) },
+         onBrowse: @escaping (String) -> Void = { _ in }) {
         self.catalog = catalog
         self.library = library
         self.playback = playback
@@ -41,6 +43,7 @@ struct CatalogSearchView: View {
         self.downloadState = downloadState
         self.onAddToDevice = onAddToDevice
         self.deviceState = deviceState
+        self.onBrowse = onBrowse
     }
 
     /// Catalog albums on screen that may need a provider track count to be recognised as owned.
@@ -82,23 +85,24 @@ struct CatalogSearchView: View {
 
     var body: some View {
         VStack(alignment: category == .songs ? .leading : .center, spacing: 20) {
-            Picker("Search category", selection: $category) {
-                Text("Songs").tag(SearchCategory.songs)
-                Text("Artists").tag(SearchCategory.artists)
-                Text("Albums").tag(SearchCategory.albums)
-            }
-            .pickerStyle(.segmented)
+            if !palette.redesign("search") { searchPicker }
 
             TextField("Songs, albums, artists", text: $query)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
+                .padding(palette.redesign("search") ? 14 : 8)
+                .background(palette.redesign("search") ? palette.elevated : Color(uiColor: .secondarySystemBackground),
+                            in: RoundedRectangle(cornerRadius: palette.redesign("search") ? 8 : 5))
                 .submitLabel(.search)
                 .focused($searchFocused)
                 .accessibilityLabel("Search songs, albums, and artists")
                 .accessibilityIdentifier("catalog.searchField")
 
+            if palette.redesign("search") && !normalizedQuery.isEmpty { searchPicker }
             if !normalizedQuery.isEmpty {
                 localResults
                 catalogResults
+            } else if palette.redesign("search") {
+                browseShortcuts
             } else {
                 ContentUnavailableView("Search your music", systemImage: "magnifyingglass",
                                        description: Text("Search saved music and available catalog results."))
@@ -134,6 +138,70 @@ struct CatalogSearchView: View {
         } message: {
             if let pending = pendingAlbumAdd { Text(pending.confirmation.message) }
         }
+    }
+
+    @ViewBuilder private var searchPicker: some View {
+            if palette.redesign("search") {
+                HStack(spacing: 8) {
+                    searchCategory("Songs", category: .songs)
+                    searchCategory("Artists", category: .artists)
+                    searchCategory("Albums", category: .albums)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Picker("Search category", selection: $category) {
+                    Text("Songs").tag(SearchCategory.songs)
+                    Text("Artists").tag(SearchCategory.artists)
+                    Text("Albums").tag(SearchCategory.albums)
+                }
+                .pickerStyle(.segmented)
+            }
+
+    }
+
+    private var browseShortcuts: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Browse all").font(.title2.bold()).accessibilityAddTraits(.isHeader)
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                browseTile("For You", symbol: "sparkles", color: 0x203562)
+                browseTile("Charts", symbol: "chart.line.uptrend.xyaxis", color: 0xE33600)
+                browseTile("Finder", symbol: "safari", color: 0x27866F)
+                browseTile("Similar", symbol: "waveform", color: 0x8863A8)
+                browseTile("Podcasts", symbol: "mic.fill", color: 0x006450)
+                browseTile("Downloads", symbol: "arrow.down.circle.fill", color: 0xB65B00)
+            }
+        }
+    }
+
+    private func tileColor(_ title: String, fallback: UInt32) -> UInt32 {
+        palette.theme?.browseColors?[title].flatMap { UInt32($0, radix: 16) } ?? fallback
+    }
+
+    private func browseTile(_ title: String, symbol: String, color: UInt32) -> some View {
+        Button { onBrowse(title) } label: {
+            ZStack(alignment: .topLeading) {
+                DowntifyStyle.adaptive(light: tileColor(title, fallback: color), dark: tileColor(title, fallback: color))
+                Text(LocalizedStringKey(title)).font(.headline).padding(12)
+                Image(systemName: symbol).font(.system(size: 42, weight: .bold))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .offset(x: 8, y: 8).opacity(0.85)
+            }
+            .foregroundStyle(.white)
+            .frame(height: 96)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func searchCategory(_ title: LocalizedStringKey, category option: SearchCategory) -> some View {
+        Button { category = option } label: {
+            Text(title).font(.subheadline.weight(.medium))
+                .padding(.horizontal, 14).frame(minHeight: 40)
+                .foregroundStyle(category == option ? palette.onBrand : Color.primary)
+                .background(category == option ? palette.brand : palette.elevated, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(category == option ? .isSelected : [])
     }
 
     @ViewBuilder private var localResults: some View {
@@ -426,7 +494,7 @@ struct CatalogSearchView: View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             if isCurrent { NowPlayingBadge(isPlaying: isPlaying) }
             Text(title).font(.body.weight(.semibold))
-                .foregroundStyle(isCurrent ? AnyShapeStyle(DowntifyStyle.accent) : AnyShapeStyle(.primary))
+                .foregroundStyle(isCurrent ? AnyShapeStyle(palette.accent) : AnyShapeStyle(.primary))
         }
     }
 

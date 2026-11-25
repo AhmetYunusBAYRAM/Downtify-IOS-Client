@@ -9,6 +9,7 @@ struct AppShellView: View {
     let serverDownloadQueue: ServerDownloadQueue
     let serverDownloads: ServerDownloadPresentationModel
     @AppStorage(DowntifyAppearance.storageKey) private var appearance = DowntifyAppearance.dark
+    @AppStorage(DowntifyTheme.storageKey) private var themeJSON = ""
     @AppStorage("downtify.language") private var language = "system"
 
     var body: some View {
@@ -29,7 +30,7 @@ struct AppShellView: View {
                                 signOut: { try await presentation.connectionService.signOut() })
             }
         }
-        .downtifyAppearance(appearance)
+        .downtifyAppearance(appearance, theme: try? DowntifyTheme.decode(Data(themeJSON.utf8)))
         .environment(\.locale, Locale(identifier: language == "system" ? Locale.current.identifier : language))
         .task { presentation.start(); library.start() }
     }
@@ -79,12 +80,13 @@ struct TrackRow: View {
     let track: LibraryTrack
     var isCurrent = false
     var isPlaying = false
+    var showsArtwork = true
 
     var body: some View {
         DowntifyMediaRow(title: track.displayTitle, subtitle: track.displayArtist,
                          detail: track.album.isEmpty ? nil : track.album,
                          isCurrent: isCurrent, isPlaying: isPlaying) {
-            TrackArtwork(track: track, size: 56)
+            if showsArtwork { TrackArtwork(track: track, size: 56) }
         } accessory: {
             Text(durationText(track.duration))
                 .font(.caption.monospacedDigit())
@@ -225,7 +227,7 @@ private struct MiniPlayerView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: palette.theme?.playerStyle == "compact" ? 8 : 16))
         .overlay(alignment: .bottom) {
             if let duration = playback.duration, duration.isFinite, duration > 0 {
                 ProgressView(value: min(playback.position, duration), total: duration)
@@ -256,6 +258,8 @@ private struct NowPlayingView: View {
     @State private var path: [NowPlayingRoute] = []
     @State private var artistChoices: [NowPlayingArtistTarget] = []
     @EnvironmentObject private var collections: LibraryCollectionsModel
+    @EnvironmentObject private var artworkLoader: ArtworkLoader
+    @State private var artworkTint: Color?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showingPlaylistPicker = false
     @State private var confirmation: String?
@@ -294,21 +298,26 @@ private struct NowPlayingView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ZStack(alignment: .topTrailing) {
+            GeometryReader { geometry in
             ScrollView {
+                let imageSize = palette.redesign("player") && !usesWideLayout && !dynamicTypeSize.isAccessibilitySize
+                    ? min(max(geometry.size.width - 48, 100), 360) : artworkSize
                 let layout = usesWideLayout
                     ? AnyLayout(HStackLayout(alignment: .center, spacing: DowntifyStyle.Space.large))
                     : AnyLayout(VStackLayout(spacing: DowntifyStyle.Space.large))
                 layout {
                     Group {
                         if let podcast = playback.podcast {
-                            PodcastArtwork(show: podcast.show, size: artworkSize)
+                            PodcastArtwork(show: podcast.show, size: imageSize)
                         } else {
-                            PlaybackItemArtwork(item: item, size: artworkSize)
+                            PlaybackItemArtwork(item: item, size: imageSize)
                         }
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: palette.redesign("player") ? 8 : 0))
+                    .shadow(color: palette.redesign("player") ? .black.opacity(0.3) : .clear, radius: 16, y: 8)
                     .accessibilityHidden(true)
                     .accessibilityIdentifier("player.artwork")
-                    VStack(spacing: DowntifyStyle.Space.regular) {
+                    VStack(alignment: palette.redesign("player") ? .leading : .center, spacing: DowntifyStyle.Space.regular) {
                         trackMetadata
                         phaseDescription
                             .font(.subheadline)
@@ -338,12 +347,18 @@ private struct NowPlayingView: View {
                 .frame(maxWidth: 760)
                 .frame(maxWidth: .infinity)
             }
+            }
             if networkOverlayEnabled {
                 NetworkDebugOverlayContainer(playback: playback)
             }
             }
             .overlay(alignment: .bottom) { confirmationBanner }
-            .background(palette.background.ignoresSafeArea())
+            .background {
+                if palette.redesign("player") {
+                    LinearGradient(colors: [artworkTint ?? palette.elevated, palette.background], startPoint: .top, endPoint: .bottom)
+                        .ignoresSafeArea()
+                } else { palette.background.ignoresSafeArea() }
+            }
             .navigationTitle("Now Playing")
             .accessibilityIdentifier("player.full")
             .navigationBarTitleDisplayMode(.inline)
@@ -399,6 +414,13 @@ private struct NowPlayingView: View {
             guard !Task.isCancelled else { return }
             withAnimation(reduceMotion ? nil : .easeOut) { confirmation = nil }
         }
+        .task(id: "\(track?.id ?? ""):\(palette.redesign("player"))") {
+            artworkTint = nil
+            if palette.redesign("player"), let track, track.hasCover,
+               let image = await artworkLoader.image(for: track, size: 150), !Task.isCancelled {
+                artworkTint = ArtworkThemeTint.color(from: image)
+            }
+        }
         .task(id: track?.id) { await loadLyrics() }
         .modifier(LyricsTranslationSupport(model: translation))
     }
@@ -434,7 +456,7 @@ private struct NowPlayingView: View {
         let hasAlbum = !item.album.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let hasArtist = !item.artist.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || item.artists.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        return VStack(spacing: 5) {
+        return VStack(alignment: palette.redesign("player") ? .leading : .center, spacing: 5) {
             Button { openAlbum(item) } label: {
                 Text(item.displayTitle)
                     .font(.title2.weight(.bold))
@@ -449,7 +471,7 @@ private struct NowPlayingView: View {
             Button { openArtist(item) } label: {
                 Text(item.displayArtist)
                     .font(.title3)
-                    .foregroundStyle(hasArtist ? DowntifyStyle.accent : DowntifyStyle.secondaryText)
+                    .foregroundStyle(palette.redesign("player") ? DowntifyStyle.secondaryText : (hasArtist ? palette.accent : DowntifyStyle.secondaryText))
             }
             .disabled(!hasArtist)
             .accessibilityLabel("Artist, \(item.displayArtist)")
@@ -468,7 +490,8 @@ private struct NowPlayingView: View {
             }
         }
         .buttonStyle(.plain)
-        .multilineTextAlignment(.center)
+        .multilineTextAlignment(palette.redesign("player") ? .leading : .center)
+        .frame(maxWidth: .infinity, alignment: palette.redesign("player") ? .leading : .center)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -488,6 +511,7 @@ private struct NowPlayingView: View {
 
     private var transportControls: some View {
         HStack(spacing: DowntifyStyle.Space.regular) {
+            if palette.redesign("player") { Spacer(minLength: 0) }
             if playback.podcast != nil {
                 Button { playback.seek(to: playback.position - 15) } label: {
                     Image(systemName: "gobackward.15").font(.title2).downtifyControlTarget()
@@ -509,8 +533,15 @@ private struct NowPlayingView: View {
                 .accessibilityLabel("Retry playback")
             } else {
                 Button { playback.togglePlayback() } label: {
-                    Image(systemName: activelyPlaying ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 56)).downtifyControlTarget()
+                    if palette.redesign("player") {
+                        Image(systemName: activelyPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 26, weight: .bold))
+                            .foregroundStyle(Color.black).frame(width: 64, height: 64)
+                            .background(Color.white, in: Circle())
+                    } else {
+                        Image(systemName: activelyPlaying ? "pause.circle.fill" : "play.circle.fill")
+                            .font(.system(size: 56)).downtifyControlTarget()
+                    }
                 }
                 .accessibilityLabel(activelyPlaying ? String(localized: "Pause") : String(localized: "Play"))
                 .accessibilityIdentifier("player.playPause")
@@ -530,7 +561,9 @@ private struct NowPlayingView: View {
                 .accessibilityValue(nextTrackValue)
                 .disabled(playback.queue.next(automatic: false) == nil)
             }
+            if palette.redesign("player") { Spacer(minLength: 0) }
         }
+        .frame(maxWidth: .infinity)
         .buttonStyle(.borderless)
     }
 
@@ -543,11 +576,11 @@ private struct NowPlayingView: View {
         HStack(spacing: DowntifyStyle.Space.regular) {
             Button { playback.setShuffle(playback.queue.shuffledIDs == nil) } label: {
                 Image(systemName: "shuffle")
-                    .foregroundStyle(playback.queue.shuffledIDs == nil ? DowntifyStyle.secondaryText : DowntifyStyle.accent)
+                    .foregroundStyle(playback.queue.shuffledIDs == nil ? DowntifyStyle.secondaryText : palette.accent)
                     .downtifyControlTarget()
                     .background {
                         if playback.queue.shuffledIDs != nil {
-                            RoundedRectangle(cornerRadius: 10).strokeBorder(DowntifyStyle.accent)
+                            RoundedRectangle(cornerRadius: 10).strokeBorder(palette.accent)
                         }
                     }
             }
@@ -557,11 +590,11 @@ private struct NowPlayingView: View {
 
             Button { playback.setRepeat(nextRepeatMode) } label: {
                 Image(systemName: repeatSymbol)
-                    .foregroundStyle(playback.queue.repeatMode == .off ? DowntifyStyle.secondaryText : DowntifyStyle.accent)
+                    .foregroundStyle(playback.queue.repeatMode == .off ? DowntifyStyle.secondaryText : palette.accent)
                     .downtifyControlTarget()
                     .background {
                         if playback.queue.repeatMode != .off {
-                            RoundedRectangle(cornerRadius: 10).strokeBorder(DowntifyStyle.accent)
+                            RoundedRectangle(cornerRadius: 10).strokeBorder(palette.accent)
                         }
                     }
             }
@@ -656,6 +689,14 @@ private struct NowPlayingView: View {
                             Text("\(Int(upNext.laterCount)) more in queue")
                                 .font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
                         }
+                    } else if autoplayContinues {
+                        Label {
+                            Text("Autoplay will continue with similar songs")
+                                .foregroundStyle(DowntifyStyle.secondaryText)
+                        } icon: {
+                            Image(systemName: "infinity").foregroundStyle(palette.accent)
+                        }
+                        .font(.subheadline)
                     } else {
                         Text("Nothing up next")
                             .font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
@@ -679,8 +720,17 @@ private struct NowPlayingView: View {
         .accessibilityIdentifier("player.upNext")
     }
 
+    /// Autoplay will add similar songs to follow this, the last song in the queue. Once playback has ended,
+    /// Autoplay found nothing to add.
+    private var autoplayContinues: Bool {
+        playback.autoplay && playback.queue.repeatMode == .off && playback.podcast == nil && playback.phase != .ended
+    }
+
     private var upNextAccessibilityLabel: String {
-        guard let entry = upNext?.entry else { return String(localized: "Nothing up next") }
+        guard let entry = upNext?.entry else {
+            return autoplayContinues ? String(localized: "Autoplay will continue with similar songs")
+                : String(localized: "Nothing up next")
+        }
         let title = entry.item.displayTitle
         let artist = entry.item.displayArtist
         return String(localized: "Up Next: \(title) by \(artist)")
@@ -694,7 +744,7 @@ private struct NowPlayingView: View {
                 .padding(.horizontal, DowntifyStyle.Space.regular)
                 .padding(.vertical, DowntifyStyle.Space.small)
                 .background(palette.surface, in: Capsule())
-                .overlay(Capsule().strokeBorder(DowntifyStyle.accent.opacity(0.4)))
+                .overlay(Capsule().strokeBorder(palette.accent.opacity(0.4)))
                 .padding(.bottom, DowntifyStyle.Space.large)
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 .accessibilityElement(children: .combine)
@@ -784,7 +834,7 @@ private struct NowPlayingView: View {
                             Button { seekToLyric(line) } label: {
                                 Text(line.text.isEmpty ? "♪" : line.text)
                                     .font(index == active ? .title3.weight(.bold) : .body)
-                                    .foregroundStyle(index == active ? DowntifyStyle.accent : DowntifyStyle.secondaryText)
+                                    .foregroundStyle(index == active ? palette.accent : DowntifyStyle.secondaryText)
                                     .multilineTextAlignment(.leading)
                                     .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -969,6 +1019,7 @@ private struct NowPlayingView: View {
 
 /// Icon over a short label; keeps the 44 pt target and wraps at large Dynamic Type sizes.
 private struct NowPlayingActionButton: View {
+    @Environment(\.downtifyPalette) private var palette
     let title: String
     let systemImage: String
     var isHighlighted = false
@@ -994,7 +1045,7 @@ private struct NowPlayingActionButton: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .foregroundStyle(isHighlighted ? DowntifyStyle.accent : (isEnabled ? Color.primary : DowntifyStyle.secondaryText))
+            .foregroundStyle(isHighlighted ? palette.accent : (isEnabled ? Color.primary : DowntifyStyle.secondaryText))
             .frame(maxWidth: .infinity, minHeight: DowntifyStyle.minimumControlSize)
             .contentShape(Rectangle())
         }
@@ -1015,7 +1066,7 @@ private struct PlaybackQueueSheet: View {
 
     /// A stack, not a List: List cells clip rows that slide out of them and end the drag gesture
     /// when the dragged row's cell moves, so live reflow needs plain views.
-    private static let cardRadius: CGFloat = 10
+    private var cardRadius: CGFloat { palette.redesign("queue") ? CGFloat(palette.theme?.cardCornerRadius ?? 10) : 10 }
 
     private var visibleEntries: [PlaybackQueueEntry] {
         guard let currentIndex = playback.queue.currentIndex else { return [] }
@@ -1041,9 +1092,12 @@ private struct PlaybackQueueSheet: View {
                         DowntifyUnavailableView(title: "Queue is empty", symbol: "music.note.list")
                             .padding(.vertical, DowntifyStyle.Space.large)
                             .frame(maxWidth: .infinity)
-                            .background(palette.surface, in: RoundedRectangle(cornerRadius: Self.cardRadius))
+                            .background(palette.surface, in: RoundedRectangle(cornerRadius: cardRadius))
                     } else {
-                        queueCard
+                        VStack(spacing: DowntifyStyle.Space.regular) {
+                            queueCard
+                            if playback.podcast == nil { autoplayCard }
+                        }
                     }
                 }
                 .padding(.horizontal, DowntifyStyle.Space.regular)
@@ -1105,9 +1159,34 @@ private struct PlaybackQueueSheet: View {
                     .animation(reflowAnimation, value: placement?.target)
             }
         }
-        .background(palette.surface, in: RoundedRectangle(cornerRadius: Self.cardRadius, style: .continuous))
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: cardRadius, style: .continuous))
         // Drawn above the stack because a lazy stack does not honour zIndex between its rows.
         .overlay { GeometryReader { proxy in liftedRow(cardOrigin: proxy.frame(in: .global).origin) } }
+    }
+
+    /// After the last song: whether Autoplay will continue with similar songs, with a switch for it.
+    private var autoplayCard: some View {
+        HStack(spacing: DowntifyStyle.Space.regular) {
+            Image(systemName: "infinity")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(playback.autoplay ? palette.accent : DowntifyStyle.secondaryText)
+                .frame(width: 32, height: 32)
+                .background(palette.elevated, in: Circle())
+                .accessibilityHidden(true)
+            Toggle(isOn: Binding(get: { playback.autoplay }, set: { playback.setAutoplay($0) })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Autoplay").font(.body.weight(.semibold))
+                    Text(playback.queue.repeatMode != .off ? "Paused while repeat is on."
+                         : "When your music ends, keep playing similar songs.")
+                        .font(.footnote).foregroundStyle(DowntifyStyle.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .tint(palette.brand)
+        }
+        .padding(palette.cardPadding(default: DowntifyStyle.Space.regular))
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: cardRadius, style: .continuous))
+        .accessibilityIdentifier("queue.autoplay")
     }
 
     /// The dragged row, raised and following the finger 1:1.
@@ -1117,7 +1196,7 @@ private struct PlaybackQueueSheet: View {
                 .modifier(QueueRowChrome(showsSeparator: false))
                 .frame(width: drag.frame.width, height: drag.frame.height)
                 .background {
-                    RoundedRectangle(cornerRadius: Self.cardRadius, style: .continuous)
+                    RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
                         .fill(palette.surface)
                         .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
                 }
@@ -1225,6 +1304,7 @@ private struct QueueReorder {
 }
 
 private struct QueueEntryRow: View {
+    @Environment(\.downtifyPalette) private var palette
     let entry: PlaybackQueueEntry
     let isCurrent: Bool
     @ObservedObject var playback: PlaybackController
@@ -1243,7 +1323,7 @@ private struct QueueEntryRow: View {
                     if isCurrent {
                         Label("Current track", systemImage: "speaker.wave.2.fill")
                             .labelStyle(.iconOnly)
-                            .foregroundStyle(DowntifyStyle.accent)
+                            .foregroundStyle(palette.accent)
                     }
                 }
             }
@@ -1421,6 +1501,8 @@ struct TrackArtwork: View {
                 loadedImage = await artwork.image(for: track, size: requestSize)
             }
             guard !Task.isCancelled else { return }
+            // A cover only a few pixels wide is a stand-in, not artwork; show the placeholder instead.
+            if let loaded = loadedImage, loaded.size.width * loaded.scale < 8 { loadedImage = nil }
             withAnimation(reduceMotion ? nil : .easeIn(duration: 0.18)) {
                 image = loadedImage
             }
@@ -1429,16 +1511,17 @@ struct TrackArtwork: View {
 }
 
 private struct ArtworkPlaceholder: View {
+    @Environment(\.downtifyPalette) private var palette
     let size: CGFloat
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: size * 0.08, style: .continuous)
-                .fill(LinearGradient(colors: [DowntifyStyle.accent.opacity(0.25), DowntifyStyle.accent.opacity(0.08)],
+                .fill(LinearGradient(colors: [palette.accent.opacity(0.25), palette.accent.opacity(0.08)],
                                      startPoint: .topLeading, endPoint: .bottomTrailing))
             Image(systemName: "music.note")
                 .font(.system(size: size * 0.30, weight: .light))
-                .foregroundStyle(DowntifyStyle.accent)
+                .foregroundStyle(palette.accent)
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)

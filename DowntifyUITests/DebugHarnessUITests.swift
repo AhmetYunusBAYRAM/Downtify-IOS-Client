@@ -5,6 +5,71 @@ final class DebugHarnessUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    func testRedesignThemeNavigation() throws {
+        let app = DowntifyUITestSupport.launch()
+        XCTAssertNotNil(DowntifyUITestSupport.waitForState(app, timeout: 30) { $0.sessionActive })
+        let drawer = app.buttons["Open navigation menu"].firstMatch
+        let account = app.buttons["Account options"].firstMatch
+        if drawer.waitForExistence(timeout: 3) {
+            drawer.tap()
+        } else {
+            XCTAssertTrue(account.waitForExistence(timeout: 10))
+            account.tap()
+        }
+        let settings = app.buttons["Settings"].firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+        let themePicker = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Theme")).firstMatch
+        XCTAssertTrue(themePicker.waitForExistence(timeout: 10))
+        themePicker.tap()
+        let redesign = app.buttons["Redesign"].firstMatch
+        XCTAssertTrue(redesign.waitForExistence(timeout: 10))
+        redesign.tap()
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(drawer.waitForExistence(timeout: 10))
+        drawer.tap()
+        XCTAssertTrue(app.buttons["Downloads"].firstMatch.waitForExistence(timeout: 10))
+        app.buttons["Downloads"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Downloads"].firstMatch.waitForExistence(timeout: 10))
+        app.buttons["Home"].firstMatch.tap()
+        let searchTab = app.buttons["Search"].firstMatch
+        XCTAssertTrue(searchTab.waitForExistence(timeout: 10))
+        searchTab.tap()
+        XCTAssertTrue(app.staticTexts["Browse all"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Charts"].firstMatch.waitForExistence(timeout: 10))
+        app.buttons["Charts"].firstMatch.tap()
+        let charts = app.buttons["Charts"].firstMatch
+        XCTAssertTrue(charts.waitForExistence(timeout: 10))
+        XCTAssertTrue(charts.isSelected)
+        app.buttons["Home"].firstMatch.tap()
+        let libraryTab = app.buttons["Your Library"].firstMatch
+        XCTAssertTrue(libraryTab.waitForExistence(timeout: 10))
+        libraryTab.tap()
+        let album = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Fixture Album")).firstMatch
+        XCTAssertTrue(album.waitForExistence(timeout: 10))
+        album.tap()
+        let play = app.buttons["Play"].firstMatch
+        XCTAssertTrue(play.waitForExistence(timeout: 10))
+        play.tap()
+        XCTAssertNotNil(DowntifyUITestSupport.waitForState(app, timeout: 30) { $0.playerVisible })
+        let dock = DowntifyUITestSupport.element(app, "player.dock")
+        XCTAssertTrue(dock.waitForExistence(timeout: 10))
+        dock.tap()
+        XCTAssertTrue(DowntifyUITestSupport.element(app, "player.full").waitForExistence(timeout: 10))
+        app.buttons["Done"].firstMatch.tap()
+        app.buttons["Home"].firstMatch.tap()
+        XCTAssertTrue(drawer.waitForExistence(timeout: 10))
+        drawer.tap()
+        app.buttons["Settings"].firstMatch.tap()
+        let restore = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Theme")).firstMatch
+        XCTAssertTrue(restore.waitForExistence(timeout: 10))
+        restore.tap()
+        let original = app.buttons["Original"].firstMatch
+        XCTAssertTrue(original.waitForExistence(timeout: 10))
+        original.tap()
+        app.buttons["Done"].firstMatch.tap()
+    }
+
     /// Scenario 1: fixture end-to-end. Library loads, playback starts, player visible with artwork.
     func testFixtureLibraryPlaybackEndToEnd() throws {
         let app = DowntifyUITestSupport.launch()

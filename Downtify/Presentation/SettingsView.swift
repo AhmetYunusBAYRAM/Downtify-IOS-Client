@@ -1,12 +1,20 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
+    @Environment(\.downtifyPalette) private var palette
     @Binding var appearance: DowntifyAppearance
     @Binding var language: String
     @Binding var networkOperationLimit: Int
     @ObservedObject var playback: PlaybackController
     @AppStorage("debug.networkOverlay.enabled") private var networkOverlayEnabled = false
     @State private var showingAbout = false
+    @AppStorage(DowntifyTheme.storageKey) private var themeJSON = ""
+    @AppStorage("downtify.theme.imported") private var importedThemeJSON = ""
+    @State private var importingTheme = false
+    @State private var exportingTheme = false
+    @State private var themeError: String?
+    @State private var exportDocument = ThemeDocument(data: Data())
 
     private let languages: [(String, String)] = [
         ("system", "System default"), ("bg", "Български"), ("en", "English"),
@@ -17,12 +25,43 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section {
+                Toggle("Autoplay", isOn: Binding(get: { playback.autoplay }, set: { playback.setAutoplay($0) }))
+                    .tint(palette.brand)
+                Text("When your music ends, keep playing similar songs.")
+                    .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Crossfade")
+                        Spacer()
+                        Group {
+                            if playback.crossfade == 0 { Text("Off") } else { Text("\(Int(playback.crossfade)) s") }
+                        }
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: Binding(get: { playback.crossfade }, set: { playback.setCrossfade($0) }),
+                           in: 0...PlaybackCrossfade.maximum, step: 1)
+                        .tint(palette.brand)
+                        .accessibilityLabel("Crossfade")
+                        .accessibilityValue(playback.crossfade == 0 ? String(localized: "Off")
+                                            : String(localized: "\(Int(playback.crossfade)) seconds"))
+                }
+                Text("Blends the end of each song into the next. Songs that follow each other on an album stay gapless.")
+                    .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Toggle("Switch quality immediately", isOn: Binding(
                     get: { playback.immediateQualitySwitch },
                     set: { playback.setImmediateQualitySwitch($0) }
                 ))
                 Text("When off, the current song keeps its quality when possible. The next song uses the new network’s quality.")
                     .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                NavigationLink {
+                    EqualizerView(playback: playback)
+                } label: {
+                    LabeledContent("Equalizer") {
+                        Text(LocalizedStringKey(!playback.equalizer.enabled ? "Off" : playback.equalizer.preset?.name ?? "Custom"))
+                    }
+                }
+                .accessibilityIdentifier("settings.equalizer")
             } header: {
                 Text("Playback")
             }
@@ -38,12 +77,32 @@ struct SettingsView: View {
                     .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Section("Appearance") {
-                Picker("Theme", selection: $appearance) {
+                Picker("Color mode", selection: $appearance) {
                     ForEach(DowntifyAppearance.allCases) { option in
                         Text(option.label).tag(option)
                     }
                 }
                 .accessibilityHint("Choose the app color appearance")
+                Picker("Theme", selection: Binding(get: { selectedTheme }, set: selectTheme)) {
+                    Text("Original").tag("original")
+                    Text("Redesign").tag("redesign")
+                    if let importedTheme {
+                        Text(importedTheme.name).tag("imported")
+                    } else if selectedTheme == "imported", let currentTheme {
+                        Text(currentTheme.name).tag("imported")
+                    }
+                }
+                Button("Import theme…") { importingTheme = true }
+                Button("Export selected theme…") {
+                    do {
+                        let encoder = JSONEncoder()
+                        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                        exportDocument = ThemeDocument(data: try encoder.encode(currentTheme ?? DowntifyTheme.bundled("original")))
+                        exportingTheme = true
+                    } catch { themeError = "Could not prepare the theme file." }
+                }
+                Text("Import a JSON theme from Files. Changes apply immediately; OLED appearance keeps its black background.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
             Section("Language") {
                 Picker("App language", selection: $language) {
@@ -60,6 +119,29 @@ struct SettingsView: View {
                 LabeledContent("Version", value: versionText)
             }
         }
+        .scrollContentBackground(palette.redesign("settings") ? .hidden : .automatic)
+        .background(palette.background.ignoresSafeArea())
+        .fileImporter(isPresented: $importingTheme, allowedContentTypes: [.json]) { result in
+            do {
+                let url = try result.get()
+                let accessing = url.startAccessingSecurityScopedResource()
+                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                let file = try FileHandle(forReadingFrom: url)
+                defer { try? file.close() }
+                let data = try file.read(upToCount: 16_385) ?? Data()
+                let theme = try DowntifyTheme.decode(data)
+                let encoded = String(decoding: try JSONEncoder().encode(theme), as: UTF8.self)
+                importedThemeJSON = encoded
+                themeJSON = encoded
+            } catch { themeError = "Could not import this theme. Check that it follows the documented theme format." }
+        }
+        .fileExporter(isPresented: $exportingTheme, document: exportDocument,
+                      contentType: .json, defaultFilename: "Downtify Theme") { result in
+            if case .failure = result { themeError = "Could not export the theme." }
+        }
+        .alert("Theme error", isPresented: Binding(get: { themeError != nil }, set: { if !$0 { themeError = nil } })) {
+            Button("OK", role: .cancel) { themeError = nil }
+        } message: { Text(themeError ?? "") }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
@@ -69,6 +151,27 @@ struct SettingsView: View {
     }
 
     @Environment(\.dismiss) private var dismiss
+    private var currentTheme: DowntifyTheme? { try? DowntifyTheme.decode(Data(themeJSON.utf8)) }
+    private var importedTheme: DowntifyTheme? { try? DowntifyTheme.decode(Data(importedThemeJSON.utf8)) }
+    private var selectedTheme: String {
+        guard let currentTheme else { return "original" }
+        if currentTheme == (try? DowntifyTheme.bundled("original")) { return "original" }
+        if currentTheme == (try? DowntifyTheme.bundled("redesign")) || currentTheme == .example { return "redesign" }
+        return "imported"
+    }
+    private func selectTheme(_ name: String) {
+        do {
+            if name == "imported" {
+                guard importedTheme != nil else { throw DowntifyTheme.ThemeError.invalid }
+                themeJSON = importedThemeJSON
+            } else {
+                // Keep a previously imported theme when switching from older app versions.
+                if selectedTheme == "imported", importedTheme == nil { importedThemeJSON = themeJSON }
+                let theme = try DowntifyTheme.bundled(name)
+                themeJSON = String(decoding: try JSONEncoder().encode(theme), as: UTF8.self)
+            }
+        } catch { themeError = "Could not load the selected theme." }
+    }
     private var versionText: String {
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? "—"
@@ -170,5 +273,15 @@ struct AboutView: View {
               let notes = try? JSONDecoder().decode([String].self, from: data)
         else { return [] }
         return notes
+    }
+}
+
+private struct ThemeDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+    var data: Data
+    init(data: Data) { self.data = data }
+    init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
     }
 }

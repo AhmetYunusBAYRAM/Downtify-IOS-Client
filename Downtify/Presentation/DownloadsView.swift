@@ -20,7 +20,7 @@ struct DownloadsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .center, spacing: DowntifyStyle.Space.large) {
+            VStack(alignment: palette.redesign("downloads") ? .leading : .center, spacing: DowntifyStyle.Space.large) {
                 localSection
                 serverSection
             }
@@ -82,7 +82,7 @@ struct DownloadsView: View {
             }.font(.footnote).foregroundStyle(DowntifyStyle.secondaryText)
         }
         .padding(16)
-        .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: palette.theme.map { CGFloat($0.cardCornerRadius) } ?? 20))
     }
 
     private func localRow(_ item: OfflineDownload) -> some View {
@@ -94,7 +94,7 @@ struct DownloadsView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
                             if isCurrent { NowPlayingBadge(isPlaying: nowPlaying.isPlaying) }
                             Text(item.track.displayTitle).font(.headline).lineLimit(2)
-                                .foregroundStyle(isCurrent ? AnyShapeStyle(DowntifyStyle.accent) : AnyShapeStyle(.primary))
+                                .foregroundStyle(isCurrent ? AnyShapeStyle(palette.accent) : AnyShapeStyle(.primary))
                         }
                         Text(item.track.displayArtist).font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
                         Text(localStatus(item)).font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
@@ -203,7 +203,7 @@ struct DownloadsView: View {
                 .font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
         }
         .padding(16)
-        .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: palette.theme.map { CGFloat($0.cardCornerRadius) } ?? 20))
     }
 
     private var catalogDownloadActions: some View {
