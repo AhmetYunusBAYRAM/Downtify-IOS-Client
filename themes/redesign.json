@@ -14,7 +14,10 @@
   "homeSections": [
     "recent",
     "new",
-    "favorites"
+    "discover",
+    "favorites",
+    "artists",
+    "downloaded"
   ],
   "shelfLayout": "carousel",
   "navigationStyle": "drawer",
