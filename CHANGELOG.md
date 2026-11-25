@@ -4,6 +4,21 @@ Historical record of Downtify iOS releases (version 0.1.2), newest first. Each b
 
 Builds 0.1.2-7 and earlier predate the curated release notes; their entries are reconstructed from git history.
 
+## 0.1.2 (13) — 2026-11-24
+
+Release notes:
+- Translate lyrics into your device's language on iOS 18 and later
+- Dragging songs in Up Next now moves them smoothly and drops them exactly where you let go
+- More of the app is translated in every supported language
+
+Changes:
+- Translate lyrics into the device language on iOS 18 and later, with a toggle back to the original; the choice is remembered, and iOS 17 is unchanged (#74)
+- Localize the lyrics translation strings in all locales (#74)
+- Fix queue reorder drop placement: drag location and row frames were measured in different coordinate spaces, so drops resolved to the first slot (#84)
+- The dragged queue row lifts and follows the finger while other rows slide aside to open a gap; the drop commits exactly what is shown, and Reduce Motion drops the spring (#84)
+- Clear queue drag state when the gesture is cancelled or the queue changes mid-drag, so scrolling no longer stays locked (#84)
+- Add a close button to the network debug overlay; add unit tests for lyrics translation and queue drag placement, and a drag-down queue UI test in the check script (#74, #84)
+
 ## 0.1.2 (12) — 2026-11-21
 
 Release notes:
@@ -17,7 +32,6 @@ Changes:
 - Add Play next to Library and catalog song menus, inserting songs at the front of the upcoming queue (#67)
 - Reorder upcoming queue songs with left-side drag handles and an insertion indicator; VoiceOver gets Move up / Move down actions (#68)
 - Localize Play next and queue reorder strings in all locales (#67, #68)
-- Translate lyrics into the device language on iOS 18 and later, with a toggle back to the original; the choice is remembered, and iOS 17 is unchanged (#74)
 - Keep bottom rows clear of the playback dock, including at accessibility text sizes, on More, About, admin Trash, podcast lists and catalog artist/album pages (#45)
 - Extend the debug harness with configurable fixture tracks and a queue order probe; add simulator UI tests, docs and check-script scenarios for Play next and queue reorder
 - Tap a timed lyric line in Now Playing to seek to it, switch between synced and static lyrics when both exist, and reset a track's saved lyric timing in one tap; lyrics requests now use the app transport so debug fixtures and staging guards apply (#71)
