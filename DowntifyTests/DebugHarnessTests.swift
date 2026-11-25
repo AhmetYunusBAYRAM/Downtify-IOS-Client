@@ -9,6 +9,11 @@ final class DebugHarnessTests: XCTestCase {
     private let stagingArgs = ["-DowntifyHarness", "-DowntifyHarnessMode", "staging"]
 
     func testThemeRoundTripAndInvalidInputs() throws {
+        let original = try DowntifyTheme.bundled("original")
+        let redesign = try DowntifyTheme.bundled("redesign")
+        XCTAssertEqual(original.name, "Original")
+        XCTAssertEqual(original.surfaceStyle, "system")
+        XCTAssertEqual(redesign, .example)
         let data = try JSONEncoder().encode(DowntifyTheme.example)
         XCTAssertEqual(try DowntifyTheme.decode(data), .example)
         var bad = DowntifyTheme.example

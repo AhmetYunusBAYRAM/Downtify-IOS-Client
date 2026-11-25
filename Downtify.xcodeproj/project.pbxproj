@@ -5,6 +5,8 @@
 	};
 	objectVersion = 56;
 	objects = {
+		00000000000000000000F100 = { isa = PBXFileReference; lastKnownFileType = folder; path = themes; sourceTree = "<group>"; };
+		00000000000000000000F101 = { isa = PBXBuildFile; fileRef = 00000000000000000000F100; };
 		000000000000000000000A08 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingDetailViews.swift; sourceTree = "<group>"; };
 		000000000000000000000A09 = { isa = PBXBuildFile; fileRef = 000000000000000000000A08; };
 		000000000000000000000A06 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingDetailModelTests.swift; sourceTree = "<group>"; };
@@ -609,6 +611,7 @@
 		000000000000000000000014 = {
 			isa = PBXGroup;
 			children = (
+				00000000000000000000F100,
 				00000000000000000000000F,
 				000000000000000000000010,
 				000000000000000000000013,
@@ -695,6 +698,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				00000000000000000000F101,
 				000000000000000000000091,
 				000000000000000000000093,
 			);

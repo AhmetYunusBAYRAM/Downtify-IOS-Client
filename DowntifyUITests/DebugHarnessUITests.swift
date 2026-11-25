@@ -19,7 +19,10 @@ final class DebugHarnessUITests: XCTestCase {
         let settings = app.buttons["Settings"].firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
         settings.tap()
-        let redesign = app.buttons["Use redesign theme"]
+        let themePicker = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Theme")).firstMatch
+        XCTAssertTrue(themePicker.waitForExistence(timeout: 10))
+        themePicker.tap()
+        let redesign = app.buttons["Redesign"].firstMatch
         XCTAssertTrue(redesign.waitForExistence(timeout: 10))
         redesign.tap()
         app.buttons["Done"].firstMatch.tap()
@@ -58,9 +61,12 @@ final class DebugHarnessUITests: XCTestCase {
         XCTAssertTrue(drawer.waitForExistence(timeout: 10))
         drawer.tap()
         app.buttons["Settings"].firstMatch.tap()
-        let restore = app.buttons["Use default theme"]
+        let restore = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Theme")).firstMatch
         XCTAssertTrue(restore.waitForExistence(timeout: 10))
         restore.tap()
+        let original = app.buttons["Original"].firstMatch
+        XCTAssertTrue(original.waitForExistence(timeout: 10))
+        original.tap()
         app.buttons["Done"].firstMatch.tap()
     }
 

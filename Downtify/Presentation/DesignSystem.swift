@@ -56,6 +56,7 @@ struct DowntifyTheme: Codable, Equatable {
     var onBrandDark: String? = nil
     var fontDesign: String? = nil
     var browseColors: [String: String]? = nil
+    var surfaceStyle: String? = nil
 
     static let storageKey = "downtify.theme.json"
     static let example = DowntifyTheme(version: 1, name: "Redesign",
@@ -100,7 +101,8 @@ struct DowntifyTheme: Codable, Equatable {
               [nil, "system", "rounded", "serif", "monospaced"].contains(fontDesign) else { throw ThemeError.invalid }
         guard Set(homeSections) == Set(["recent", "new", "favorites"]), homeSections.count == 3,
               ["grid", "list", "carousel"].contains(shelfLayout) else { throw ThemeError.invalid }
-        guard [nil, "system", "drawer"].contains(navigationStyle),
+        guard [nil, "system", "custom"].contains(surfaceStyle),
+              [nil, "system", "drawer"].contains(navigationStyle),
               [nil, "system", "profile"].contains(headerStyle),
               [nil, "shelf", "tiles"].contains(recentStyle),
               [nil, "standard", "compact"].contains(playerStyle) else { throw ThemeError.invalid }
@@ -115,6 +117,13 @@ struct DowntifyTheme: Codable, Equatable {
         let theme = try JSONDecoder().decode(Self.self, from: data)
         try theme.validate()
         return theme
+    }
+
+    static func bundled(_ name: String, bundle: Bundle = .main) throws -> DowntifyTheme {
+        guard let url = bundle.url(forResource: name, withExtension: "json", subdirectory: "themes") else {
+            throw ThemeError.invalid
+        }
+        return try decode(Data(contentsOf: url))
     }
 
     func color(light: String, dark: String) -> Color {
@@ -191,6 +200,7 @@ struct DowntifyPalette {
 
     var surface: Color {
         if oled { return Color(uiColor: UIColor(white: 0.09, alpha: 1)) }
+        if theme?.surfaceStyle == "system" { return Color(uiColor: .secondarySystemGroupedBackground) }
         return theme.map { $0.color(light: $0.surfaceLight, dark: $0.surfaceDark) }
             ?? Color(uiColor: .secondarySystemGroupedBackground)
     }
