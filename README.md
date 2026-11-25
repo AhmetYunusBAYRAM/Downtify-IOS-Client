@@ -16,12 +16,18 @@ Downtify for iOS is a SwiftUI app for connecting to your own Downtify server. Br
 
 ## Features
 
-| | |
+| Feature | What you can do |
 | --- | --- |
-| **Library** | Connect to your server, sync your library and browse your music on iPhone or iPad. |
-| **Playback** | Listen with a persistent library and catalog queue, queue editing, shuffle, repeat, and background and lock-screen controls. |
-| **Search and discover** | Search your synced library and the server catalog; explore Finder, personalized suggestions, charts and similar tracks. |
-| **Downloads** | Submit catalog tracks to the server download queue or save available tracks to your device for offline listening. Server jobs and device downloads are shown separately. |
+| **Adaptive playback** | Start with a buffer sized to your connection speed and recover from temporary stream failures. When switching between Wi-Fi and cellular, keep the current track at the quality it started with when possible, or switch quality immediately. |
+| **Queue and preloading** | Mix library and catalog tracks in one queue that survives app restarts. Use **Play next**, drag to reorder, shuffle or repeat. The app preloads the current track and up to five upcoming tracks so cached tracks can play through a connection drop. |
+| **Now Playing** | Jump to an artist or album from the player, including catalog releases. Tap a synced lyric to seek, switch to plain lyrics when available, or adjust the lyric timing per track. |
+| **Offline listening and sync** | Use **Add to Device** to keep music on your iPhone or iPad. Track likes and playlist favorites made offline sync when the server is reachable again. |
+| **Library and playlists** | Browse and search your synced library, edit playlists and see when a catalog result is already in your library. |
+| **Search and discover** | Search and play from the server catalog, browse Finder and charts, or explore personalized suggestions. **Similar** keeps finding more tracks as you scroll. |
+| **Server downloads** | Use **Add to Library** to queue a catalog download on your server and follow its progress in the app. |
+| **iOS playback controls** | Keep listening in the background with playback controls and album artwork on the Lock Screen and in Control Center. |
+| **Quick pairing** | Find compatible servers on your local network or scan a pairing QR code from **Settings → Apps** on your server. |
+| **Network and storage tools** | See what the player is buffering in the network overlay, adjust the concurrent request limit, and review or clear app storage while staying signed in. |
 
 ## Screenshots
 
