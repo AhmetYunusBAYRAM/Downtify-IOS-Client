@@ -28,6 +28,7 @@ struct CatalogDiscoverView: View {
     @State private var isSearching = false
     @State private var pendingAlbumAdd: PendingAlbumAdd?
     @FocusState private var finderFocused: Bool
+    @FocusState private var similarFocused: Bool
 
     private enum Section: String, CaseIterable, Identifiable {
         case finder = "Finder", discover = "For You", charts = "Charts", similar = "Similar"
@@ -36,10 +37,20 @@ struct CatalogDiscoverView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Picker("Explore", selection: $selectedSection) {
-                ForEach(Section.allCases) { Text(LocalizedStringKey($0.rawValue)).tag($0.rawValue) }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(Section.allCases) { section in
+                        DowntifyChip(title: LocalizedStringKey(section.rawValue),
+                                     isSelected: (Section(rawValue: selectedSection) ?? .finder) == section) {
+                            selectedSection = section.rawValue
+                        }
+                        .accessibilityIdentifier("discover.section.\(section.rawValue)")
+                    }
+                }
+                .padding(.horizontal, DowntifyStyle.Space.regular)
             }
-            .pickerStyle(.segmented)
+            .padding(.horizontal, -DowntifyStyle.Space.regular)
+            .accessibilityElement(children: .contain)
             .accessibilityLabel("Discovery section")
 
             switch Section(rawValue: selectedSection) ?? .finder {
@@ -52,7 +63,7 @@ struct CatalogDiscoverView: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Done") { finderFocused = false }
+                Button("Done") { finderFocused = false; similarFocused = false }
             }
         }
         .onAppear(perform: loadInitial)
@@ -100,7 +111,7 @@ struct CatalogDiscoverView: View {
                 .accessibilityLabel("Search")
             }
             .padding(12)
-            .background(palette.surface, in: RoundedRectangle(cornerRadius: 14))
+            .background(palette.elevated, in: RoundedRectangle(cornerRadius: 8))
 
             if isSearching || !query.isEmpty {
                 switch catalog.finderSearchState {
@@ -318,7 +329,9 @@ struct CatalogDiscoverView: View {
             heroCard(title: "Keep the music going", subtitle: "Start with an artist or track and find a radio-style list of similar songs.", symbol: "waveform.path")
             HStack {
                 TextField("Artist", text: $similarArtist).textFieldStyle(.roundedBorder).accessibilityLabel("Similar artist")
+                    .focused($similarFocused).submitLabel(.search).onSubmit(loadSimilar)
                 TextField("Track", text: $similarTrack).textFieldStyle(.roundedBorder).accessibilityLabel("Similar track")
+                    .focused($similarFocused).submitLabel(.search).onSubmit(loadSimilar)
             }
             Button { loadSimilar() } label: { Label("Find similar tracks", systemImage: "waveform") }.buttonStyle(.borderedProminent)
                 .disabled(similarArtist.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && similarTrack.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -494,12 +507,25 @@ struct CatalogDiscoverView: View {
     }
 
     private func heroCard(title: String, subtitle: String, symbol: String) -> some View {
-        DowntifyCard {
-            HStack(spacing: 14) {
-                Image(systemName: symbol).font(.title2).foregroundStyle(DowntifyStyle.accent).frame(width: 44, height: 44).background(DowntifyStyle.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 13))
-                VStack(alignment: .leading, spacing: 4) { Text(title).font(.headline); Text(subtitle).font(.subheadline).foregroundStyle(.secondary) }
+        HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(.title3.bold())
+                Text(subtitle).font(.subheadline).foregroundStyle(.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 0)
+            Image(systemName: symbol)
+                .font(.system(size: 40, weight: .semibold))
+                .rotationEffect(.degrees(12))
+                .accessibilityHidden(true)
         }
+        .foregroundStyle(.white)
+        .padding(DowntifyStyle.Space.regular)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(LinearGradient(colors: [Color(red: 0.12, green: 0.2, blue: 0.39), Color(red: 0.55, green: 0.4, blue: 0.67)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 
     private func emptyMessage(_ title: LocalizedStringKey, symbol: String, detail: String) -> some View {
@@ -521,6 +547,7 @@ struct CatalogDiscoverView: View {
 
     private func searchFinder() {
         guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        finderFocused = false
         isSearching = true
         catalog.searchFinder(query)
     }
@@ -566,6 +593,7 @@ struct CatalogDiscoverView: View {
     }
 
     private func loadSimilar() {
+        similarFocused = false
         catalog.loadSimilar(artist: similarArtist.trimmingCharacters(in: .whitespacesAndNewlines),
                             track: similarTrack.trimmingCharacters(in: .whitespacesAndNewlines))
     }

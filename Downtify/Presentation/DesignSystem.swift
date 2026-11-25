@@ -28,11 +28,18 @@ struct DowntifyPalette {
     var oled = false
 
     var background: Color {
-        oled ? .black : DowntifyStyle.adaptive(light: 0xF2F3F5, dark: 0x141618)
+        oled ? .black : DowntifyStyle.adaptive(light: 0xFFFFFF, dark: 0x121212)
     }
 
+    /// Cards and grouped rows that sit on `background`.
     var surface: Color {
-        oled ? Color(uiColor: UIColor(white: 0.09, alpha: 1)) : Color(uiColor: .secondarySystemGroupedBackground)
+        oled ? DowntifyStyle.adaptive(light: 0xF3F3F3, dark: 0x0F0F0F)
+            : DowntifyStyle.adaptive(light: 0xF3F3F3, dark: 0x1E1E1E)
+    }
+
+    /// Chips, quick-access tiles and search fields; one step above `surface`.
+    var elevated: Color {
+        DowntifyStyle.adaptive(light: 0xE8E8E8, dark: 0x2A2A2A)
     }
 }
 
@@ -89,8 +96,11 @@ extension EnvironmentValues {
 
 /// Shared semantic colors, spacing, and surfaces used throughout the app.
 enum DowntifyStyle {
-    static let accent = adaptive(light: 0x17623E, dark: 0x72D9A0)
-    static let onAccent = adaptive(light: 0xFFFFFF, dark: 0x09160F)
+    /// Text and icon accent. Darker in light mode so green text keeps its contrast on white.
+    static let accent = adaptive(light: 0x14833B, dark: 0x1ED760)
+    /// Solid fill for play buttons and selected chips; always paired with `onAccent`.
+    static let brand = Color(red: 0x1D / 255, green: 0xB9 / 255, blue: 0x54 / 255)
+    static let onAccent = Color.black
     static let error = adaptive(light: 0xAE252E, dark: 0xFF9B9E)
     static let secondaryText = Color(uiColor: .secondaryLabel)
     static let minimumControlSize: CGFloat = 44

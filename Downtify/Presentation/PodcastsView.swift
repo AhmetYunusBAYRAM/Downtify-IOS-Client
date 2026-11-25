@@ -8,8 +8,10 @@ struct PodcastsView: View {
     @State private var connectionFailed = false
     @State private var navigationID = UUID()
 
+    @Environment(\.downtifyPalette) private var palette
+
     var body: some View {
-        NavigationStack {
+        Group {
             if let session {
                 PodcastShowsList(api: api, session: session, connection: connection, playback: playback)
             } else if connectionFailed {
@@ -19,6 +21,9 @@ struct PodcastsView: View {
                 ProgressView("Checking connection…")
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(palette.background.ignoresSafeArea())
+        .navigationTitle("Podcasts")
         .id(navigationID)
         .task {
             do {

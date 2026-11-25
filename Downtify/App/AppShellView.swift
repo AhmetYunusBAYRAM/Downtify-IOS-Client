@@ -79,20 +79,48 @@ struct TrackRow: View {
     let track: LibraryTrack
     var isCurrent = false
     var isPlaying = false
+    var showsArtwork = true
+    var isOnDevice = false
 
     var body: some View {
-        DowntifyMediaRow(title: track.displayTitle, subtitle: track.displayArtist,
-                         detail: track.album.isEmpty ? nil : track.album,
-                         isCurrent: isCurrent, isPlaying: isPlaying) {
-            TrackArtwork(track: track, size: 56)
-        } accessory: {
-            Text(durationText(track.duration))
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(DowntifyStyle.secondaryText)
-                .accessibilityHidden(true)
+        HStack(spacing: 12) {
+            if showsArtwork {
+                TrackArtwork(track: track, size: 48).accessibilityHidden(true)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    if isCurrent { NowPlayingBadge(isPlaying: isPlaying) }
+                    Text(track.displayTitle)
+                        .font(.body)
+                        .foregroundStyle(isCurrent ? AnyShapeStyle(DowntifyStyle.accent) : AnyShapeStyle(.primary))
+                        .lineLimit(1)
+                }
+                HStack(spacing: 5) {
+                    if isOnDevice {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(DowntifyStyle.accent)
+                            .accessibilityLabel("On this device")
+                    }
+                    if track.isExplicit {
+                        Text(verbatim: "E")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(Color(uiColor: .systemBackground))
+                            .frame(width: 14, height: 14)
+                            .background(DowntifyStyle.secondaryText, in: RoundedRectangle(cornerRadius: 2))
+                            .accessibilityLabel("Explicit")
+                    }
+                    Text(track.displayArtist)
+                        .font(.subheadline)
+                        .foregroundStyle(DowntifyStyle.secondaryText)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .frame(minHeight: DowntifyStyle.minimumControlSize + 8)
+        .padding(.vertical, 2)
         .contentShape(Rectangle())
     }
 }
@@ -140,10 +168,15 @@ struct PlaybackDock: View {
             if playback.podcast != nil || playback.queue.current != nil {
                 MiniPlayerView(playback: playback) { showingNowPlaying = true }
                     .frame(maxWidth: 760)
-                    .padding(.horizontal, DowntifyStyle.Space.regular)
-                    .padding(.vertical, DowntifyStyle.Space.small)
+                    .padding(.horizontal, DowntifyStyle.Space.small)
+                    .padding(.top, DowntifyStyle.Space.small)
+                    .padding(.bottom, 6)
                     .frame(maxWidth: .infinity)
-                    .background(palette.background)
+                    .background {
+                        LinearGradient(colors: [palette.background.opacity(0), palette.background.opacity(0.92)],
+                                       startPoint: .top, endPoint: .bottom)
+                            .allowsHitTesting(false)
+                    }
                     .background {
                         GeometryReader { proxy in
                             Color.clear
@@ -152,6 +185,7 @@ struct PlaybackDock: View {
                         }
                     }
                     .onDisappear { height = 0 }
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("player.dock")
             }
         }
@@ -165,40 +199,68 @@ struct PlaybackDock: View {
 private struct MiniPlayerView: View {
     @ObservedObject var playback: PlaybackController
     let open: () -> Void
-    @Environment(\.downtifyPalette) private var palette
+    @EnvironmentObject private var collections: LibraryCollectionsModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var tint: Color?
+    /// How far the song info follows the finger; neighbours slide in from the side.
+    @State private var dragOffset: CGFloat = 0
+    @State private var infoWidth: CGFloat = 0
+    @State private var skips = 0
 
     private var item: PlaybackItem? { playback.queue.current?.item }
+    private var nextID: UUID? { playback.podcast == nil ? playback.queue.next(automatic: false) : nil }
+    private var previousID: UUID? { playback.podcast == nil ? playback.queue.previous() : nil }
+    private func entryItem(_ id: UUID?) -> PlaybackItem? {
+        guard let id else { return nil }
+        return playback.queue.order.first { $0.id == id }?.item
+    }
     private var isActive: Bool { playback.phase == .playing || playback.phase == .buffering || playback.phase == .loading }
 
     var body: some View {
         let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
-            : AnyLayout(HStackLayout(spacing: 4))
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout(spacing: 6))
         layout {
-            if let podcast = playback.podcast {
-                Button(action: open) {
-                    DowntifyMediaRow(title: podcast.episode.title, subtitle: podcast.show.name, accessibilityLineLimit: 2) {
-                        PodcastArtwork(show: podcast.show, size: 44)
-                    } accessory: { EmptyView() }
+            Button(action: open) {
+                ZStack {
+                    if dragOffset < 0, let next = entryItem(nextID) {
+                        songInfo(next).offset(x: dragOffset + infoWidth + Self.gap)
+                    }
+                    if dragOffset > 0, let previous = entryItem(previousID) {
+                        songInfo(previous).offset(x: dragOffset - infoWidth - Self.gap)
+                    }
+                    currentInfo.offset(x: dragOffset)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Now playing, \(podcast.episode.title), \(podcast.show.name)")
-                .accessibilityHint("Open Now Playing")
-            } else if let item {
-                Button(action: open) {
-                    DowntifyMediaRow(title: item.displayTitle, subtitle: item.displayArtist, accessibilityLineLimit: 2) {
-                        PlaybackItemArtwork(item: item, size: 44)
-                    } accessory: {
-                        EmptyView()
+                .clipped()
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear
+                            .onAppear { infoWidth = proxy.size.width }
+                            .onChange(of: proxy.size.width) { _, width in infoWidth = width }
                     }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Now playing, \(item.displayTitle) by \(item.displayArtist)")
-                .accessibilityHint("Open Now Playing")
+                .contentShape(Rectangle())
             }
-            HStack(spacing: 4) {
+            .buttonStyle(.plain)
+            .highPriorityGesture(swipeGesture)
+            .sensoryFeedback(.selection, trigger: skips)
+            .accessibilityLabel(nowPlayingLabel)
+            .accessibilityHint("Open Now Playing")
+            .accessibilityAction(named: Text("Next track")) { playback.skipNext() }
+            .accessibilityAction(named: Text("Previous track")) { playback.skipPrevious() }
+            HStack(spacing: 0) {
+                if playback.podcast == nil, let track = item?.libraryTrack, collections.likedIDs != nil {
+                    let liked = collections.effectiveLike(track.id)
+                    Button { Task { await collections.toggleLike(track) } } label: {
+                        Image(systemName: liked ? "heart.fill" : "heart")
+                            .foregroundStyle(liked ? DowntifyStyle.accent : Color.primary)
+                            .downtifyControlTarget()
+                    }
+                    .disabled(collections.mutationBusy)
+                    .accessibilityLabel(liked ? String(localized: "Unlike song") : String(localized: "Like song"))
+                    .sensoryFeedback(.selection, trigger: liked)
+                }
                 if case .failed = playback.phase {
                     Button { playback.play() } label: {
                         Image(systemName: "arrow.clockwise").downtifyControlTarget()
@@ -207,33 +269,122 @@ private struct MiniPlayerView: View {
                 } else {
                     Button { playback.togglePlayback() } label: {
                         Image(systemName: isActive ? "pause.fill" : "play.fill")
+                            .font(.title3)
                             .downtifyControlTarget()
                     }
                     .accessibilityLabel(isActive ? String(localized: "Pause") : String(localized: "Play"))
-                    .accessibilityIdentifier("player.playPause")
-                }
-                if playback.podcast == nil {
-                    Button { playback.skipNext() } label: {
-                        Image(systemName: "forward.end.fill").downtifyControlTarget()
-                    }
-                    .accessibilityLabel("Next track")
-                    .disabled(playback.queue.next(automatic: false) == nil)
+                    .accessibilityIdentifier("miniPlayer.playPause")
                 }
             }
             .font(.body.weight(.semibold))
             .buttonStyle(.borderless)
+            .foregroundStyle(Color.primary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
+        .padding(.leading, 7)
+        .padding(.trailing, 4)
+        .padding(.vertical, 7)
+        .background(tint ?? Color(white: 0.22), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(alignment: .bottom) {
             if let duration = playback.duration, duration.isFinite, duration > 0 {
-                ProgressView(value: min(playback.position, duration), total: duration)
-                    .padding(.horizontal, 12)
-                    .accessibilityHidden(true)
-                    .transaction { if reduceMotion { $0.animation = nil } }
+                GeometryReader { proxy in
+                    Capsule().fill(Color.white.opacity(0.25))
+                        .overlay(alignment: .leading) {
+                            Capsule().fill(Color.white)
+                                .frame(width: proxy.size.width * min(max(playback.position / duration, 0), 1))
+                        }
+                }
+                .frame(height: 2)
+                .padding(.horizontal, 8)
+                .accessibilityHidden(true)
+                .transaction { if reduceMotion { $0.animation = nil } }
             }
         }
+        .environment(\.colorScheme, .dark)
+        .artworkTint(for: item?.libraryTrack, into: $tint)
+    }
+
+    private static let gap: CGFloat = 16
+
+    @ViewBuilder
+    private var currentInfo: some View {
+        if let podcast = playback.podcast {
+            infoRow(title: podcast.episode.title, subtitle: podcast.show.name) {
+                PodcastArtwork(show: podcast.show, size: 42)
+            }
+        } else {
+            songInfo(item)
+        }
+    }
+
+    private func songInfo(_ item: PlaybackItem?) -> some View {
+        infoRow(title: item?.displayTitle ?? "", subtitle: item?.displayArtist ?? "") {
+            PlaybackItemArtwork(item: item, size: 42)
+        }
+    }
+
+    private func infoRow<Artwork: View>(title: String, subtitle: String, @ViewBuilder artwork: () -> Artwork) -> some View {
+        HStack(spacing: 10) {
+            artwork()
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(verbatim: title)
+                    .font(.subheadline.weight(.semibold))
+                Text(verbatim: subtitle)
+                    .font(.footnote)
+                    .foregroundStyle(DowntifyStyle.secondaryText)
+            }
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// Swipe left for the next song and right for the previous one. The info follows the finger, the
+    /// neighbouring song slides in, and a short or slow drag springs back.
+    private var swipeGesture: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                guard playback.podcast == nil, abs(value.translation.width) > abs(value.translation.height) else { return }
+                let dx = value.translation.width
+                let hasNeighbour = dx < 0 ? nextID != nil : previousID != nil
+                dragOffset = hasNeighbour ? dx : dx * 0.25
+            }
+            .onEnded { value in
+                guard playback.podcast == nil else { return }
+                let width = max(infoWidth, 1)
+                let dx = value.translation.width
+                let flung = value.predictedEndTranslation.width
+                if (dx < -width * 0.3 || flung < -width * 0.6), nextID != nil {
+                    finishSwipe(to: -width - Self.gap) { playback.skipNext() }
+                } else if (dx > width * 0.3 || flung > width * 0.6), previousID != nil {
+                    finishSwipe(to: width + Self.gap) { playback.goToPreviousSong() }
+                } else {
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) { dragOffset = 0 }
+                }
+            }
+    }
+
+    private func finishSwipe(to target: CGFloat, change: @escaping () -> Void) {
+        let settle = {
+            change()
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { dragOffset = 0 }
+            skips += 1
+        }
+        if reduceMotion {
+            settle()
+        } else {
+            withAnimation(.easeOut(duration: 0.18)) { dragOffset = target } completion: { settle() }
+        }
+    }
+
+
+    private var nowPlayingLabel: String {
+        if let podcast = playback.podcast {
+            return String(localized: "Now playing, \(podcast.episode.title), \(podcast.show.name)")
+        }
+        guard let item else { return "" }
+        return String(localized: "Now playing, \(item.displayTitle) by \(item.displayArtist)")
     }
 }
 
@@ -266,6 +417,7 @@ private struct NowPlayingView: View {
     @Environment(\.downtifyPalette) private var palette
     @Environment(\.dismiss) private var dismiss
     @State private var showingQueue = false
+    @State private var showingEqualizer = false
     @State private var lyrics: TrackLyrics?
     @State private var lyricsLoading = false
     @State private var lyricsError = false
@@ -291,34 +443,47 @@ private struct NowPlayingView: View {
         horizontalSizeClass == .regular && !dynamicTypeSize.isAccessibilitySize
     }
 
+    @State private var tint: Color?
+
+    private var backdrop: some View {
+        LinearGradient(colors: [tint ?? Color(white: 0.28), Color(white: 0.07)], startPoint: .top, endPoint: .bottom)
+            .ignoresSafeArea()
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             ZStack(alignment: .topTrailing) {
+            GeometryReader { proxy in
             ScrollView {
                 let layout = usesWideLayout
                     ? AnyLayout(HStackLayout(alignment: .center, spacing: DowntifyStyle.Space.large))
                     : AnyLayout(VStackLayout(spacing: DowntifyStyle.Space.large))
+                let size = artworkSize(for: proxy.size.width)
                 layout {
                     Group {
                         if let podcast = playback.podcast {
-                            PodcastArtwork(show: podcast.show, size: artworkSize)
+                            PodcastArtwork(show: podcast.show, size: size)
                         } else {
-                            PlaybackItemArtwork(item: item, size: artworkSize)
+                            PlaybackItemArtwork(item: item, size: size)
                         }
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .shadow(color: .black.opacity(0.4), radius: 20, y: 12)
+                    .padding(.top, DowntifyStyle.Space.small)
                     .accessibilityHidden(true)
                     .accessibilityIdentifier("player.artwork")
                     VStack(spacing: DowntifyStyle.Space.regular) {
                         trackMetadata
-                        phaseDescription
-                            .font(.subheadline)
-                            .foregroundStyle(DowntifyStyle.secondaryText)
-                            .multilineTextAlignment(.center)
+                        if showsPhase {
+                            phaseDescription
+                                .font(.subheadline)
+                                .foregroundStyle(DowntifyStyle.secondaryText)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                         timeline
                         transportControls
                         if playback.podcast == nil {
                             actionRow
-                            queueControls
                             upNextCard
                             if track != nil { lyricsSection }
                         } else {
@@ -329,29 +494,49 @@ private struct NowPlayingView: View {
                             }
                             if item != nil {
                                 Button("Back to music", systemImage: "music.note") { playback.returnToMusic() }
+                                    .buttonStyle(.bordered)
                             }
                         }
                     }
-                    .frame(maxWidth: 400)
+                    .frame(maxWidth: usesWideLayout ? 400 : 520)
                 }
-                .padding(DowntifyStyle.Space.regular)
-                .frame(maxWidth: 760)
+                .padding(.horizontal, DowntifyStyle.Space.large)
+                .padding(.bottom, DowntifyStyle.Space.large)
+                .frame(maxWidth: 820)
                 .frame(maxWidth: .infinity)
+            }
             }
             if networkOverlayEnabled {
                 NetworkDebugOverlayContainer(playback: playback)
             }
             }
             .overlay(alignment: .bottom) { confirmationBanner }
-            .background(palette.background.ignoresSafeArea())
+            .background(backdrop)
             .navigationTitle("Now Playing")
             .accessibilityIdentifier("player.full")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(palette.background, for: .navigationBar)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.down").font(.body.weight(.semibold))
+                    }
+                    .accessibilityLabel("Done")
+                    .accessibilityIdentifier("player.close")
                 }
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 0) {
+                        Text(playback.podcast == nil ? "Playing from your library" : "Playing podcast")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(DowntifyStyle.secondaryText)
+                            .textCase(.uppercase)
+                        Text(verbatim: playback.podcast?.show.name ?? (item?.album.isEmpty == false ? item?.album ?? "" : item?.displayArtist ?? ""))
+                            .font(.footnote.weight(.bold))
+                            .lineLimit(1)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+                ToolbarItem(placement: .topBarTrailing) { moreMenu }
             }
             .navigationDestination(for: NowPlayingRoute.self) { route in
                 Group {
@@ -364,6 +549,7 @@ private struct NowPlayingView: View {
                                             serverDownloads: serverDownloads)
                     }
                 }
+                .background(palette.background.ignoresSafeArea())
                 .toolbarBackground(palette.background, for: .navigationBar)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
@@ -381,6 +567,10 @@ private struct NowPlayingView: View {
         }
         .sheet(isPresented: $showingQueue) {
             PlaybackQueueSheet(playback: playback)
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingEqualizer) {
+            NavigationStack { EqualizerView(playback: playback, showsDoneButton: true) }
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingPlaylistPicker) {
@@ -401,6 +591,8 @@ private struct NowPlayingView: View {
         }
         .task(id: track?.id) { await loadLyrics() }
         .modifier(LyricsTranslationSupport(model: translation))
+        .artworkTint(for: track, into: $tint)
+        .environment(\.colorScheme, .dark)
     }
 
     @ViewBuilder
@@ -408,13 +600,13 @@ private struct NowPlayingView: View {
         if playback.podcast == nil, let item {
             musicMetadata(item)
         } else {
-            VStack(spacing: 5) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(playback.podcast?.episode.title ?? item?.displayTitle ?? String(localized: "Unknown title"))
                     .font(.title2.weight(.bold))
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                     .accessibilityAddTraits(.isHeader)
                 Text(playback.podcast?.show.name ?? item?.displayArtist ?? String(localized: "Unknown artist"))
-                    .font(.title3)
+                    .font(.body)
                     .foregroundStyle(DowntifyStyle.secondaryText)
                 if let album = playback.podcast?.show.author, !album.isEmpty {
                     Text(album)
@@ -422,53 +614,77 @@ private struct NowPlayingView: View {
                         .foregroundStyle(DowntifyStyle.secondaryText)
                 }
             }
-            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityElement(children: .combine)
         }
     }
 
-    /// Title and album open the album page, the artist opens the artist page.
+    /// Title opens the album page, the artist opens the artist page; the heart likes the song.
     /// Targets resolve at tap time so this sheet never observes the library.
     private func musicMetadata(_ item: PlaybackItem) -> some View {
         let hasAlbum = !item.album.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let hasArtist = !item.artist.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || item.artists.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        return VStack(spacing: 5) {
-            Button { openAlbum(item) } label: {
-                Text(item.displayTitle)
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-            }
-            .disabled(!hasAlbum)
-            .accessibilityLabel(item.displayTitle)
-            .accessibilityAddTraits(.isHeader)
-            .accessibilityHint(hasAlbum ? String(localized: "Opens the album page") : "")
-            .accessibilityIdentifier("player.title")
-            Button { openArtist(item) } label: {
-                Text(item.displayArtist)
-                    .font(.title3)
-                    .foregroundStyle(hasArtist ? DowntifyStyle.accent : DowntifyStyle.secondaryText)
-            }
-            .disabled(!hasArtist)
-            .accessibilityLabel("Artist, \(item.displayArtist)")
-            .accessibilityHint(hasArtist ? String(localized: "Opens the artist page") : "")
-            .accessibilityIdentifier("player.artist")
-            if hasAlbum {
+        let like = likePresentation
+        return HStack(alignment: .center, spacing: DowntifyStyle.Space.regular) {
+            VStack(alignment: .leading, spacing: 4) {
                 Button { openAlbum(item) } label: {
-                    Text(item.album)
-                        .font(.subheadline)
-                        .foregroundStyle(DowntifyStyle.secondaryText)
-                        .underline()
+                    Text(item.displayTitle)
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 }
-                .accessibilityLabel("Album, \(item.album)")
-                .accessibilityHint("Opens the album page")
-                .accessibilityIdentifier("player.album")
+                .disabled(!hasAlbum)
+                .accessibilityLabel(item.displayTitle)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityHint(hasAlbum ? String(localized: "Opens the album page") : "")
+                .accessibilityIdentifier("player.title")
+                Button { openArtist(item) } label: {
+                    Text(item.displayArtist)
+                        .font(.body)
+                        .foregroundStyle(DowntifyStyle.secondaryText)
+                }
+                .disabled(!hasArtist)
+                .accessibilityLabel("Artist, \(item.displayArtist)")
+                .accessibilityHint(hasArtist ? String(localized: "Opens the artist page") : "")
+                .accessibilityIdentifier("player.artist")
+                if hasAlbum {
+                    Button { openAlbum(item) } label: {
+                        Text(item.album)
+                            .font(.footnote)
+                            .foregroundStyle(DowntifyStyle.secondaryText)
+                            .lineLimit(1)
+                    }
+                    .accessibilityLabel("Album, \(item.album)")
+                    .accessibilityHint("Opens the album page")
+                    .accessibilityIdentifier("player.album")
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button {
+                guard let actionTrack else { return }
+                Task { await collections.toggleLike(actionTrack) }
+            } label: {
+                Image(systemName: like.isLiked ? "heart.fill" : "heart")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(like.isLiked ? DowntifyStyle.accent : Color.primary)
+                    .overlay(alignment: .topTrailing) {
+                        if like.isPending {
+                            Image(systemName: "clock.fill").font(.caption2).offset(x: 8, y: -6)
+                        }
+                    }
+                    .downtifyControlTarget()
+            }
+            .disabled(!like.isEnabled)
+            .accessibilityLabel(Text(verbatim: like.accessibilityLabel))
+            .accessibilityValue(like.isPending ? String(localized: "Queued") : "")
+            .accessibilityHint(Text(verbatim: like.explanation ?? ""))
+            .accessibilityIdentifier("player.like")
+            .sensoryFeedback(.selection, trigger: like.isLiked)
         }
         .buttonStyle(.plain)
-        .multilineTextAlignment(.center)
+        .multilineTextAlignment(.leading)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -487,51 +703,69 @@ private struct NowPlayingView: View {
     }
 
     private var transportControls: some View {
-        HStack(spacing: DowntifyStyle.Space.regular) {
+        HStack(spacing: 0) {
+            if playback.podcast == nil {
+                shuffleButton
+                Spacer(minLength: 4)
+            }
             if playback.podcast != nil {
                 Button { playback.seek(to: playback.position - 15) } label: {
-                    Image(systemName: "gobackward.15").font(.title2).downtifyControlTarget()
+                    Image(systemName: "gobackward.15").font(.title).downtifyControlTarget()
                 }
                 .accessibilityLabel("Back 15 seconds")
             } else {
                 Button { playback.skipPrevious() } label: {
-                    Image(systemName: "backward.end.fill").font(.title2)
+                    Image(systemName: "backward.end.fill").font(.title)
                         .downtifyControlTarget()
                 }
                 .accessibilityLabel("Previous track")
                 .disabled(item == nil)
             }
+            Spacer(minLength: 4)
             if case .failed = playback.phase {
                 Button { playback.play() } label: {
-                    Image(systemName: "arrow.clockwise.circle.fill").font(.system(size: 56))
-                        .downtifyControlTarget()
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundStyle(.black)
+                        .frame(width: 68, height: 68)
+                        .background(Color.white, in: Circle())
                 }
                 .accessibilityLabel("Retry playback")
             } else {
                 Button { playback.togglePlayback() } label: {
-                    Image(systemName: activelyPlaying ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 56)).downtifyControlTarget()
+                    Image(systemName: activelyPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundStyle(.black)
+                        .offset(x: activelyPlaying ? 0 : 2)
+                        .frame(width: 68, height: 68)
+                        .background(Color.white, in: Circle())
                 }
                 .accessibilityLabel(activelyPlaying ? String(localized: "Pause") : String(localized: "Play"))
                 .accessibilityIdentifier("player.playPause")
                 .disabled(item == nil && playback.podcast == nil)
             }
+            Spacer(minLength: 4)
             if playback.podcast != nil {
                 Button { playback.seek(to: playback.position + 30) } label: {
-                    Image(systemName: "goforward.30").font(.title2).downtifyControlTarget()
+                    Image(systemName: "goforward.30").font(.title).downtifyControlTarget()
                 }
                 .accessibilityLabel("Forward 30 seconds")
             } else {
                 Button { playback.skipNext() } label: {
-                    Image(systemName: "forward.end.fill").font(.title2)
+                    Image(systemName: "forward.end.fill").font(.title)
                         .downtifyControlTarget()
                 }
                 .accessibilityLabel("Next track")
                 .accessibilityValue(nextTrackValue)
                 .disabled(playback.queue.next(automatic: false) == nil)
             }
+            if playback.podcast == nil {
+                Spacer(minLength: 4)
+                repeatButton
+            }
         }
         .buttonStyle(.borderless)
+        .foregroundStyle(Color.primary)
     }
 
     private var nextTrackValue: String {
@@ -539,38 +773,39 @@ private struct NowPlayingView: View {
         return String(localized: "Next track: \(title)")
     }
 
-    private var queueControls: some View {
-        HStack(spacing: DowntifyStyle.Space.regular) {
-            Button { playback.setShuffle(playback.queue.shuffledIDs == nil) } label: {
-                Image(systemName: "shuffle")
-                    .foregroundStyle(playback.queue.shuffledIDs == nil ? DowntifyStyle.secondaryText : DowntifyStyle.accent)
-                    .downtifyControlTarget()
-                    .background {
-                        if playback.queue.shuffledIDs != nil {
-                            RoundedRectangle(cornerRadius: 10).strokeBorder(DowntifyStyle.accent)
-                        }
-                    }
-            }
-            .accessibilityLabel("Shuffle")
-            .accessibilityValue(playback.queue.shuffledIDs == nil ? String(localized: "Off") : String(localized: "On"))
-            .accessibilityAddTraits(playback.queue.shuffledIDs == nil ? [] : .isSelected)
+    /// Green with a dot underneath while on, as in most music apps.
+    private func modeIndicator(_ isOn: Bool) -> some View {
+        Circle().fill(isOn ? DowntifyStyle.accent : .clear).frame(width: 4, height: 4)
+    }
 
-            Button { playback.setRepeat(nextRepeatMode) } label: {
-                Image(systemName: repeatSymbol)
-                    .foregroundStyle(playback.queue.repeatMode == .off ? DowntifyStyle.secondaryText : DowntifyStyle.accent)
-                    .downtifyControlTarget()
-                    .background {
-                        if playback.queue.repeatMode != .off {
-                            RoundedRectangle(cornerRadius: 10).strokeBorder(DowntifyStyle.accent)
-                        }
-                    }
+    private var shuffleButton: some View {
+        let isOn = playback.queue.shuffledIDs != nil
+        return Button { playback.setShuffle(!isOn) } label: {
+            VStack(spacing: 3) {
+                Image(systemName: "shuffle").font(.title3.weight(.semibold))
+                modeIndicator(isOn)
             }
-            .accessibilityLabel("Repeat")
-            .accessibilityValue(repeatDescription)
-            .accessibilityHint("Changes repeat mode")
+            .foregroundStyle(isOn ? DowntifyStyle.accent : Color.primary)
+            .downtifyControlTarget()
         }
-        .buttonStyle(.borderless)
-        .font(.title3)
+        .accessibilityLabel("Shuffle")
+        .accessibilityValue(isOn ? String(localized: "On") : String(localized: "Off"))
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+
+    private var repeatButton: some View {
+        let isOn = playback.queue.repeatMode != .off
+        return Button { playback.setRepeat(nextRepeatMode) } label: {
+            VStack(spacing: 3) {
+                Image(systemName: repeatSymbol).font(.title3.weight(.semibold))
+                modeIndicator(isOn)
+            }
+            .foregroundStyle(isOn ? DowntifyStyle.accent : Color.primary)
+            .downtifyControlTarget()
+        }
+        .accessibilityLabel("Repeat")
+        .accessibilityValue(repeatDescription)
+        .accessibilityHint("Changes repeat mode")
     }
 
     private var likePresentation: NowPlayingLikePresentation {
@@ -591,7 +826,7 @@ private struct NowPlayingView: View {
             busy: collections.mutationBusy)
     }
 
-    /// Labeled actions so Like, Add to Playlist and the queue are visible without guessing at icons.
+    /// Add to Playlist on the left and the queue on the right, below the transport controls.
     private var actionRow: some View {
         let like = likePresentation
         let playlist = playlistPresentation
@@ -600,33 +835,24 @@ private struct NowPlayingView: View {
             explanations.append(explanation)
         }
         return VStack(spacing: DowntifyStyle.Space.small) {
-            HStack(alignment: .top, spacing: DowntifyStyle.Space.small) {
-                NowPlayingActionButton(title: like.title, systemImage: like.systemImage,
-                                       isHighlighted: like.isLiked, showsPending: like.isPending) {
-                    guard let actionTrack else { return }
-                    Task { await collections.toggleLike(actionTrack) }
-                }
-                .disabled(!like.isEnabled)
-                .accessibilityLabel(Text(verbatim: like.accessibilityLabel))
-                .accessibilityValue(like.isPending ? String(localized: "Queued") : "")
-                .accessibilityHint(Text(verbatim: like.explanation ?? ""))
-                .accessibilityIdentifier("player.like")
-                .sensoryFeedback(.selection, trigger: like.isLiked)
-
-                NowPlayingActionButton(title: String(localized: "Add to Playlist"), systemImage: "text.badge.plus") {
-                    showingPlaylistPicker = true
+            HStack {
+                Button { showingPlaylistPicker = true } label: {
+                    Image(systemName: "plus.circle").font(.title2).downtifyControlTarget()
                 }
                 .disabled(!playlist.isEnabled)
                 .accessibilityLabel(Text(verbatim: playlist.accessibilityLabel))
                 .accessibilityHint(Text(verbatim: playlist.explanation ?? ""))
                 .accessibilityIdentifier("player.addToPlaylist")
-
-                NowPlayingActionButton(title: String(localized: "Queue"), systemImage: "list.bullet") {
-                    showingQueue = true
+                Spacer()
+                Button { showingQueue = true } label: {
+                    Image(systemName: "list.bullet").font(.title2).downtifyControlTarget()
                 }
+                .accessibilityLabel("Queue")
                 .accessibilityHint("Open queue")
                 .accessibilityIdentifier("player.queue")
             }
+            .buttonStyle(.borderless)
+            .foregroundStyle(Color.primary)
             if !explanations.isEmpty {
                 Text(verbatim: explanations.joined(separator: " · "))
                     .font(.footnote)
@@ -634,6 +860,35 @@ private struct NowPlayingView: View {
                     .multilineTextAlignment(.center)
                     .accessibilityHidden(true)
             }
+        }
+    }
+
+    /// Album, artist, playlist and queue shortcuts in one place.
+    private var moreMenu: some View {
+        Menu {
+            if let item, playback.podcast == nil {
+                Button("Add to Playlist", systemImage: "text.badge.plus") { showingPlaylistPicker = true }
+                    .disabled(!playlistPresentation.isEnabled)
+                if !item.album.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button("Go to album", systemImage: "opticaldisc") { openAlbum(item) }
+                }
+                Button("Go to artist", systemImage: "music.mic") { openArtist(item) }
+                Button("Queue", systemImage: "list.bullet") { showingQueue = true }
+            }
+            Button("Equalizer", systemImage: "slider.vertical.3") { showingEqualizer = true }
+            if playback.podcast != nil, item != nil {
+                Button("Back to music", systemImage: "music.note") { playback.returnToMusic() }
+            }
+        } label: {
+            Image(systemName: "ellipsis").font(.body.weight(.semibold))
+        }
+        .accessibilityLabel("More options")
+    }
+
+    private var showsPhase: Bool {
+        switch playback.phase {
+        case .playing, .paused, .idle: false
+        default: true
         }
     }
 
@@ -657,7 +912,8 @@ private struct NowPlayingView: View {
                                 .font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
                         }
                     } else {
-                        Text("Nothing up next")
+                        Text(playback.autoplay && playback.queue.repeatMode == .off
+                             ? "Autoplay will continue with similar songs" : "Nothing up next")
                             .font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
                     }
                 }
@@ -668,8 +924,8 @@ private struct NowPlayingView: View {
             }
             .padding(DowntifyStyle.Space.regular)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(palette.surface, in: RoundedRectangle(cornerRadius: 18))
-            .contentShape(RoundedRectangle(cornerRadius: 18))
+            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
@@ -728,9 +984,10 @@ private struct NowPlayingView: View {
         }
     }
 
-    private var artworkSize: CGFloat {
-        if usesWideLayout { return 200 }
-        return dynamicTypeSize.isAccessibilitySize ? 172 : 240
+    private func artworkSize(for width: CGFloat) -> CGFloat {
+        if usesWideLayout { return 300 }
+        let available = max(160, width - DowntifyStyle.Space.large * 2)
+        return dynamicTypeSize.isAccessibilitySize ? min(available, 200) : min(available, 420)
     }
 
     private var lyricsSection: some View {
@@ -739,8 +996,9 @@ private struct NowPlayingView: View {
             HStack {
                 Label("Lyrics", systemImage: "quote.bubble")
                     .font(.headline)
+                    .lineLimit(1)
                     .accessibilityAddTraits(.isHeader)
-                Spacer()
+                Spacer(minLength: 4)
                 if mode == .synced {
                     HStack(spacing: 4) {
                         Button { setLyricOffset(lyricOffset - LyricsPresentation.offsetStep) } label: {
@@ -748,6 +1006,8 @@ private struct NowPlayingView: View {
                         }.accessibilityLabel("Lyrics earlier by half a second")
                         Text("\(lyricOffset, format: .number.precision(.fractionLength(1)))s")
                             .font(.caption.monospacedDigit())
+                            .lineLimit(1)
+                            .fixedSize()
                             .accessibilityIdentifier("lyrics.offsetValue")
                             .accessibilityLabel("Lyrics offset \(lyricOffset, format: .number.precision(.fractionLength(1))) seconds")
                         Button { setLyricOffset(lyricOffset + LyricsPresentation.offsetStep) } label: {
@@ -783,8 +1043,8 @@ private struct NowPlayingView: View {
                         ForEach(Array(displayedLines(for: lyrics).enumerated()), id: \.offset) { index, line in
                             Button { seekToLyric(line) } label: {
                                 Text(line.text.isEmpty ? "♪" : line.text)
-                                    .font(index == active ? .title3.weight(.bold) : .body)
-                                    .foregroundStyle(index == active ? DowntifyStyle.accent : DowntifyStyle.secondaryText)
+                                    .font(.title3.weight(.bold))
+                                    .foregroundStyle(index == active ? Color.primary : Color.black.opacity(0.55))
                                     .multilineTextAlignment(.leading)
                                     .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -800,7 +1060,7 @@ private struct NowPlayingView: View {
                     .accessibilityElement(children: .contain)
                 } else {
                     Text(displayedPlain(for: lyrics))
-                        .font(.body)
+                        .font(.title3.weight(.semibold))
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("lyrics.plain")
                         .accessibilityLabel("Plain lyrics")
@@ -816,7 +1076,11 @@ private struct NowPlayingView: View {
         }
         .padding(DowntifyStyle.Space.regular)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(palette.surface, in: RoundedRectangle(cornerRadius: 18))
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(tint ?? Color(white: 0.3))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.12)))
+        }
     }
 
     @ViewBuilder
@@ -944,10 +1208,11 @@ private struct NowPlayingView: View {
     }
 
     private var timeline: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: 2) {
             if let duration = playback.duration, duration.isFinite, duration > 0 {
-                Slider(value: Binding(get: { min(playback.position, duration) }, set: { playback.seek(to: $0, checkpoint: false) }),
-                       in: 0...duration, onEditingChanged: { if !$0 { playback.finishScrubbing() } })
+                DowntifyScrubber(value: min(playback.position, duration), total: duration,
+                                 onChange: { playback.seek(to: $0, checkpoint: false) },
+                                 onEditingChanged: { if !$0 { playback.finishScrubbing() } })
                     .accessibilityLabel("Playback position")
                     .accessibilityValue("\(spokenDuration(playback.position)) of \(spokenDuration(duration))")
                 HStack {
@@ -964,41 +1229,6 @@ private struct NowPlayingView: View {
                     .accessibilityLabel("Playback position unavailable")
             }
         }
-    }
-}
-
-/// Icon over a short label; keeps the 44 pt target and wraps at large Dynamic Type sizes.
-private struct NowPlayingActionButton: View {
-    let title: String
-    let systemImage: String
-    var isHighlighted = false
-    var showsPending = false
-    let action: () -> Void
-    @Environment(\.isEnabled) private var isEnabled
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: systemImage)
-                    .font(.title3)
-                    .frame(height: 28)
-                    .overlay(alignment: .topTrailing) {
-                        if showsPending {
-                            Image(systemName: "clock.fill")
-                                .font(.caption2)
-                                .offset(x: 8, y: -6)
-                        }
-                    }
-                Text(verbatim: title)
-                    .font(.caption.weight(.medium))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .foregroundStyle(isHighlighted ? DowntifyStyle.accent : (isEnabled ? Color.primary : DowntifyStyle.secondaryText))
-            .frame(maxWidth: .infinity, minHeight: DowntifyStyle.minimumControlSize)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.borderless)
     }
 }
 
@@ -1324,7 +1554,25 @@ final class ArtworkLoader: ObservableObject {
 
     func removeAll() {
         cache.removeAllObjects()
+        tints.removeAll()
         cachedSession = nil
+    }
+
+    private var tints: [String: Color] = [:]
+
+    /// Cover color already computed for this track, without loading anything.
+    func cachedTint(for track: LibraryTrack) -> Color? { tints[track.id] }
+
+    /// Background color taken from the track's cover; nil when the track has no cover or it cannot load.
+    func tint(for track: LibraryTrack) async -> Color? {
+        if let cached = tints[track.id] { return cached }
+        var image = cachedImage(for: track)
+        if image == nil { image = await self.image(for: track, size: 150) }
+        guard let image, let color = ArtworkTint.color(from: image) else { return nil }
+        let tint = Color(uiColor: color)
+        if tints.count > 300 { tints.removeAll() }
+        tints[track.id] = tint
+        return tint
     }
 
     func image(for track: LibraryTrack, size: Int) async -> UIImage? {
@@ -1404,7 +1652,7 @@ struct TrackArtwork: View {
             if let image {
                 Image(uiImage: image).resizable().scaledToFill()
                     .frame(width: size, height: size)
-                    .clipShape(RoundedRectangle(cornerRadius: size * 0.08, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: size * 0.04, style: .continuous))
                     .transition(.opacity)
             } else {
                 ArtworkPlaceholder(size: size)
@@ -1421,6 +1669,8 @@ struct TrackArtwork: View {
                 loadedImage = await artwork.image(for: track, size: requestSize)
             }
             guard !Task.isCancelled else { return }
+            // A cover only a few pixels wide is a stand-in, not artwork; show the placeholder instead.
+            if let loaded = loadedImage, loaded.size.width * loaded.scale < 8 { loadedImage = nil }
             withAnimation(reduceMotion ? nil : .easeIn(duration: 0.18)) {
                 image = loadedImage
             }
@@ -1433,12 +1683,12 @@ private struct ArtworkPlaceholder: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: size * 0.08, style: .continuous)
-                .fill(LinearGradient(colors: [DowntifyStyle.accent.opacity(0.25), DowntifyStyle.accent.opacity(0.08)],
+            RoundedRectangle(cornerRadius: size * 0.04, style: .continuous)
+                .fill(LinearGradient(colors: [Color(white: 0.24), Color(white: 0.16)],
                                      startPoint: .topLeading, endPoint: .bottomTrailing))
             Image(systemName: "music.note")
-                .font(.system(size: size * 0.30, weight: .light))
-                .foregroundStyle(DowntifyStyle.accent)
+                .font(.system(size: size * 0.32, weight: .regular))
+                .foregroundStyle(Color(white: 0.62))
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
