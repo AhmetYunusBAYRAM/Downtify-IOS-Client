@@ -77,7 +77,8 @@ run fixture-ui -only-testing:DowntifyUITests/DebugHarnessUITests/testFixtureLibr
   -only-testing:DowntifyUITests/DebugHarnessUITests/testCurrentSongHighlightFollowsQueue \
   -only-testing:DowntifyUITests/DebugHarnessUITests/testNowPlayingActionsAreDiscoverable \
   -only-testing:DowntifyUITests/DebugHarnessUITests/testPlayNextAndAddToQueueFromLibrarySongMenu \
-  -only-testing:DowntifyUITests/DebugHarnessUITests/testQueueHandleDragReordersUpcomingSongs || status=1
+  -only-testing:DowntifyUITests/DebugHarnessUITests/testQueueHandleDragReordersUpcomingSongs \
+  -only-testing:DowntifyUITests/DebugHarnessUITests/testQueueHandleDragDownReordersUpcomingSongs || status=1
 # Issue #71 (lyrics seek, display modes, timing reset) and #72 (Similar load-more), fixture mode.
 run lyrics-similar-ui -only-testing:DowntifyUITests/LyricsUITests -only-testing:DowntifyUITests/SimilarUITests || status=1
 if [[ "$MODE" == "staging" ]]; then
