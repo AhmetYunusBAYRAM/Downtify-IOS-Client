@@ -36,6 +36,7 @@ struct PodcastsView: View {
 }
 
 private struct PodcastShowsList: View {
+    @Environment(\.downtifyPalette) private var palette
     let api: PodcastsAPI
     let session: DeviceSession
     let connection: ConnectionService
@@ -80,6 +81,8 @@ private struct PodcastShowsList: View {
                 ProgressView("Loading podcasts…")
             }
         }
+        .scrollContentBackground(palette.redesign("podcasts") ? .hidden : .automatic)
+        .background(palette.background.ignoresSafeArea())
         .navigationTitle("Podcasts")
         .downtifyScrollEndClearance()
         .task(id: session) {

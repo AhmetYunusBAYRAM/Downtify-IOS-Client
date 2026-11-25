@@ -8,6 +8,45 @@ final class DebugHarnessTests: XCTestCase {
     private let harnessArgs = ["-DowntifyHarness"]
     private let stagingArgs = ["-DowntifyHarness", "-DowntifyHarnessMode", "staging"]
 
+    func testThemeRoundTripAndInvalidInputs() throws {
+        let data = try JSONEncoder().encode(DowntifyTheme.example)
+        XCTAssertEqual(try DowntifyTheme.decode(data), .example)
+        var bad = DowntifyTheme.example
+        bad.accentDark = "nothex"
+        XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)))
+        bad = .example
+        bad.homeSections = ["recent", "recent", "new"]
+        XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)))
+        bad = .example
+        bad.componentStyles = ["unknown": "redesign"]
+        XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)))
+        bad = .example
+        bad.elevatedDark = nil
+        XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)))
+        bad = .example
+        bad.navigationStyle = "unknown"
+        XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)))
+        var legacy = DowntifyTheme.example
+        legacy.navigationStyle = nil
+        legacy.headerStyle = nil
+        legacy.recentStyle = nil
+        legacy.playerStyle = nil
+        legacy.componentStyles = nil
+        legacy.elevatedLight = nil
+        legacy.elevatedDark = nil
+        legacy.brandLight = nil
+        legacy.brandDark = nil
+        legacy.onBrandLight = nil
+        legacy.onBrandDark = nil
+        legacy.fontDesign = nil
+        legacy.browseColors = nil
+        XCTAssertEqual(try DowntifyTheme.decode(JSONEncoder().encode(legacy)), legacy)
+        bad = .example
+        bad.albumGridMinimum = 999
+        XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)))
+        XCTAssertThrowsError(try DowntifyTheme.decode(Data(repeating: 32, count: 16_385)))
+    }
+
     // MARK: Activation and fixture defaults
 
     func testHarnessIsInactiveWithoutFlag() {

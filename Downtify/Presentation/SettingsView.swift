@@ -1,12 +1,19 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
+    @Environment(\.downtifyPalette) private var palette
     @Binding var appearance: DowntifyAppearance
     @Binding var language: String
     @Binding var networkOperationLimit: Int
     @ObservedObject var playback: PlaybackController
     @AppStorage("debug.networkOverlay.enabled") private var networkOverlayEnabled = false
     @State private var showingAbout = false
+    @AppStorage(DowntifyTheme.storageKey) private var themeJSON = ""
+    @State private var importingTheme = false
+    @State private var exportingTheme = false
+    @State private var themeError: String?
+    @State private var exportDocument = ThemeDocument(data: Data())
 
     private let languages: [(String, String)] = [
         ("system", "System default"), ("bg", "Български"), ("en", "English"),
@@ -44,6 +51,26 @@ struct SettingsView: View {
                     }
                 }
                 .accessibilityHint("Choose the app color appearance")
+                LabeledContent("Custom theme", value: currentTheme?.name ?? "Default")
+                Button("Use redesign theme") {
+                    if let data = try? JSONEncoder().encode(DowntifyTheme.example) {
+                        themeJSON = String(decoding: data, as: UTF8.self)
+                    }
+                }
+                Button("Import theme…") { importingTheme = true }
+                Button("Export theme example…") {
+                    do {
+                        let encoder = JSONEncoder()
+                        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                        exportDocument = ThemeDocument(data: try encoder.encode(currentTheme ?? .example))
+                        exportingTheme = true
+                    } catch { themeError = "Could not prepare the theme file." }
+                }
+                if currentTheme != nil {
+                    Button("Use default theme") { themeJSON = "" }
+                }
+                Text("Import a JSON theme from Files. Changes apply immediately; OLED appearance keeps its black background.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
             Section("Language") {
                 Picker("App language", selection: $language) {
@@ -60,6 +87,27 @@ struct SettingsView: View {
                 LabeledContent("Version", value: versionText)
             }
         }
+        .scrollContentBackground(palette.redesign("settings") ? .hidden : .automatic)
+        .background(palette.background.ignoresSafeArea())
+        .fileImporter(isPresented: $importingTheme, allowedContentTypes: [.json]) { result in
+            do {
+                let url = try result.get()
+                let accessing = url.startAccessingSecurityScopedResource()
+                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                let file = try FileHandle(forReadingFrom: url)
+                defer { try? file.close() }
+                let data = try file.read(upToCount: 16_385) ?? Data()
+                let theme = try DowntifyTheme.decode(data)
+                themeJSON = String(decoding: try JSONEncoder().encode(theme), as: UTF8.self)
+            } catch { themeError = "Could not import this theme. Check that it follows the documented theme format." }
+        }
+        .fileExporter(isPresented: $exportingTheme, document: exportDocument,
+                      contentType: .json, defaultFilename: "Downtify Theme") { result in
+            if case .failure = result { themeError = "Could not export the theme." }
+        }
+        .alert("Theme error", isPresented: Binding(get: { themeError != nil }, set: { if !$0 { themeError = nil } })) {
+            Button("OK", role: .cancel) { themeError = nil }
+        } message: { Text(themeError ?? "") }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
@@ -69,6 +117,7 @@ struct SettingsView: View {
     }
 
     @Environment(\.dismiss) private var dismiss
+    private var currentTheme: DowntifyTheme? { try? DowntifyTheme.decode(Data(themeJSON.utf8)) }
     private var versionText: String {
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? "—"
@@ -170,5 +219,15 @@ struct AboutView: View {
               let notes = try? JSONDecoder().decode([String].self, from: data)
         else { return [] }
         return notes
+    }
+}
+
+private struct ThemeDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+    var data: Data
+    init(data: Data) { self.data = data }
+    init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
     }
 }

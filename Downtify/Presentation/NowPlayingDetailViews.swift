@@ -487,9 +487,10 @@ private struct AlbumRowView: View {
 }
 
 private struct InLibraryBadge: View {
+    @Environment(\.downtifyPalette) private var palette
     var body: some View {
         Image(systemName: "checkmark.circle.fill")
-            .foregroundStyle(DowntifyStyle.accent)
+            .foregroundStyle(palette.accent)
             .downtifyControlTarget()
             .accessibilityLabel("In Library")
     }

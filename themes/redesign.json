@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "name": "Redesign",
+  "accentLight": "14833B",
+  "accentDark": "1ED760",
+  "backgroundLight": "FFFFFF",
+  "backgroundDark": "121212",
+  "surfaceLight": "F3F3F3",
+  "surfaceDark": "1E1E1E",
+  "cardCornerRadius": 8,
+  "cardPadding": 16,
+  "rowSpacing": 12,
+  "albumGridMinimum": 142,
+  "homeSections": [
+    "recent",
+    "new",
+    "favorites"
+  ],
+  "shelfLayout": "carousel",
+  "navigationStyle": "drawer",
+  "headerStyle": "profile",
+  "recentStyle": "tiles",
+  "playerStyle": "compact",
+  "componentStyles": {
+    "home": "redesign",
+    "library": "redesign",
+    "search": "redesign",
+    "collection": "redesign",
+    "downloads": "redesign",
+    "player": "redesign",
+    "settings": "redesign",
+    "connection": "redesign",
+    "discover": "redesign",
+    "podcasts": "redesign",
+    "queue": "redesign"
+  },
+  "elevatedLight": "E8E8E8",
+  "elevatedDark": "2A2A2A",
+  "brandLight": "1DB954",
+  "brandDark": "1DB954",
+  "onBrandLight": "000000",
+  "onBrandDark": "000000",
+  "fontDesign": "system",
+  "browseColors": {
+    "For You": "203562",
+    "Charts": "E33600",
+    "Finder": "27866F",
+    "Similar": "8863A8",
+    "Podcasts": "006450",
+    "Downloads": "B65B00"
+  }
+}
