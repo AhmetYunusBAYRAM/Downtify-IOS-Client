@@ -9,6 +9,21 @@ final class DebugHarnessTests: XCTestCase {
     private let harnessArgs = ["-DowntifyHarness"]
     private let stagingArgs = ["-DowntifyHarness", "-DowntifyHarnessMode", "staging"]
 
+    /// The example themes in docs/theme-examples must stay valid, and full.json must show every field.
+    func testDocumentedExampleThemesDecodeAndCoverEveryField() throws {
+        let folder = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("docs/theme-examples")
+        let files = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "json" }
+        XCTAssertGreaterThanOrEqual(files.count, 3)
+        for file in files {
+            XCTAssertNoThrow(try DowntifyTheme.decode(Data(contentsOf: file)), file.lastPathComponent)
+        }
+        let full = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: folder.appendingPathComponent("full.json"))) as? [String: Any])
+        let fields = Set(Mirror(reflecting: DowntifyTheme.example).children.compactMap(\.label))
+        XCTAssertEqual(Set(full.keys), fields, "full.json should list every theme field; update it and the guide when fields change")
+    }
+
     func testThemeRoundTripAndInvalidInputs() throws {
         let original = try DowntifyTheme.bundled("original")
         let redesign = try DowntifyTheme.bundled("redesign")
