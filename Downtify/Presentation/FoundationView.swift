@@ -49,16 +49,16 @@ struct FoundationView: View {
             }
             .background(palette.background.ignoresSafeArea())
         }
-        .tint(DowntifyStyle.accent)
+        .tint(palette.accent)
     }
 
     private var brand: some View {
         HStack(spacing: 12) {
             Image(systemName: "waveform")
                 .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(DowntifyStyle.onAccent)
-                .frame(width: 48, height: 48)
-                .background(DowntifyStyle.accent.gradient, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .foregroundStyle(palette.onBrand)
+                .frame(width: palette.redesign("connection") ? 64 : 48, height: palette.redesign("connection") ? 64 : 48)
+                .background(palette.brand.gradient, in: RoundedRectangle(cornerRadius: palette.redesign("connection") ? 24 : 15, style: .continuous))
                 .accessibilityHidden(true)
 
             Text(name)
@@ -107,7 +107,7 @@ struct FoundationView: View {
                 Button { model.probeAddress() } label: {
                     if model.isWorking { ProgressView().frame(maxWidth: .infinity).accessibilityLabel("Connecting to server") }
                     else { Text("Connect to server").frame(maxWidth: .infinity) }
-                }.buttonStyle(.borderedProminent).foregroundStyle(DowntifyStyle.onAccent).disabled(model.isWorking || model.address.isEmpty)
+                }.buttonStyle(.borderedProminent).foregroundStyle(palette.onBrand).tint(palette.brand).disabled(model.isWorking || model.address.isEmpty)
 
                 Button { model.startDiscovery() } label: {
                     Label(model.isDiscovering ? String(localized: "Searching local network…") : String(localized: "Find servers on this network"), systemImage: "dot.radiowaves.left.and.right")
@@ -140,17 +140,17 @@ struct FoundationView: View {
 
                 if let target = model.target {
                     Divider()
-                    Label(target.name, systemImage: "checkmark.circle.fill").font(.headline).foregroundStyle(DowntifyStyle.accent)
+                    Label(target.name, systemImage: "checkmark.circle.fill").font(.headline).foregroundStyle(palette.accent)
                     Text(target.address).font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
                     if target.supportsPasswordSignIn {
                         Text("Sign in with password").font(.subheadline.weight(.semibold))
                         TextField("Username", text: $model.username).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder)
                         SecureField("Password", text: $model.password).textFieldStyle(.roundedBorder)
-                        Button(model.cooldownSeconds > 0 ? String(localized: "Wait \(model.cooldownSeconds)s") : String(localized: "Sign in")) { model.signIn() }.buttonStyle(.borderedProminent).foregroundStyle(DowntifyStyle.onAccent).disabled(model.isWorking || model.cooldownSeconds > 0 || model.username.isEmpty || model.password.isEmpty).accessibilityIdentifier("connect.signInButton")
+                        Button(model.cooldownSeconds > 0 ? String(localized: "Wait \(model.cooldownSeconds)s") : String(localized: "Sign in")) { model.signIn() }.buttonStyle(.borderedProminent).foregroundStyle(palette.onBrand).tint(palette.brand).disabled(model.isWorking || model.cooldownSeconds > 0 || model.username.isEmpty || model.password.isEmpty).accessibilityIdentifier("connect.signInButton")
                     }
                     Text("Pairing code").font(.subheadline.weight(.semibold))
                     TextField("Enter code", text: $model.pairingCode).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder)
-                    Button(model.cooldownSeconds > 0 ? String(localized: "Wait \(model.cooldownSeconds)s") : String(localized: "Pair device")) { model.pair() }.buttonStyle(.borderedProminent).foregroundStyle(DowntifyStyle.onAccent).disabled(model.isWorking || model.cooldownSeconds > 0 || model.pairingCode.isEmpty)
+                    Button(model.cooldownSeconds > 0 ? String(localized: "Wait \(model.cooldownSeconds)s") : String(localized: "Pair device")) { model.pair() }.buttonStyle(.borderedProminent).foregroundStyle(palette.onBrand).tint(palette.brand).disabled(model.isWorking || model.cooldownSeconds > 0 || model.pairingCode.isEmpty)
                     if model.cooldownSeconds > 0 {
                         Text("Sign-in is paused for this server. Try again in \(model.cooldownSeconds) seconds.")
                             .font(.caption).foregroundStyle(DowntifyStyle.secondaryText)

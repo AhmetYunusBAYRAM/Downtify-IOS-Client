@@ -380,6 +380,101 @@ final class PlaybackTests: XCTestCase {
     }
 
     @MainActor
+    func testAutoplayPreferenceDefaultsOnAndPersists() {
+        let name = "DowntifyTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let store = PlaybackStateStore(defaults: defaults)
+        XCTAssertTrue(store.loadAutoplay())
+        store.saveAutoplay(false)
+        XCTAssertFalse(PlaybackStateStore(defaults: defaults).loadAutoplay())
+    }
+
+    /// When the last song ends, Autoplay appends similar songs and keeps playing without duplicates.
+    @MainActor
+    func testAutoplayContinuesWithSimilarSongsWhenQueueEnds() async throws {
+        let fixture = PlaybackFixture()
+        await fixture.controller.updateSession(deviceSession()) { [] }
+        fixture.controller.setAutoplay(true)
+        var seeds: [String] = []
+        fixture.controller.autoplayProvider = { seed in
+            seeds.append(seed.title)
+            return [.library(self.track("first")), .library(self.track("similar"))]
+        }
+        let starts = expectation(description: "First track starts")
+        fixture.engine.onPlay = { starts.fulfill() }
+        fixture.controller.replaceQueue([track("first")])
+        await fulfillment(of: [starts], timeout: 3)
+
+        let continues = expectation(description: "Autoplay track starts")
+        fixture.engine.onPlay = { continues.fulfill() }
+        fixture.engine.onEvent?(.ended)
+        await fulfillment(of: [continues], timeout: 3)
+        XCTAssertEqual(fixture.controller.queue.current?.track.id, "similar")
+        XCTAssertEqual(fixture.controller.queue.order.map(\.track.id), ["first", "similar"],
+                       "songs already queued are not added again")
+        XCTAssertFalse(seeds.isEmpty)
+    }
+
+    /// With Autoplay off the queue simply ends.
+    @MainActor
+    func testAutoplayOffLetsQueueEnd() async throws {
+        let fixture = PlaybackFixture()
+        await fixture.controller.updateSession(deviceSession()) { [] }
+        fixture.controller.setAutoplay(false)
+        fixture.controller.autoplayProvider = { _ in [.library(self.track("similar"))] }
+        let starts = expectation(description: "Track starts")
+        fixture.engine.onPlay = { starts.fulfill() }
+        fixture.controller.replaceQueue([track("first")])
+        await fulfillment(of: [starts], timeout: 3)
+        fixture.engine.onEvent?(.ended)
+        XCTAssertEqual(fixture.controller.phase, .ended)
+        XCTAssertEqual(fixture.controller.queue.order.count, 1)
+    }
+
+    /// With crossfade on, the next song starts that many seconds before the current one ends.
+    @MainActor
+    func testCrossfadeStartsNextSongBeforeTheEnd() async throws {
+        let fixture = PlaybackFixture()
+        await fixture.controller.updateSession(deviceSession()) { [] }
+        fixture.controller.setCrossfade(6)
+        let starts = expectation(description: "First track starts")
+        fixture.engine.onPlay = { starts.fulfill() }
+        fixture.controller.replaceQueue([track("first"), track("second")])
+        await fulfillment(of: [starts], timeout: 3)
+
+        fixture.engine.onEvent?(.position(80, duration: 100))
+        XCTAssertTrue(fixture.engine.crossfades.isEmpty, "too early to blend")
+        let next = expectation(description: "Second track starts during the fade")
+        fixture.engine.onPlay = { next.fulfill() }
+        fixture.engine.onEvent?(.position(95, duration: 100))
+        await fulfillment(of: [next], timeout: 3)
+        XCTAssertEqual(fixture.controller.queue.current?.track.id, "second")
+        XCTAssertEqual(fixture.engine.crossfades, [5])
+    }
+
+    @MainActor
+    func testCrossfadeIsOffByDefaultAndKeepsAlbumsGapless() {
+        let name = "DowntifyTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        XCTAssertEqual(PlaybackStateStore(defaults: defaults).loadCrossfade(), 0)
+
+        func song(_ id: String, album: String, number: Int, duration: Double = 200) -> PlaybackItem {
+            .library(LibraryTrack(id: id, file: "\(id).mp3", title: id, artist: "A", artists: ["A"], album: album,
+                                  albumArtist: "A", albumID: album, artistID: "a", trackNumber: number, year: "",
+                                  duration: duration, codec: "mp3", bitrate: 0, sampleRate: 0, channels: 2, size: 0,
+                                  added: 0, hasCover: false, isExplicit: false, playlists: []))
+        }
+        XCTAssertFalse(PlaybackCrossfade.applies(from: song("1", album: "live", number: 1), to: song("2", album: "live", number: 2),
+                                                 seconds: 6, currentDuration: 200), "consecutive album tracks stay gapless")
+        XCTAssertTrue(PlaybackCrossfade.applies(from: song("1", album: "a", number: 1), to: song("2", album: "b", number: 2),
+                                                seconds: 6, currentDuration: 200))
+        XCTAssertFalse(PlaybackCrossfade.applies(from: song("1", album: "a", number: 1), to: song("2", album: "b", number: 1, duration: 12),
+                                                 seconds: 6, currentDuration: 200), "short songs are not overlapped")
+    }
+
+    @MainActor
     func testRemoteSeekAndEndOfTrackAdvance() async throws {
         let fixture = PlaybackFixture()
         await fixture.controller.updateSession(deviceSession()) { [] }
@@ -400,6 +495,63 @@ final class PlaybackTests: XCTestCase {
         XCTAssertEqual(fixture.controller.phase, .ended)
         XCTAssertFalse(fixture.audio.active)
         XCTAssertEqual(fixture.remote.metadata?.position, 100)
+    }
+
+    func testEqualizerFiltersShapeTheCurveAtEachBand() {
+        let rate = 44_100.0
+        let flat = BiquadCoefficients(shape: .peaking, frequency: 1_000, gainDB: 0, sampleRate: rate)
+        XCTAssertEqual(flat, .identity, "a band at 0 dB is skipped")
+        let peak = BiquadCoefficients(shape: .peaking, frequency: 1_000, gainDB: 6, sampleRate: rate)
+        XCTAssertEqual(peak.magnitudeDB(at: 1_000, sampleRate: rate), 6, accuracy: 0.05)
+        XCTAssertEqual(peak.magnitudeDB(at: 60, sampleRate: rate), 0, accuracy: 0.5)
+        let bass = BiquadCoefficients(shape: .lowShelf, frequency: 60, gainDB: -6, sampleRate: rate)
+        XCTAssertEqual(bass.magnitudeDB(at: 20, sampleRate: rate), -6, accuracy: 0.6)
+        XCTAssertEqual(bass.magnitudeDB(at: 5_000, sampleRate: rate), 0, accuracy: 0.1)
+        let treble = BiquadCoefficients(shape: .highShelf, frequency: 15_000, gainDB: 6, sampleRate: rate)
+        XCTAssertEqual(treble.magnitudeDB(at: 20_000, sampleRate: rate), 6, accuracy: 1)
+        XCTAssertEqual(treble.magnitudeDB(at: 200, sampleRate: rate), 0, accuracy: 0.1)
+    }
+
+    /// A boosted 1 kHz band makes a 1 kHz tone louder; a cut makes it quieter.
+    func testEqualizerFilterBankChangesToneLoudness() {
+        func rms(gain: Double) -> Double {
+            var equalizer = PlaybackEqualizer()
+            equalizer.enabled = true
+            equalizer.gains = [0, 0, 0, gain, 0, 0]
+            let bank = EqualizerFilterBank(sampleRate: 44_100)
+            bank.configure(equalizer, version: 1)
+            var samples = (0..<44_100).map { Float(sin(2 * Double.pi * 1_000 * Double($0) / 44_100)) * 0.25 }
+            samples.withUnsafeMutableBufferPointer { bank.process($0, channels: 1, firstChannel: 0) }
+            let tail = samples.suffix(22_050)
+            return sqrt(tail.reduce(0) { $0 + Double($1 * $1) } / Double(tail.count))
+        }
+        let flat = 0.25 / sqrt(2)
+        // Boosting includes 3 dB of automatic headroom, so +6 dB nets about +3 dB.
+        XCTAssertEqual(20 * log10(rms(gain: 6) / flat), 3, accuracy: 0.3)
+        XCTAssertEqual(20 * log10(rms(gain: -6) / flat), -6, accuracy: 0.3)
+    }
+
+    @MainActor
+    func testEqualizerPresetsAndPersistence() {
+        var equalizer = PlaybackEqualizer()
+        XCTAssertFalse(equalizer.enabled)
+        equalizer.apply(.bassBooster)
+        XCTAssertEqual(equalizer.preset, .bassBooster)
+        equalizer.setGain(20, at: 2)
+        XCTAssertEqual(equalizer.gains[2], 12, "gains are clamped to 12 dB")
+        XCTAssertNil(equalizer.preset, "moving a band makes the curve custom")
+        equalizer.setGain(2, at: 2)
+        XCTAssertEqual(equalizer.preset, .bassBooster, "returning to the preset's values selects it again")
+        XCTAssertEqual(Set(EqualizerPreset.allCases.map(\.gains.count)), [6])
+
+        let name = "DowntifyTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let store = PlaybackStateStore(defaults: defaults)
+        XCTAssertEqual(store.loadEqualizer(), PlaybackEqualizer())
+        equalizer.enabled = true
+        store.saveEqualizer(equalizer)
+        XCTAssertEqual(PlaybackStateStore(defaults: defaults).loadEqualizer(), equalizer)
     }
 
     @MainActor
@@ -1276,6 +1428,73 @@ final class PlaybackTests: XCTestCase {
         try await engine.load(stream, at: 0)
     }
 
+    /// Real engine and controller: near the end of a song the next one starts while the first fades out.
+    @MainActor
+    func testCrossfadeEndToEndStartsTheNextSongWhileTheFirstFadesOut() async throws {
+        let first = track("crossfade-first"), second = track("crossfade-second")
+        let resolver = try LocalToneResolver(tones: [first.id: (440, 11), second.id: (880, 11)])
+        defer { resolver.removeFiles() }
+        let engine = AVPlaybackEngine()
+        let controller = PlaybackController(engine: engine, resolver: resolver, audioSession: SystemPlaybackAudioSession(),
+                                            remote: TestRemoteControls(), store: TestPlaybackStore(),
+                                            networkMonitor: TestNetworkMonitor(), verifySession: { _ in })
+        defer { controller.stopAndClear(); engine.reset() }
+        controller.setCrossfade(2)
+        await controller.updateSession(deviceSession()) { [] }
+        controller.replaceQueue([first, second])
+        try await waitFor { controller.phase == .playing && (controller.duration ?? 0) > 10 }
+        controller.seek(to: (controller.duration ?? 11) - 3)
+
+        try await waitFor(timeout: 6) { controller.queue.current?.track.id == second.id }
+        let fading = Mirror(reflecting: engine).children.first { $0.label == "outgoing" }?.value
+        let fadingPlayer = fading.flatMap { Mirror(reflecting: $0).children.first?.value }
+            .flatMap { Mirror(reflecting: $0).children.first { $0.label == "player" }?.value as? AVPlayer }
+        XCTAssertEqual(fadingPlayer?.rate, 1, "the first song is still playing under the second")
+        XCTAssertLessThan(controller.position, 1.5, "the second song starts from its beginning")
+        try await waitFor { controller.phase == .playing }
+        try await waitFor(timeout: 4) {
+            Mirror(reflecting: engine).children.first { $0.label == "outgoing" }.map { "\($0.value)" } == "nil"
+        }
+        XCTAssertEqual(controller.queue.current?.track.id, second.id)
+    }
+
+    /// Real engine and controller: when the queue runs out, Autoplay's songs are queued and played.
+    @MainActor
+    func testAutoplayEndToEndPlaysTheSuggestedSongAfterTheQueueEnds() async throws {
+        let first = track("autoplay-first"), suggested = track("autoplay-suggested")
+        let resolver = try LocalToneResolver(tones: [first.id: (440, 2), suggested.id: (660, 2)])
+        defer { resolver.removeFiles() }
+        let engine = AVPlaybackEngine()
+        let controller = PlaybackController(engine: engine, resolver: resolver, audioSession: SystemPlaybackAudioSession(),
+                                            remote: TestRemoteControls(), store: TestPlaybackStore(),
+                                            networkMonitor: TestNetworkMonitor(), verifySession: { _ in })
+        defer { controller.stopAndClear(); engine.reset() }
+        controller.setAutoplay(true)
+        var seeds: [PlaybackItem.MediaID] = []
+        controller.autoplayProvider = { seed in
+            seeds.append(seed.mediaID)
+            return [.library(suggested)]
+        }
+        await controller.updateSession(deviceSession()) { [] }
+        controller.replaceQueue([first])
+        try await waitFor(timeout: 8) {
+            controller.queue.current?.track.id == suggested.id && controller.phase == .playing
+        }
+        // Seeded from the song that ended the queue, then again from the suggested song so playback keeps going.
+        XCTAssertEqual(seeds.prefix(2), [PlaybackItem.library(first).mediaID, PlaybackItem.library(suggested).mediaID])
+        XCTAssertEqual(controller.queue.order.map(\.item.mediaID),
+                       [PlaybackItem.library(first).mediaID, PlaybackItem.library(suggested).mediaID])
+    }
+
+    @MainActor
+    private func waitFor(timeout: TimeInterval = 5, _ condition: @MainActor () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition() {
+            guard Date() < deadline else { return XCTFail("Timed out waiting for playback") }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+    }
+
     private func waveFixture(seconds: Int = 1) -> Data {
         let samples = Data(repeating: 0, count: seconds * 16_000)
         var wave = Data()
@@ -1527,6 +1746,8 @@ private final class TestPlaybackEngine: PlaybackEngining {
     func seek(to position: TimeInterval) { seeks.append(position) }
     func reset() { resets += 1 }
     func resetMediaServices() { mediaResets += 1 }
+    var crossfades: [TimeInterval] = []
+    func beginCrossfade(over seconds: TimeInterval) { crossfades.append(seconds) }
 }
 
 private actor TestPodcasts: PodcastPlaybackServing {
@@ -1570,6 +1791,52 @@ private actor TestStreamResolver: PlaybackStreamResolving {
 }
 
 @MainActor
+/// Serves each track as a local sine-wave file, so the real engine plays real audio without a server.
+private final class LocalToneResolver: PlaybackStreamResolving, @unchecked Sendable {
+    private let files: [String: URL]
+
+    init(tones: [String: (frequency: Double, seconds: Double)]) throws {
+        var files: [String: URL] = [:]
+        for (id, tone) in tones {
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(id)-\(UUID().uuidString).caf")
+            let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 2)!
+            let frames = AVAudioFrameCount(tone.seconds * 44_100)
+            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)!
+            buffer.frameLength = frames
+            for channel in 0..<2 {
+                let data = buffer.floatChannelData![channel]
+                for frame in 0..<Int(frames) {
+                    data[frame] = 0.05 * Float(sin(2 * Double.pi * tone.frequency * Double(frame) / 44_100))
+                }
+            }
+            try AVAudioFile(forWriting: url, settings: format.settings).write(from: buffer)
+            files[id] = url
+        }
+        self.files = files
+    }
+
+    func removeFiles() { files.values.forEach { try? FileManager.default.removeItem(at: $0) } }
+
+    private func stream(_ id: String) throws -> PlaybackStream {
+        guard let url = files[id] else { throw PlaybackFailure.invalidStream }
+        let length = (try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+        return PlaybackStream(contentType: "com.apple.coreaudio-format", fileExtension: "caf", length: length,
+                              quality: .original, availableQualities: [.original], fileURL: url) { _ in Data() }
+    }
+
+    func localStream(for item: PlaybackItem, quality: PlaybackQuality, session: DeviceSession,
+                     allowAlternateQuality: Bool) async -> PlaybackStream? { nil }
+    func resolve(track: LibraryTrack, quality: PlaybackQuality, session: DeviceSession) async throws -> PlaybackStream {
+        try stream(track.id)
+    }
+    func resolve(catalogSong: CatalogSong, quality: PlaybackQuality, session: DeviceSession) async throws -> PlaybackStream {
+        throw PlaybackFailure.invalidStream
+    }
+    func preloadSource(for item: PlaybackItem, quality: PlaybackQuality, session: DeviceSession) async throws -> PlaybackStream {
+        throw PlaybackFailure.invalidStream
+    }
+}
+
 private final class TestAudioSession: PlaybackAudioSession {
     var onEvent: ((PlaybackAudioEvent) -> Void)?
     var active = false

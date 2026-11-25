@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import SwiftUI
 import XCTest
 @testable import Downtify
 
@@ -7,6 +8,108 @@ import XCTest
 final class DebugHarnessTests: XCTestCase {
     private let harnessArgs = ["-DowntifyHarness"]
     private let stagingArgs = ["-DowntifyHarness", "-DowntifyHarnessMode", "staging"]
+
+    func testThemeRoundTripAndInvalidInputs() throws {
+        let original = try DowntifyTheme.bundled("original")
+        let redesign = try DowntifyTheme.bundled("redesign")
+        XCTAssertEqual(original.name, "Original")
+        XCTAssertEqual(original.surfaceStyle, "system")
+        XCTAssertEqual(redesign, .example)
+        let data = try JSONEncoder().encode(DowntifyTheme.example)
+        XCTAssertEqual(try DowntifyTheme.decode(data), .example)
+        var bad = DowntifyTheme.example
+        bad.accentDark = "nothex"
+        XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)))
+        bad = .example
+        bad.homeSections = ["recent", "recent", "new"]
+        XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)))
+        bad = .example
+        bad.componentStyles = ["unknown": "redesign"]
+        XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)))
+        bad = .example
+        bad.elevatedDark = nil
+        XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)))
+        bad = .example
+        bad.navigationStyle = "unknown"
+        XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)))
+        var legacy = DowntifyTheme.example
+        legacy.navigationStyle = nil
+        legacy.headerStyle = nil
+        legacy.recentStyle = nil
+        legacy.playerStyle = nil
+        legacy.componentStyles = nil
+        legacy.elevatedLight = nil
+        legacy.elevatedDark = nil
+        legacy.brandLight = nil
+        legacy.brandDark = nil
+        legacy.onBrandLight = nil
+        legacy.onBrandDark = nil
+        legacy.fontDesign = nil
+        legacy.browseColors = nil
+        XCTAssertEqual(try DowntifyTheme.decode(JSONEncoder().encode(legacy)), legacy)
+        bad = .example
+        bad.albumGridMinimum = 999
+        XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)))
+        XCTAssertThrowsError(try DowntifyTheme.decode(Data(repeating: 32, count: 16_385)))
+    }
+
+    func testHomeSectionsAcceptOptionalCardsAndKeepOlderFilesComplete() throws {
+        func decode(_ sections: [String]) throws -> DowntifyTheme {
+            var theme = DowntifyTheme.example
+            theme.homeSections = sections
+            return try DowntifyTheme.decode(JSONEncoder().encode(theme))
+        }
+        // Listed optional sections are shown exactly as ordered; leaving one out hides it.
+        XCTAssertEqual(try decode(["artists", "recent", "new", "favorites"]).resolvedHomeSections,
+                       ["artists", "recent", "new", "favorites"])
+        XCTAssertEqual(try decode(["downloaded", "favorites", "new", "recent", "discover"]).resolvedHomeSections,
+                       ["downloaded", "favorites", "new", "recent", "discover"])
+        // A file from before the optional sections existed gets all three after its own.
+        XCTAssertEqual(try decode(["favorites", "recent", "new"]).resolvedHomeSections,
+                       ["favorites", "recent", "new", "discover", "artists", "downloaded"])
+        XCTAssertEqual(try DowntifyTheme.bundled("original").resolvedHomeSections,
+                       ["recent", "new", "favorites", "discover", "artists", "downloaded"])
+        XCTAssertEqual(try DowntifyTheme.bundled("redesign").resolvedHomeSections, DowntifyTheme.standardHomeSections)
+
+        XCTAssertThrowsError(try decode(["recent", "new", "discover"]), "a required section is missing")
+        XCTAssertThrowsError(try decode(["recent", "new", "favorites", "artists", "artists"]), "listed twice")
+        XCTAssertThrowsError(try decode(["recent", "new", "favorites", "podcasts"]), "unknown section")
+    }
+
+    func testEqualizerThemeColorsAreOptionalPairsWithPaletteFallbacks() throws {
+        func rgb(_ color: Color, _ style: UIUserInterfaceStyle) -> [Int] {
+            let resolved = UIColor(color).resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            resolved.getRed(&r, green: &g, blue: &b, alpha: &a)
+            return [r, g, b].map { Int(($0 * 255).rounded()) }
+        }
+        // Without equalizer fields, the equalizer follows the shared palette.
+        let fallback = DowntifyPalette(theme: .example)
+        XCTAssertEqual(rgb(fallback.equalizerAccent, .dark), rgb(fallback.accent, .dark))
+        XCTAssertEqual(rgb(fallback.equalizerHandle, .light), rgb(fallback.brand, .light))
+        XCTAssertEqual(rgb(fallback.equalizerGrid, .dark), rgb(DowntifyStyle.secondaryText, .dark))
+        XCTAssertEqual(DowntifyPalette(theme: .example).cardCornerRadius(default: 12), 8)
+        XCTAssertEqual(DowntifyPalette().cardCornerRadius(default: 12), 12)
+
+        var themed = DowntifyTheme.example
+        themed.equalizerAccentLight = "AA0011"; themed.equalizerAccentDark = "FF3355"
+        themed.equalizerHandleLight = "000000"; themed.equalizerHandleDark = "FFFFFF"
+        themed.equalizerGridLight = "666666"; themed.equalizerGridDark = "999999"
+        let decoded = try DowntifyTheme.decode(JSONEncoder().encode(themed))
+        XCTAssertEqual(decoded, themed)
+        let palette = DowntifyPalette(theme: decoded)
+        XCTAssertEqual(rgb(palette.equalizerAccent, .light), [0xAA, 0x00, 0x11])
+        XCTAssertEqual(rgb(palette.equalizerAccent, .dark), [0xFF, 0x33, 0x55])
+        XCTAssertEqual(rgb(palette.equalizerHandle, .dark), [0xFF, 0xFF, 0xFF])
+        XCTAssertEqual(rgb(palette.equalizerGrid, .light), [0x66, 0x66, 0x66])
+
+        var bad = themed
+        bad.equalizerHandleDark = nil
+        XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)), "pairs are set together")
+        bad = themed
+        bad.equalizerGridLight = "#66666"
+        XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)), "six hex digits")
+    }
 
     // MARK: Activation and fixture defaults
 
