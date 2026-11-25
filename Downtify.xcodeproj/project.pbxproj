@@ -46,6 +46,8 @@
 		000000000000000000000310 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackEqualizer.swift; sourceTree = "<group>"; };
 		000000000000000000000311 = { isa = PBXBuildFile; fileRef = 000000000000000000000310; };
 		000000000000000000000312 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EqualizerView.swift; sourceTree = "<group>"; };
+		00000000000000000000030E = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DowntifyComponents.swift; sourceTree = "<group>"; };
+		00000000000000000000030F = { isa = PBXBuildFile; fileRef = 00000000000000000000030E; };
 		000000000000000000000313 = { isa = PBXBuildFile; fileRef = 000000000000000000000312; };
 		000000000000000000000300 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageInspector.swift; sourceTree = "<group>"; };
 		000000000000000000000301 = { isa = PBXBuildFile; fileRef = 000000000000000000000300; };
@@ -510,6 +512,7 @@
 				000000000000000000000077,
 				000000000000000000000080,
 				000000000000000000000312,
+				00000000000000000000030E,
 				000000000000000000000075,
 			);
 			sourceTree = "<group>";
@@ -644,6 +647,7 @@
 				000000000000000000000099,
 				000000000000000000000311,
 				000000000000000000000313,
+				00000000000000000000030F,
 				000000000000000000000097,
 				000000000000000000000095,
 				000000000000000000000205,
