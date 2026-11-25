@@ -37,6 +37,14 @@ final class PlaybackController: ObservableObject {
     @Published private(set) var equalizer: PlaybackEqualizer
     @Published private(set) var buffering: PlaybackBuffering
     @Published private(set) var normalization: PlaybackNormalization
+    /// Keeps playing similar songs once the queue runs out.
+    @Published private(set) var autoplay: Bool
+    /// Seconds the end of one song overlaps the start of the next; 0 turns crossfade off.
+    @Published private(set) var crossfade: TimeInterval
+    /// Supplies the songs Autoplay appends, given the last song in the queue. Set once a server is connected.
+    var autoplayProvider: (@MainActor (PlaybackItem) async -> [PlaybackItem])?
+    private var autoplayTask: Task<Void, Never>?
+    private var autoplayResumesPlayback = false
 
     private let cache: PlaybackCache?
     private let preloadCache: PlaybackPreloadCache?
@@ -114,6 +122,8 @@ final class PlaybackController: ObservableObject {
         equalizer = store.loadEqualizer()
         buffering = store.loadBuffering()
         normalization = store.loadNormalization()
+        autoplay = store.loadAutoplay()
+        crossfade = store.loadCrossfade()
         engine.setNormalization(normalization)
         engine.setEqualizer(equalizer)
 
@@ -133,6 +143,7 @@ final class PlaybackController: ObservableObject {
         localHandoffTask?.cancel()
         prefetchTask?.cancel()
         progressTask?.cancel()
+        autoplayTask?.cancel()
     }
 
     func observeSessions(
@@ -213,6 +224,8 @@ final class PlaybackController: ObservableObject {
 
     /// Stops playback, empties the queue so the dock hides, and persists the empty state.
     func stopAndClear() {
+        cancelAutoplay()
+        engine.cancelCrossfade()
         stopEngine()
         audioSession.deactivate()
         progressGeneration += 1
@@ -352,6 +365,7 @@ final class PlaybackController: ObservableObject {
     }
 
     func replaceQueue(_ items: [PlaybackItem], startingAt index: Int = 0, autoplay: Bool = true) {
+        cancelAutoplay()
         queue.replace(items, startingAt: index)
         consecutiveUnplayableFailures = 0
         didSelect(autoplay: autoplay)
@@ -469,6 +483,17 @@ final class PlaybackController: ObservableObject {
         store.saveImmediateQualitySwitch(enabled)
     }
 
+    func setAutoplay(_ enabled: Bool) {
+        autoplay = enabled
+        store.saveAutoplay(enabled)
+        if enabled, phase == .playing { topUpAutoplay() }
+    }
+
+    func setCrossfade(_ seconds: TimeInterval) {
+        crossfade = min(max(seconds.rounded(), 0), PlaybackCrossfade.maximum)
+        store.saveCrossfade(crossfade)
+    }
+
     func setBuffering(_ preference: PlaybackBuffering) {
         buffering = preference
         store.saveBuffering(preference)
@@ -584,6 +609,72 @@ final class PlaybackController: ObservableObject {
     }
 
     private var preferredQuality: PlaybackQuality { qualityPreferences.preferred(on: lastConnectedNetwork) }
+
+    // MARK: Crossfade
+
+    /// Starts the next song early so the two overlap; true when playback moved on.
+    private func crossfadeIfDue() -> Bool {
+        guard crossfade > 0, podcast == nil, wantsPlayback, loaded, phase == .playing,
+              let duration, position >= duration - crossfade,
+              let currentID = queue.currentID, let current = queue.current?.item,
+              let nextID = queue.next(automatic: true), nextID != currentID,
+              let next = queue.order.first(where: { $0.id == nextID })?.item,
+              PlaybackCrossfade.applies(from: current, to: next, seconds: crossfade, currentDuration: duration)
+        else { return false }
+        recordListen(at: position)
+        resetListen()
+        cancelPrefetch()
+        engine.beginCrossfade(over: max(1, duration - position))
+        advance(to: nextID)
+        return true
+    }
+
+    // MARK: Autoplay
+
+    /// Fetches songs similar to the last one when Autoplay is on and nothing else is queued.
+    /// Returns true while a request is in flight; with `resume`, playback restarts once songs arrive.
+    @discardableResult
+    private func topUpAutoplay(resume: Bool = false) -> Bool {
+        guard autoplay, let provider = autoplayProvider, podcast == nil, queue.repeatMode == .off,
+              queue.next(automatic: true) == nil, let seed = queue.current?.item else { return false }
+        if resume { autoplayResumesPlayback = true }
+        guard autoplayTask == nil else { return true }
+        autoplayTask = Task { [weak self] in
+            let items = await provider(seed)
+            guard let self, !Task.isCancelled else { return }
+            self.autoplayTask = nil
+            self.finishAutoplay(items, after: seed)
+        }
+        return true
+    }
+
+    private func finishAutoplay(_ items: [PlaybackItem], after seed: PlaybackItem) {
+        let resume = autoplayResumesPlayback
+        autoplayResumesPlayback = false
+        let queued = Set(queue.order.map(\.item.mediaID))
+        let fresh = items.filter { !queued.contains($0.mediaID) }
+        // Continue only from the same last song; the listener may have changed the queue meanwhile.
+        guard queue.current?.item.mediaID == seed.mediaID, queue.next(automatic: true) == nil, !fresh.isEmpty else {
+            if resume, phase == .loading, !wantsPlayback {
+                phase = .ended
+                audioSession.deactivate()
+                publishMetadata()
+            }
+            return
+        }
+        queue.append(fresh)
+        didEditQueue()
+        if resume, let next = queue.next(automatic: true) {
+            wantsPlayback = true
+            advance(to: next)
+        }
+    }
+
+    private func cancelAutoplay() {
+        autoplayTask?.cancel()
+        autoplayTask = nil
+        autoplayResumesPlayback = false
+    }
 
     private func didEditQueue() {
         queueReadyForPersistence = true
@@ -833,6 +924,7 @@ final class PlaybackController: ObservableObject {
                 persist()
             }
             prefetchUpcoming()
+            topUpAutoplay()
         case .buffering:
             guard wantsPlayback, loaded else { return }
             phase = .buffering
@@ -846,6 +938,7 @@ final class PlaybackController: ObservableObject {
                 recordListen(at: position)
             }
             if abs(position - lastSavedPosition) >= 5 || (listen?.elapsed ?? 0) - lastSavedListenElapsed >= 5 { persist() }
+            if crossfadeIfDue() { return }
         case .ended:
             guard wantsPlayback, loaded else { return }
             if let duration, phase == .playing { recordListen(at: duration) }
@@ -860,10 +953,12 @@ final class PlaybackController: ObservableObject {
                 }
                 return
             }
+            // Autoplay may still be fetching similar songs; playback resumes when they arrive.
+            let continuing = topUpAutoplay(resume: true)
             wantsPlayback = false
             engine.pause()
-            audioSession.deactivate()
-            phase = .ended
+            if !continuing { audioSession.deactivate() }
+            phase = continuing ? .loading : .ended
             if let duration { position = duration }
             persist()
         case let .failed(failure):

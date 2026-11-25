@@ -380,6 +380,101 @@ final class PlaybackTests: XCTestCase {
     }
 
     @MainActor
+    func testAutoplayPreferenceDefaultsOnAndPersists() {
+        let name = "DowntifyTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let store = PlaybackStateStore(defaults: defaults)
+        XCTAssertTrue(store.loadAutoplay())
+        store.saveAutoplay(false)
+        XCTAssertFalse(PlaybackStateStore(defaults: defaults).loadAutoplay())
+    }
+
+    /// When the last song ends, Autoplay appends similar songs and keeps playing without duplicates.
+    @MainActor
+    func testAutoplayContinuesWithSimilarSongsWhenQueueEnds() async throws {
+        let fixture = PlaybackFixture()
+        await fixture.controller.updateSession(deviceSession()) { [] }
+        fixture.controller.setAutoplay(true)
+        var seeds: [String] = []
+        fixture.controller.autoplayProvider = { seed in
+            seeds.append(seed.title)
+            return [.library(self.track("first")), .library(self.track("similar"))]
+        }
+        let starts = expectation(description: "First track starts")
+        fixture.engine.onPlay = { starts.fulfill() }
+        fixture.controller.replaceQueue([track("first")])
+        await fulfillment(of: [starts], timeout: 3)
+
+        let continues = expectation(description: "Autoplay track starts")
+        fixture.engine.onPlay = { continues.fulfill() }
+        fixture.engine.onEvent?(.ended)
+        await fulfillment(of: [continues], timeout: 3)
+        XCTAssertEqual(fixture.controller.queue.current?.track.id, "similar")
+        XCTAssertEqual(fixture.controller.queue.order.map(\.track.id), ["first", "similar"],
+                       "songs already queued are not added again")
+        XCTAssertFalse(seeds.isEmpty)
+    }
+
+    /// With Autoplay off the queue simply ends.
+    @MainActor
+    func testAutoplayOffLetsQueueEnd() async throws {
+        let fixture = PlaybackFixture()
+        await fixture.controller.updateSession(deviceSession()) { [] }
+        fixture.controller.setAutoplay(false)
+        fixture.controller.autoplayProvider = { _ in [.library(self.track("similar"))] }
+        let starts = expectation(description: "Track starts")
+        fixture.engine.onPlay = { starts.fulfill() }
+        fixture.controller.replaceQueue([track("first")])
+        await fulfillment(of: [starts], timeout: 3)
+        fixture.engine.onEvent?(.ended)
+        XCTAssertEqual(fixture.controller.phase, .ended)
+        XCTAssertEqual(fixture.controller.queue.order.count, 1)
+    }
+
+    /// With crossfade on, the next song starts that many seconds before the current one ends.
+    @MainActor
+    func testCrossfadeStartsNextSongBeforeTheEnd() async throws {
+        let fixture = PlaybackFixture()
+        await fixture.controller.updateSession(deviceSession()) { [] }
+        fixture.controller.setCrossfade(6)
+        let starts = expectation(description: "First track starts")
+        fixture.engine.onPlay = { starts.fulfill() }
+        fixture.controller.replaceQueue([track("first"), track("second")])
+        await fulfillment(of: [starts], timeout: 3)
+
+        fixture.engine.onEvent?(.position(80, duration: 100))
+        XCTAssertTrue(fixture.engine.crossfades.isEmpty, "too early to blend")
+        let next = expectation(description: "Second track starts during the fade")
+        fixture.engine.onPlay = { next.fulfill() }
+        fixture.engine.onEvent?(.position(95, duration: 100))
+        await fulfillment(of: [next], timeout: 3)
+        XCTAssertEqual(fixture.controller.queue.current?.track.id, "second")
+        XCTAssertEqual(fixture.engine.crossfades, [5])
+    }
+
+    @MainActor
+    func testCrossfadeIsOffByDefaultAndKeepsAlbumsGapless() {
+        let name = "DowntifyTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        XCTAssertEqual(PlaybackStateStore(defaults: defaults).loadCrossfade(), 0)
+
+        func song(_ id: String, album: String, number: Int, duration: Double = 200) -> PlaybackItem {
+            .library(LibraryTrack(id: id, file: "\(id).mp3", title: id, artist: "A", artists: ["A"], album: album,
+                                  albumArtist: "A", albumID: album, artistID: "a", trackNumber: number, year: "",
+                                  duration: duration, codec: "mp3", bitrate: 0, sampleRate: 0, channels: 2, size: 0,
+                                  added: 0, hasCover: false, isExplicit: false, playlists: []))
+        }
+        XCTAssertFalse(PlaybackCrossfade.applies(from: song("1", album: "live", number: 1), to: song("2", album: "live", number: 2),
+                                                 seconds: 6, currentDuration: 200), "consecutive album tracks stay gapless")
+        XCTAssertTrue(PlaybackCrossfade.applies(from: song("1", album: "a", number: 1), to: song("2", album: "b", number: 2),
+                                                seconds: 6, currentDuration: 200))
+        XCTAssertFalse(PlaybackCrossfade.applies(from: song("1", album: "a", number: 1), to: song("2", album: "b", number: 1, duration: 12),
+                                                 seconds: 6, currentDuration: 200), "short songs are not overlapped")
+    }
+
+    @MainActor
     func testRemoteSeekAndEndOfTrackAdvance() async throws {
         let fixture = PlaybackFixture()
         await fixture.controller.updateSession(deviceSession()) { [] }
@@ -1584,6 +1679,8 @@ private final class TestPlaybackEngine: PlaybackEngining {
     func seek(to position: TimeInterval) { seeks.append(position) }
     func reset() { resets += 1 }
     func resetMediaServices() { mediaResets += 1 }
+    var crossfades: [TimeInterval] = []
+    func beginCrossfade(over seconds: TimeInterval) { crossfades.append(seconds) }
 }
 
 private actor TestPodcasts: PodcastPlaybackServing {

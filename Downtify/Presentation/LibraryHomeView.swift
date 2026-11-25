@@ -154,6 +154,7 @@ struct LibraryHomeView: View {
         .onChange(of: palette.theme?.navigationStyle) { _, style in
             if style != "drawer" { showingDrawer = false }
         }
+        .task(id: catalogPresentation.session) { configureAutoplay() }
         .onChange(of: networkOperationLimit) { _, value in
             Task { await NetworkOperationCoordinator.shared.setLimit(value) }
         }
@@ -312,6 +313,21 @@ struct LibraryHomeView: View {
             .foregroundStyle(palette.background)
             .frame(width: size, height: size)
             .background(palette.accent, in: Circle())
+    }
+
+    /// Autoplay continues with up to ten songs similar to the last one, resolved to library copies where they exist.
+    private func configureAutoplay() {
+        let catalog = catalogPresentation
+        let library = library
+        playback.autoplayProvider = { [weak catalog, weak library] seed in
+            guard let catalog, let library,
+                  let songs = try? await catalog.similarSongs(artist: seed.leadArtist, track: seed.title) else { return [] }
+            let tracks = library.tracks
+            let libraryOnly = catalog.isLibraryOnly == true
+            return Array(songs.map { PlaybackItem.resolving($0, in: tracks) }
+                .filter { !libraryOnly || $0.libraryTrack != nil }
+                .prefix(10))
+        }
     }
 
     private var versionText: String {

@@ -346,6 +346,13 @@ final class CatalogPresentationModel: ObservableObject {
         }
     }
 
+    /// One page of similar songs for callers that keep their own list (Search recommendations, Autoplay).
+    /// Empty when no server is connected or it lacks Discover.
+    func similarSongs(artist: String, track: String, limit: Int = 20) async throws -> [CatalogSong] {
+        guard let session, supportsDiscover == true, !artist.isEmpty || !track.isEmpty else { return [] }
+        return try await api.similar(artist: artist, track: track, limit: limit, session: session).tracks
+    }
+
     func loadSimilar(artist: String = "", track: String = "", limit: Int = 20) {
         // A new search discards any extension still in flight and its accumulated rows.
         requests["similar_more"]?.cancel()

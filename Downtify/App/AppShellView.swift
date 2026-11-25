@@ -690,7 +690,8 @@ private struct NowPlayingView: View {
                                 .font(.caption).foregroundStyle(DowntifyStyle.secondaryText)
                         }
                     } else {
-                        Text("Nothing up next")
+                        Text(playback.autoplay && playback.queue.repeatMode == .off
+                             ? "Autoplay will continue with similar songs" : "Nothing up next")
                             .font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
                     }
                 }
@@ -1456,6 +1457,8 @@ struct TrackArtwork: View {
                 loadedImage = await artwork.image(for: track, size: requestSize)
             }
             guard !Task.isCancelled else { return }
+            // A cover only a few pixels wide is a stand-in, not artwork; show the placeholder instead.
+            if let loaded = loadedImage, loaded.size.width * loaded.scale < 8 { loadedImage = nil }
             withAnimation(reduceMotion ? nil : .easeIn(duration: 0.18)) {
                 image = loadedImage
             }

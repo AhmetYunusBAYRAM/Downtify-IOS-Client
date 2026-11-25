@@ -673,6 +673,14 @@
 "Lyrics display" = "Şarkı sözü görünümü";
 "Reset lyrics timing" = "Söz zamanlamasını sıfırla";
 "Seek to %@ at %@" = "%@ satırına git (%@)";
+/* Playback: Autoplay, Crossfade */
+"Autoplay" = "Otomatik çalma";
+"When your music ends, keep playing similar songs." = "Müziğin bitince benzer şarkıları çalmaya devam et.";
+"Autoplay will continue with similar songs" = "Otomatik çalma benzer şarkılarla devam edecek";
+"Crossfade" = "Yumuşak geçiş";
+"%lld s" = "%lld sn";
+"%lld seconds" = "%lld saniye";
+"Blends the end of each song into the next. Songs that follow each other on an album stay gapless." = "Her şarkının sonunu bir sonrakine yumuşakça karıştırır. Albümde art arda gelen şarkılar boşluksuz çalmaya devam eder.";
 "Jumps playback to this line" = "Oynatmayı bu satıra götürür";
 "instrumental break" = "enstrümantal bölüm";
 "Loading more…" = "Daha fazlası yükleniyor…";
