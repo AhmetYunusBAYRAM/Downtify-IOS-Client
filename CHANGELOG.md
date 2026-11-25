@@ -26,6 +26,12 @@ Changes:
 - Theme authoring guide (docs/RUNTIME_THEMES.md) with example themes and a test that keeps them valid; theme tests for equalizer colors and Home sections (#90, #92, #93)
 - Turkish translations for the Equalizer, Autoplay, Crossfade and Home text; theme settings text and other languages show English for now (#90, #91, #92)
 
+Released from #95.
+
+Contributors:
+- Ahmet Yunus BAYRAM (@AhmetYunusBAYRAM), first contribution: the Equalizer, Autoplay, Crossfade and Home sections come from their redesign in #88
+- Michael Moskie (@michaelmoskie)
+
 ## 0.1.2 (13) — 2026-11-24
 
 Release notes:
