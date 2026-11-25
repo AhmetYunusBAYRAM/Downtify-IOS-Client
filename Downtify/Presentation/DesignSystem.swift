@@ -57,6 +57,15 @@ struct DowntifyTheme: Codable, Equatable {
     var fontDesign: String? = nil
     var browseColors: [String: String]? = nil
     var surfaceStyle: String? = nil
+    /// Optional equalizer colors. Each pair falls back to a shared palette color when omitted:
+    /// accent (curve, fill and selected preset) to `accent`, handle to `brand`, grid (scale and labels)
+    /// to the secondary text color.
+    var equalizerAccentLight: String? = nil
+    var equalizerAccentDark: String? = nil
+    var equalizerHandleLight: String? = nil
+    var equalizerHandleDark: String? = nil
+    var equalizerGridLight: String? = nil
+    var equalizerGridDark: String? = nil
 
     static let storageKey = "downtify.theme.json"
     static let example = DowntifyTheme(version: 1, name: "Redesign",
@@ -82,7 +91,9 @@ struct DowntifyTheme: Codable, Equatable {
                 CharacterSet(charactersIn: "0123456789abcdefABCDEF").contains($0)
             }) else { throw ThemeError.invalid }
         }
-        for color in [elevatedLight, elevatedDark, brandLight, brandDark, onBrandLight, onBrandDark].compactMap({ $0 }) {
+        for color in [elevatedLight, elevatedDark, brandLight, brandDark, onBrandLight, onBrandDark,
+                      equalizerAccentLight, equalizerAccentDark, equalizerHandleLight, equalizerHandleDark,
+                      equalizerGridLight, equalizerGridDark].compactMap({ $0 }) {
             guard color.count == 6, color.unicodeScalars.allSatisfy({
                 CharacterSet(charactersIn: "0123456789abcdefABCDEF").contains($0)
             }) else { throw ThemeError.invalid }
@@ -95,7 +106,10 @@ struct DowntifyTheme: Codable, Equatable {
         }) ?? true else { throw ThemeError.invalid }
         guard (elevatedLight == nil) == (elevatedDark == nil),
               (brandLight == nil) == (brandDark == nil),
-              (onBrandLight == nil) == (onBrandDark == nil) else { throw ThemeError.invalid }
+              (onBrandLight == nil) == (onBrandDark == nil),
+              (equalizerAccentLight == nil) == (equalizerAccentDark == nil),
+              (equalizerHandleLight == nil) == (equalizerHandleDark == nil),
+              (equalizerGridLight == nil) == (equalizerGridDark == nil) else { throw ThemeError.invalid }
         let componentNames = Set(["home", "library", "search", "collection", "downloads", "player", "settings", "connection", "discover", "podcasts", "queue"])
         guard componentStyles?.allSatisfy({ componentNames.contains($0.key) && ["standard", "redesign"].contains($0.value) }) ?? true,
               [nil, "system", "rounded", "serif", "monospaced"].contains(fontDesign) else { throw ThemeError.invalid }
@@ -182,6 +196,20 @@ struct DowntifyPalette {
     var onBrand: Color {
         guard let t = theme, let light = t.onBrandLight, let dark = t.onBrandDark else { return DowntifyStyle.onAccent }
         return t.color(light: light, dark: dark)
+    }
+    /// Equalizer curve, its fill, and the selected preset.
+    var equalizerAccent: Color { pair(\.equalizerAccentLight, \.equalizerAccentDark) ?? accent }
+    /// Equalizer band handles.
+    var equalizerHandle: Color { pair(\.equalizerHandleLight, \.equalizerHandleDark) ?? brand }
+    /// Equalizer dB scale, guide lines, and band labels; also the curve while the equalizer is off.
+    var equalizerGrid: Color { pair(\.equalizerGridLight, \.equalizerGridDark) ?? DowntifyStyle.secondaryText }
+    /// Corner radius and padding of themed cards outside `DowntifyCard`, with the given standard-theme defaults.
+    func cardCornerRadius(default value: CGFloat) -> CGFloat { theme.map { CGFloat($0.cardCornerRadius) } ?? value }
+    func cardPadding(default value: CGFloat) -> CGFloat { theme.map { CGFloat($0.cardPadding) } ?? value }
+
+    private func pair(_ light: KeyPath<DowntifyTheme, String?>, _ dark: KeyPath<DowntifyTheme, String?>) -> Color? {
+        guard let t = theme, let l = t[keyPath: light], let d = t[keyPath: dark] else { return nil }
+        return t.color(light: l, dark: d)
     }
     var fontDesign: Font.Design {
         switch theme?.fontDesign {

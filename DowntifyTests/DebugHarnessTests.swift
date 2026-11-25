@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import SwiftUI
 import XCTest
 @testable import Downtify
 
@@ -50,6 +51,41 @@ final class DebugHarnessTests: XCTestCase {
         bad.albumGridMinimum = 999
         XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)))
         XCTAssertThrowsError(try DowntifyTheme.decode(Data(repeating: 32, count: 16_385)))
+    }
+
+    func testEqualizerThemeColorsAreOptionalPairsWithPaletteFallbacks() throws {
+        func rgb(_ color: Color, _ style: UIUserInterfaceStyle) -> [Int] {
+            let resolved = UIColor(color).resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            resolved.getRed(&r, green: &g, blue: &b, alpha: &a)
+            return [r, g, b].map { Int(($0 * 255).rounded()) }
+        }
+        // Without equalizer fields, the equalizer follows the shared palette.
+        let fallback = DowntifyPalette(theme: .example)
+        XCTAssertEqual(rgb(fallback.equalizerAccent, .dark), rgb(fallback.accent, .dark))
+        XCTAssertEqual(rgb(fallback.equalizerHandle, .light), rgb(fallback.brand, .light))
+        XCTAssertEqual(rgb(fallback.equalizerGrid, .dark), rgb(DowntifyStyle.secondaryText, .dark))
+        XCTAssertEqual(DowntifyPalette(theme: .example).cardCornerRadius(default: 12), 8)
+        XCTAssertEqual(DowntifyPalette().cardCornerRadius(default: 12), 12)
+
+        var themed = DowntifyTheme.example
+        themed.equalizerAccentLight = "AA0011"; themed.equalizerAccentDark = "FF3355"
+        themed.equalizerHandleLight = "000000"; themed.equalizerHandleDark = "FFFFFF"
+        themed.equalizerGridLight = "666666"; themed.equalizerGridDark = "999999"
+        let decoded = try DowntifyTheme.decode(JSONEncoder().encode(themed))
+        XCTAssertEqual(decoded, themed)
+        let palette = DowntifyPalette(theme: decoded)
+        XCTAssertEqual(rgb(palette.equalizerAccent, .light), [0xAA, 0x00, 0x11])
+        XCTAssertEqual(rgb(palette.equalizerAccent, .dark), [0xFF, 0x33, 0x55])
+        XCTAssertEqual(rgb(palette.equalizerHandle, .dark), [0xFF, 0xFF, 0xFF])
+        XCTAssertEqual(rgb(palette.equalizerGrid, .light), [0x66, 0x66, 0x66])
+
+        var bad = themed
+        bad.equalizerHandleDark = nil
+        XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)), "pairs are set together")
+        bad = themed
+        bad.equalizerGridLight = "#66666"
+        XCTAssertThrowsError(try DowntifyTheme.decode(JSONEncoder().encode(bad)), "six hex digits")
     }
 
     // MARK: Activation and fixture defaults
