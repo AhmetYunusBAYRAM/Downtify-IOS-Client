@@ -60,21 +60,10 @@ enum DowntifyUITestSupport {
 
     /// Opens the Library tab and switches to the Songs category, where track rows are listed.
     static func openLibrarySongs(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
-        let library = tab(app, "tab.library", index: 2)
-        XCTAssertTrue(library.waitForExistence(timeout: 15), "Library tab not visible", file: file, line: line)
-        library.tap()
+        element(app, "tab.library").tap()
         let songs = app.buttons["Songs"].firstMatch
         XCTAssertTrue(songs.waitForExistence(timeout: 15), "Songs category not visible", file: file, line: line)
-        // Library chips toggle; tapping the selected one would clear the filter.
-        if !songs.isSelected { songs.tap() }
-    }
-
-    /// Tab bar button by identifier, falling back to its position (0 Home, 1 Search, 2 Your Library)
-    /// because some iOS releases drop identifiers set inside `tabItem`.
-    static func tab(_ app: XCUIApplication, _ identifier: String, index: Int) -> XCUIElement {
-        let byIdentifier = element(app, identifier)
-        if byIdentifier.waitForExistence(timeout: 5) { return byIdentifier }
-        return app.tabBars.buttons.element(boundBy: index)
+        songs.tap()
     }
 
     static func element(_ app: XCUIApplication, _ identifier: String) -> XCUIElement {

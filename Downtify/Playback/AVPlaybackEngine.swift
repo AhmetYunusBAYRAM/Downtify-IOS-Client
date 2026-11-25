@@ -16,10 +16,10 @@ protocol PlaybackEngining: AnyObject {
     func play()
     func pause()
     func seek(to position: TimeInterval)
+    func setEqualizer(_ equalizer: PlaybackEqualizer)
     func reset()
     func resetMediaServices()
     func setNormalization(_ normalization: PlaybackNormalization)
-    func setEqualizer(_ equalizer: PlaybackEqualizer)
     /// Keeps the current song playing on its own while it fades out over `seconds`; the next `load` and
     /// `play` fade in over the same time. Used for crossfade between songs.
     func beginCrossfade(over seconds: TimeInterval)
@@ -28,8 +28,8 @@ protocol PlaybackEngining: AnyObject {
 }
 
 extension PlaybackEngining {
-    func setNormalization(_ normalization: PlaybackNormalization) {}
     func setEqualizer(_ equalizer: PlaybackEqualizer) {}
+    func setNormalization(_ normalization: PlaybackNormalization) {}
     func beginCrossfade(over seconds: TimeInterval) {}
     func cancelCrossfade() {}
 }
@@ -58,10 +58,10 @@ final class AVPlaybackEngine: PlaybackEngining {
     private var normalizationTask: Task<Void, Never>?
     private var measurement: PlaybackLevelMeasurement?
     private var normalizationTrack: AVAssetTrack?
-    private var currentStream: PlaybackStream?
     private var equalizer = PlaybackEqualizer()
-    /// Shared with every tap, so moving a band takes effect at once, including on a song fading out.
+    /// Shared with every tap, so moving a band takes effect at once.
     private let equalizerSettings = EqualizerSettings()
+    private var currentStream: PlaybackStream?
     /// The previous song while it fades out, with the loader that keeps its stream alive.
     private var outgoing: (player: AVPlayer, loader: AudioRangeLoader?)?
     private var outgoingFade: Task<Void, Never>?

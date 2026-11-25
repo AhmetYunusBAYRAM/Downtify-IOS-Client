@@ -11,15 +11,13 @@ struct CatalogSearchView: View {
     var downloadState: (CatalogSong) -> ServerDownloadActionState = { _ in .idle }
     var onAddToDevice: (CatalogSong) -> Void = { _ in }
     var deviceState: (CatalogSong) -> DeviceSaveState = { _ in .unavailable(.notInLibrary) }
-    /// Shown instead of the empty-state message while the search field is empty.
-    var browse: AnyView? = nil
+    var onBrowse: (String) -> Void = { _ in }
     /// Starts loading charts and Discover suggestions for the shelves under Browse.
     var loadSuggestions: () -> Void = {}
     @Environment(\.openURL) private var openURL
     @State private var recommended: [CatalogSong] = []
     @State private var recommendationSeeds: [String] = []
     @State private var recommendationsLoading = false
-    @State private var recommendationsFailed = false
     @State private var recommendationGeneration = 0
     @State private var showsAllRecommended = false
 
@@ -48,7 +46,7 @@ struct CatalogSearchView: View {
          downloadState: @escaping (CatalogSong) -> ServerDownloadActionState = { _ in .idle },
          onAddToDevice: @escaping (CatalogSong) -> Void = { _ in },
          deviceState: @escaping (CatalogSong) -> DeviceSaveState = { _ in .unavailable(.notInLibrary) },
-         browse: AnyView? = nil,
+         onBrowse: @escaping (String) -> Void = { _ in },
          loadSuggestions: @escaping () -> Void = {}) {
         self.catalog = catalog
         self.library = library
@@ -59,7 +57,7 @@ struct CatalogSearchView: View {
         self.downloadState = downloadState
         self.onAddToDevice = onAddToDevice
         self.deviceState = deviceState
-        self.browse = browse
+        self.onBrowse = onBrowse
         self.loadSuggestions = loadSuggestions
     }
 
@@ -102,44 +100,24 @@ struct CatalogSearchView: View {
 
     var body: some View {
         VStack(alignment: category == .songs ? .leading : .center, spacing: 20) {
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass").font(.title3.weight(.semibold))
-                TextField("", text: $query, prompt: Text("What do you want to listen to?").foregroundStyle(Color(white: 0.4)))
-                    .submitLabel(.search)
-                    .autocorrectionDisabled()
-                    .focused($searchFocused)
-                    .accessibilityLabel("Search songs, albums, and artists")
-                    .accessibilityIdentifier("catalog.searchField")
-                if !query.isEmpty {
-                    Button { query = "" } label: {
-                        Image(systemName: "xmark").font(.body.weight(.semibold)).downtifyControlTarget()
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Clear search")
-                }
-            }
-            .font(.body.weight(.medium))
-            .foregroundStyle(Color.black)
-            .tint(Color.black)
-            .padding(.horizontal, 12)
-            .frame(minHeight: 48)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.black.opacity(0.1)))
+            if !palette.redesign("search") { searchPicker }
 
+            TextField("Songs, albums, artists", text: $query)
+                .textFieldStyle(.plain)
+                .padding(palette.redesign("search") ? 14 : 8)
+                .background(palette.redesign("search") ? palette.elevated : Color(uiColor: .secondarySystemBackground),
+                            in: RoundedRectangle(cornerRadius: palette.redesign("search") ? 8 : 5))
+                .submitLabel(.search)
+                .focused($searchFocused)
+                .accessibilityLabel("Search songs, albums, and artists")
+                .accessibilityIdentifier("catalog.searchField")
+
+            if palette.redesign("search") && !normalizedQuery.isEmpty { searchPicker }
             if !normalizedQuery.isEmpty {
-                HStack(spacing: 8) {
-                    DowntifyChip(title: "Songs", isSelected: category == .songs) { category = .songs }
-                    DowntifyChip(title: "Artists", isSelected: category == .artists) { category = .artists }
-                    DowntifyChip(title: "Albums", isSelected: category == .albums) { category = .albums }
-                    Spacer(minLength: 0)
-                }
-                .padding(.vertical, -DowntifyStyle.Space.small)
-                .accessibilityElement(children: .contain)
-                .accessibilityLabel("Search category")
                 localResults
                 catalogResults
-            } else if let browse {
-                browse
+            } else if palette.redesign("search") {
+                browseShortcuts
                 suggestions
             } else {
                 ContentUnavailableView("Search your music", systemImage: "magnifyingglass",
@@ -150,7 +128,9 @@ struct CatalogSearchView: View {
                 linkResolver
             }
         }
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: category == .songs ? .leading : .center)
+        .background(palette.background)
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
@@ -164,9 +144,9 @@ struct CatalogSearchView: View {
             catalog.search(normalizedQuery)
         }
         .onAppear { catalog.start() }
-        .task(id: catalog.policyGeneration) { if browse != nil { loadSuggestions() } }
+        .task(id: catalog.policyGeneration) { if palette.redesign("search") { loadSuggestions() } }
         .task(id: RecommendationRequest(session: catalog.session, generation: recommendationGeneration)) {
-            guard browse != nil else { return }
+            guard palette.redesign("search") else { return }
             await loadRecommendations()
         }
         .task(id: albumCountLookupKey) { loadAlbumTrackCounts() }
@@ -181,6 +161,70 @@ struct CatalogSearchView: View {
         }
     }
 
+    @ViewBuilder private var searchPicker: some View {
+            if palette.redesign("search") {
+                HStack(spacing: 8) {
+                    searchCategory("Songs", category: .songs)
+                    searchCategory("Artists", category: .artists)
+                    searchCategory("Albums", category: .albums)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Picker("Search category", selection: $category) {
+                    Text("Songs").tag(SearchCategory.songs)
+                    Text("Artists").tag(SearchCategory.artists)
+                    Text("Albums").tag(SearchCategory.albums)
+                }
+                .pickerStyle(.segmented)
+            }
+
+    }
+
+    private var browseShortcuts: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Browse all").font(.title2.bold()).accessibilityAddTraits(.isHeader)
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                browseTile("For You", symbol: "sparkles", color: 0x203562)
+                browseTile("Charts", symbol: "chart.line.uptrend.xyaxis", color: 0xE33600)
+                browseTile("Finder", symbol: "safari", color: 0x27866F)
+                browseTile("Similar", symbol: "waveform", color: 0x8863A8)
+                browseTile("Podcasts", symbol: "mic.fill", color: 0x006450)
+                browseTile("Downloads", symbol: "arrow.down.circle.fill", color: 0xB65B00)
+            }
+        }
+    }
+
+    private func tileColor(_ title: String, fallback: UInt32) -> UInt32 {
+        palette.theme?.browseColors?[title].flatMap { UInt32($0, radix: 16) } ?? fallback
+    }
+
+    private func browseTile(_ title: String, symbol: String, color: UInt32) -> some View {
+        Button { onBrowse(title) } label: {
+            ZStack(alignment: .topLeading) {
+                DowntifyStyle.adaptive(light: tileColor(title, fallback: color), dark: tileColor(title, fallback: color))
+                Text(LocalizedStringKey(title)).font(.headline).padding(12)
+                Image(systemName: symbol).font(.system(size: 42, weight: .bold))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .offset(x: 8, y: 8).opacity(0.85)
+            }
+            .foregroundStyle(.white)
+            .frame(height: 96)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func searchCategory(_ title: LocalizedStringKey, category option: SearchCategory) -> some View {
+        Button { category = option } label: {
+            Text(title).font(.subheadline.weight(.medium))
+                .padding(.horizontal, 14).frame(minHeight: 40)
+                .foregroundStyle(category == option ? palette.onBrand : Color.primary)
+                .background(category == option ? palette.brand : palette.elevated, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(category == option ? .isSelected : [])
+    }
+
     @ViewBuilder private var localResults: some View {
         if category == .songs && !localSongs.isEmpty {
             sectionHeader("In your library")
@@ -190,13 +234,16 @@ struct CatalogSearchView: View {
                     let isCurrent = nowPlaying.isCurrent(track)
                     HStack(spacing: 0) {
                     Button { playback.replaceQueue(localSongs, startingAt: localSongs.firstIndex(of: track) ?? 0) } label: {
-                        HStack(spacing: 12) {
-                            TrackArtwork(track: track, size: 48).accessibilityHidden(true)
+                        HStack(spacing: palette.redesign("search") ? 12 : nil) {
+                            if palette.redesign("search") { TrackArtwork(track: track, size: 48).accessibilityHidden(true) }
                             VStack(alignment: .leading, spacing: 3) {
                                 currentTitle(track.title, isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
                                 Text(track.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                             }
                             Spacer(minLength: 4)
+                            if !palette.redesign("search") {
+                                Image(systemName: "play.fill").frame(minWidth: 44, minHeight: 44)
+                            }
                         }
                         .frame(minHeight: DowntifyStyle.minimumControlSize)
                         .contentShape(Rectangle())
@@ -213,15 +260,19 @@ struct CatalogSearchView: View {
         if category == .albums && !localAlbums.isEmpty {
             sectionHeader("Library albums")
             ForEach(localAlbums) { entry in
-                NavigationLink(value: entry.context) { LibraryListRow(entry: entry) }
-                    .buttonStyle(.plain)
+                NavigationLink(value: entry.context) {
+                    Label("\(entry.title) · \(entry.artist)", systemImage: "square.stack")
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                }
             }
         }
         if category == .artists && !localArtists.isEmpty {
             sectionHeader("Library artists")
             ForEach(localArtists) { entry in
-                NavigationLink(value: entry.context) { LibraryListRow(entry: entry) }
-                    .buttonStyle(.plain)
+                NavigationLink(value: entry.context) {
+                    Label(entry.title, systemImage: "person")
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                }
             }
         }
     }
@@ -250,16 +301,12 @@ struct CatalogSearchView: View {
                     ForEach(albums) { album in
                         HStack {
                             NavigationLink { albumDetail(album) } label: {
-                                HStack(spacing: 12) {
-                                    CatalogCoverImage(imageURL: album.coverURL, size: 48, symbol: "opticaldisc")
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(album.title).lineLimit(1)
-                                        Text(album.artist.isEmpty ? String(localized: "Album") : String(localized: "Album · \(album.artist)"))
-                                            .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                                    }
+                                if palette.redesign("search") {
+                                    catalogAlbumRow(album)
+                                } else {
+                                    Label("\(album.title) · \(album.artist)", systemImage: "square.stack")
+                                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                                 }
-                                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-                                .contentShape(Rectangle())
                             }.buttonStyle(.plain)
                             if canRequestAlbumDownload(album), let url = album.url {
                                 serverAlbumDownloadButton(url: url, album: album)
@@ -282,9 +329,13 @@ struct CatalogSearchView: View {
                         NavigationLink { artistDetail(artist) } label: {
                             HStack(spacing: 12) {
                                 artistArtwork(artist.coverURL)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(artist.name).lineLimit(1)
-                                    Text("Artist").font(.subheadline).foregroundStyle(.secondary)
+                                if palette.redesign("search") {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(artist.name).lineLimit(1)
+                                        Text("Artist").font(.subheadline).foregroundStyle(.secondary)
+                                    }
+                                } else {
+                                    Text(artist.name)
                                 }
                             }
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
@@ -445,14 +496,17 @@ struct CatalogSearchView: View {
                             }
                             playback.replaceQueue([PlaybackItem.resolving(song, in: library.tracks)])
                         } label: {
-                            HStack(spacing: 12) {
-                                songArtwork(song)
+                            HStack(spacing: palette.redesign("search") ? 12 : nil) {
+                                if palette.redesign("search") { songArtwork(song) }
                                 VStack(alignment: .leading, spacing: 3) {
                                     currentTitle(song.title, isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
                                     Text([song.artist, song.albumName].filter { !$0.isEmpty }.joined(separator: " · "))
                                         .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                                 }
                                 Spacer(minLength: 4)
+                                if !palette.redesign("search") {
+                                    Image(systemName: "play.fill").frame(minWidth: 44, minHeight: 44)
+                                }
                             }
                             .frame(minHeight: DowntifyStyle.minimumControlSize)
                             .contentShape(Rectangle())
@@ -476,6 +530,14 @@ struct CatalogSearchView: View {
         }
     }
 
+    private func currentTitle(_ title: String, isCurrent: Bool, isPlaying: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if isCurrent { NowPlayingBadge(isPlaying: isPlaying) }
+            Text(title).font(.body.weight(.semibold))
+                .foregroundStyle(isCurrent ? AnyShapeStyle(palette.accent) : AnyShapeStyle(.primary))
+        }
+    }
+
     /// The result's cover, or the library copy's cover when the catalog has none.
     @ViewBuilder private func songArtwork(_ song: CatalogSong) -> some View {
         let url = song.coverURL ?? song.previewURL
@@ -486,12 +548,17 @@ struct CatalogSearchView: View {
         }
     }
 
-    private func currentTitle(_ title: String, isCurrent: Bool, isPlaying: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            if isCurrent { NowPlayingBadge(isPlaying: isPlaying) }
-            Text(title).font(.body.weight(.semibold))
-                .foregroundStyle(isCurrent ? AnyShapeStyle(DowntifyStyle.accent) : AnyShapeStyle(.primary))
+    private func catalogAlbumRow(_ album: CatalogAlbum) -> some View {
+        HStack(spacing: 12) {
+            CatalogCoverImage(imageURL: album.coverURL, size: 48, symbol: "opticaldisc")
+            VStack(alignment: .leading, spacing: 3) {
+                Text(album.title).lineLimit(1)
+                Text(album.artist.isEmpty ? String(localized: "Album") : String(localized: "Album · \(album.artist)"))
+                    .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+            }
         }
+        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     // MARK: Suggestions under Browse
@@ -534,7 +601,6 @@ struct CatalogSearchView: View {
         let seeds = recommendationSeedTracks
         guard !seeds.isEmpty else { return }
         recommendationsLoading = true
-        recommendationsFailed = false
         defer { if !Task.isCancelled { recommendationsLoading = false } }
         let catalog = self.catalog
         let lists = await withTaskGroup(of: (Int, [CatalogSong]).self) { group in
@@ -562,7 +628,6 @@ struct CatalogSearchView: View {
         }
         recommended = Array(merged.prefix(30))
         recommendationSeeds = seeds.map(\.artist)
-        recommendationsFailed = merged.isEmpty && lists.allSatisfy(\.isEmpty)
     }
 
     @ViewBuilder private var recommendedSection: some View {
@@ -621,7 +686,7 @@ struct CatalogSearchView: View {
                             HStack(spacing: 6) {
                                 if isCurrent { NowPlayingBadge(isPlaying: nowPlaying.isPlaying) }
                                 Text(song.title)
-                                    .foregroundStyle(isCurrent ? AnyShapeStyle(DowntifyStyle.accent) : AnyShapeStyle(.primary))
+                                    .foregroundStyle(isCurrent ? AnyShapeStyle(palette.accent) : AnyShapeStyle(.primary))
                                     .lineLimit(1)
                             }
                             Text(song.artists.isEmpty ? song.artist : song.artists.joined(separator: ", "))
@@ -637,7 +702,7 @@ struct CatalogSearchView: View {
                 .accessibilityLabel("Play \(song.title) by \(song.artist)")
                 .downtifyCurrentRowAccessibility(isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
             }
-            if song.source != "library", catalog.isLibraryOnly != true {
+            if song.source != "library", catalog.externalCatalogAvailable {
                 serverDownloadButton(for: song)
             }
         }
@@ -723,9 +788,9 @@ struct CatalogSearchView: View {
             Text(title).font(.title3.bold()).accessibilityAddTraits(.isHeader)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: 14) { content() }
-                    .padding(.horizontal, DowntifyStyle.Space.regular)
+                    .padding(.horizontal, 16)
             }
-            .padding(.horizontal, -DowntifyStyle.Space.regular)
+            .padding(.horizontal, -16)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, DowntifyStyle.Space.small)
@@ -876,5 +941,65 @@ struct CatalogSearchView: View {
             return resolution.albums.count == 1 && resolution.albums.first?.url == url ? resolution.tracks : nil
         default: return nil
         }
+    }
+}
+
+/// A provider cover loaded over https, with a symbol on the theme's elevated color while it loads or when missing.
+private struct CatalogCoverImage: View {
+    let imageURL: String?
+    var size: CGFloat
+    var round = false
+    var symbol = "music.note"
+    @Environment(\.downtifyPalette) private var palette
+
+    private var url: URL? {
+        guard let imageURL, let url = URL(string: imageURL), url.scheme?.lowercased() == "https" else { return nil }
+        return url
+    }
+
+    var body: some View {
+        AsyncImage(url: url) { phase in
+            if let image = phase.image {
+                image.resizable().scaledToFill()
+            } else {
+                Image(systemName: symbol)
+                    .font(.system(size: size * 0.3))
+                    .foregroundStyle(DowntifyStyle.secondaryText)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(palette.elevated)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(round ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: max(4, size * 0.04), style: .continuous)))
+        .accessibilityHidden(true)
+    }
+}
+
+/// Cover card for the horizontal suggestion shelves.
+private struct RemoteArtworkCard: View {
+    let title: String
+    let subtitle: String
+    let imageURL: String?
+    var round = false
+    var symbol = "music.note"
+    var size: CGFloat = 140
+
+    var body: some View {
+        VStack(alignment: round ? .center : .leading, spacing: 6) {
+            CatalogCoverImage(imageURL: imageURL, size: size, round: round, symbol: symbol)
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+            if !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(DowntifyStyle.secondaryText)
+                    .lineLimit(2)
+            }
+        }
+        .frame(width: size, alignment: round ? .center : .leading)
+        .multilineTextAlignment(round ? .center : .leading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 }

@@ -37,21 +37,28 @@ struct CatalogDiscoverView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(Section.allCases) { section in
-                        DowntifyChip(title: LocalizedStringKey(section.rawValue),
-                                     isSelected: (Section(rawValue: selectedSection) ?? .finder) == section) {
-                            selectedSection = section.rawValue
+            if palette.redesign("discover") {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(Section.allCases) { section in
+                            Button { selectedSection = section.rawValue } label: {
+                                Text(LocalizedStringKey(section.rawValue)).font(.subheadline.weight(.medium))
+                                    .padding(.horizontal, 14).frame(minHeight: 40)
+                                    .foregroundStyle(selectedSection == section.rawValue ? palette.onBrand : Color.primary)
+                                    .background(selectedSection == section.rawValue ? palette.brand : palette.elevated, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(selectedSection == section.rawValue ? .isSelected : [])
                         }
-                        .accessibilityIdentifier("discover.section.\(section.rawValue)")
                     }
+                }.scrollIndicators(.hidden)
+            } else {
+                Picker("Explore", selection: $selectedSection) {
+                    ForEach(Section.allCases) { Text(LocalizedStringKey($0.rawValue)).tag($0.rawValue) }
                 }
-                .padding(.horizontal, DowntifyStyle.Space.regular)
+                .pickerStyle(.segmented)
+                .accessibilityLabel("Discovery section")
             }
-            .padding(.horizontal, -DowntifyStyle.Space.regular)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Discovery section")
 
             switch Section(rawValue: selectedSection) ?? .finder {
             case .finder: finderContent
@@ -111,7 +118,7 @@ struct CatalogDiscoverView: View {
                 .accessibilityLabel("Search")
             }
             .padding(12)
-            .background(palette.elevated, in: RoundedRectangle(cornerRadius: 8))
+            .background(palette.surface, in: RoundedRectangle(cornerRadius: 14))
 
             if isSearching || !query.isEmpty {
                 switch catalog.finderSearchState {
@@ -389,7 +396,7 @@ struct CatalogDiscoverView: View {
                     DowntifyMediaRow(title: song.title, subtitle: song.artists.joined(separator: ", ").isEmpty ? song.artist : song.artists.joined(separator: ", "), detail: song.albumName.isEmpty ? nil : song.albumName,
                                      isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying) {
                         artwork(song.coverURL ?? song.previewURL, fallback: "music.note")
-                    } accessory: { Image(systemName: "play.fill").foregroundStyle(DowntifyStyle.accent).frame(width: 44, height: 44) }
+                    } accessory: { Image(systemName: "play.fill").foregroundStyle(palette.accent).frame(width: 44, height: 44) }
                 }.buttonStyle(.plain).accessibilityLabel("Play \(song.title) by \(song.artist)")
                     .downtifyCurrentRowAccessibility(isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
                     .disabled(song.source == "library" && song.libraryTrack(in: libraryTracks) == nil)
@@ -507,25 +514,12 @@ struct CatalogDiscoverView: View {
     }
 
     private func heroCard(title: String, subtitle: String, symbol: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.title3.bold())
-                Text(subtitle).font(.subheadline).foregroundStyle(.white.opacity(0.85))
-                    .fixedSize(horizontal: false, vertical: true)
+        DowntifyCard {
+            HStack(spacing: 14) {
+                Image(systemName: symbol).font(.title2).foregroundStyle(palette.accent).frame(width: 44, height: 44).background(palette.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 13))
+                VStack(alignment: .leading, spacing: 4) { Text(title).font(.headline); Text(subtitle).font(.subheadline).foregroundStyle(.secondary) }
             }
-            Spacer(minLength: 0)
-            Image(systemName: symbol)
-                .font(.system(size: 40, weight: .semibold))
-                .rotationEffect(.degrees(12))
-                .accessibilityHidden(true)
         }
-        .foregroundStyle(.white)
-        .padding(DowntifyStyle.Space.regular)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(LinearGradient(colors: [Color(red: 0.12, green: 0.2, blue: 0.39), Color(red: 0.55, green: 0.4, blue: 0.67)],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing),
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .accessibilityElement(children: .combine)
     }
 
     private func emptyMessage(_ title: LocalizedStringKey, symbol: String, detail: String) -> some View {
@@ -592,6 +586,7 @@ struct CatalogDiscoverView: View {
         }
     }
 
+    /// Dismisses the keyboard first so the result list can scroll.
     private func loadSimilar() {
         similarFocused = false
         catalog.loadSimilar(artist: similarArtist.trimmingCharacters(in: .whitespacesAndNewlines),

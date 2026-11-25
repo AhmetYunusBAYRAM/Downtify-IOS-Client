@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "name": "Minimal",
+  "accentLight": "7B1FA2",
+  "accentDark": "CE93D8",
+  "backgroundLight": "FAF7FC",
+  "backgroundDark": "121016",
+  "surfaceLight": "FFFFFF",
+  "surfaceDark": "1F1B24",
+  "cardCornerRadius": 14,
+  "cardPadding": 16,
+  "rowSpacing": 12,
+  "albumGridMinimum": 142,
+  "homeSections": [
+    "recent",
+    "new",
+    "favorites"
+  ],
+  "shelfLayout": "grid"
+}

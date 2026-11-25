@@ -58,8 +58,7 @@ final class LyricsUITests: XCTestCase {
     }
 
     private func offsetLabel(_ app: XCUIApplication) -> String {
-        // Regions with a decimal comma read "0,5"; compare digits the same way everywhere.
-        DowntifyUITestSupport.element(app, "lyrics.offsetValue").label.replacingOccurrences(of: ",", with: ".")
+        DowntifyUITestSupport.element(app, "lyrics.offsetValue").label
     }
 
     // MARK: Seek

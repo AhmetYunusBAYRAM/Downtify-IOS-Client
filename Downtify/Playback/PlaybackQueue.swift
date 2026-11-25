@@ -380,14 +380,14 @@ protocol PlaybackStateStoring {
     func saveImmediateQualitySwitch(_ enabled: Bool)
     func loadBuffering() -> PlaybackBuffering
     func saveBuffering(_ buffering: PlaybackBuffering)
+    func loadEqualizer() -> PlaybackEqualizer
+    func saveEqualizer(_ equalizer: PlaybackEqualizer)
     func loadNormalization() -> PlaybackNormalization
     func saveNormalization(_ normalization: PlaybackNormalization)
     func loadAutoplay() -> Bool
     func saveAutoplay(_ enabled: Bool)
     func loadCrossfade() -> TimeInterval
     func saveCrossfade(_ seconds: TimeInterval)
-    func loadEqualizer() -> PlaybackEqualizer
-    func saveEqualizer(_ equalizer: PlaybackEqualizer)
 }
 
 extension PlaybackStateStoring {
@@ -395,14 +395,14 @@ extension PlaybackStateStoring {
     func saveImmediateQualitySwitch(_ enabled: Bool) {}
     func loadBuffering() -> PlaybackBuffering { PlaybackBuffering() }
     func saveBuffering(_ buffering: PlaybackBuffering) {}
+    func loadEqualizer() -> PlaybackEqualizer { PlaybackEqualizer() }
+    func saveEqualizer(_ equalizer: PlaybackEqualizer) {}
     func loadNormalization() -> PlaybackNormalization { .off }
     func saveNormalization(_ normalization: PlaybackNormalization) {}
     func loadAutoplay() -> Bool { false }
     func saveAutoplay(_ enabled: Bool) {}
     func loadCrossfade() -> TimeInterval { 0 }
     func saveCrossfade(_ seconds: TimeInterval) {}
-    func loadEqualizer() -> PlaybackEqualizer { PlaybackEqualizer() }
-    func saveEqualizer(_ equalizer: PlaybackEqualizer) {}
 }
 
 struct PlaybackStateStore: PlaybackStateStoring {
@@ -417,6 +417,8 @@ struct PlaybackStateStore: PlaybackStateStoring {
     func saveImmediateQualitySwitch(_ enabled: Bool) { defaults.set(enabled, forKey: "playback.immediateQualitySwitch") }
     func loadBuffering() -> PlaybackBuffering { load("playback.buffering") ?? PlaybackBuffering() }
     func saveBuffering(_ buffering: PlaybackBuffering) { save(buffering, key: "playback.buffering") }
+    func loadEqualizer() -> PlaybackEqualizer { load("playback.equalizer") ?? PlaybackEqualizer() }
+    func saveEqualizer(_ equalizer: PlaybackEqualizer) { save(equalizer, key: "playback.equalizer") }
     func loadNormalization() -> PlaybackNormalization { load("playback.normalization") ?? .off }
     func saveNormalization(_ normalization: PlaybackNormalization) { save(normalization, key: "playback.normalization") }
     /// Autoplay is on unless the listener turned it off.
@@ -427,8 +429,6 @@ struct PlaybackStateStore: PlaybackStateStoring {
         min(max(defaults.double(forKey: "playback.crossfade"), 0), PlaybackCrossfade.maximum)
     }
     func saveCrossfade(_ seconds: TimeInterval) { defaults.set(seconds, forKey: "playback.crossfade") }
-    func loadEqualizer() -> PlaybackEqualizer { load("playback.equalizer") ?? PlaybackEqualizer() }
-    func saveEqualizer(_ equalizer: PlaybackEqualizer) { save(equalizer, key: "playback.equalizer") }
 
     func removeAllSavedQueues() {
         for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("playback.queue.") {

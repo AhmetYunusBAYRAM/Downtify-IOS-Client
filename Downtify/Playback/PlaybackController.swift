@@ -34,13 +34,13 @@ final class PlaybackController: ObservableObject {
     private let remote: any PlaybackRemoteControlling
     private let store: any PlaybackStateStoring
     private let networkMonitor: any PlaybackNetworkMonitoring
+    @Published private(set) var equalizer: PlaybackEqualizer
     @Published private(set) var buffering: PlaybackBuffering
     @Published private(set) var normalization: PlaybackNormalization
     /// Keeps playing similar songs once the queue runs out.
     @Published private(set) var autoplay: Bool
     /// Seconds the end of one song overlaps the start of the next; 0 turns crossfade off.
     @Published private(set) var crossfade: TimeInterval
-    @Published private(set) var equalizer: PlaybackEqualizer
     /// Supplies the songs Autoplay appends, given the last song in the queue. Set once a server is connected.
     var autoplayProvider: (@MainActor (PlaybackItem) async -> [PlaybackItem])?
     private var autoplayTask: Task<Void, Never>?
@@ -119,11 +119,11 @@ final class PlaybackController: ObservableObject {
         self.podcasts = podcasts
         qualityPreferences = store.loadQualities()
         immediateQualitySwitch = store.loadImmediateQualitySwitch()
+        equalizer = store.loadEqualizer()
         buffering = store.loadBuffering()
         normalization = store.loadNormalization()
         autoplay = store.loadAutoplay()
         crossfade = store.loadCrossfade()
-        equalizer = store.loadEqualizer()
         engine.setNormalization(normalization)
         engine.setEqualizer(equalizer)
 
@@ -489,12 +489,6 @@ final class PlaybackController: ObservableObject {
         if enabled, phase == .playing { topUpAutoplay() }
     }
 
-    func setEqualizer(_ equalizer: PlaybackEqualizer) {
-        self.equalizer = equalizer
-        store.saveEqualizer(equalizer)
-        engine.setEqualizer(equalizer)
-    }
-
     func setCrossfade(_ seconds: TimeInterval) {
         crossfade = min(max(seconds.rounded(), 0), PlaybackCrossfade.maximum)
         store.saveCrossfade(crossfade)
@@ -506,6 +500,12 @@ final class PlaybackController: ObservableObject {
         if let cache { Task { await cache.resize(to: preference.byteLimit) } }
         cancelPrefetch()
         prefetchUpcoming()
+    }
+
+    func setEqualizer(_ equalizer: PlaybackEqualizer) {
+        self.equalizer = equalizer
+        store.saveEqualizer(equalizer)
+        engine.setEqualizer(equalizer)
     }
 
     func setNormalization(_ preference: PlaybackNormalization) {
@@ -587,12 +587,6 @@ final class PlaybackController: ObservableObject {
         advance(to: next)
     }
 
-    /// Moves to the previous song even after the first seconds (mini player swipe); keeps playing or paused.
-    func goToPreviousSong() {
-        guard podcast == nil, let previous = queue.previous() else { return }
-        advance(to: previous)
-    }
-
     func skipPrevious() {
         guard podcast == nil, queue.current != nil else { return }
         if position >= 3 || queue.previous() == nil {
@@ -600,6 +594,12 @@ final class PlaybackController: ObservableObject {
         } else if let previous = queue.previous() {
             advance(to: previous)
         }
+    }
+
+    /// Moves to the previous song even after the first seconds (mini player swipe); keeps playing or paused.
+    func goToPreviousSong() {
+        guard podcast == nil, let previous = queue.previous() else { return }
+        advance(to: previous)
     }
 
     func persist() {

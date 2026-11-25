@@ -1,14 +1,6 @@
 import SwiftUI
 
-/// Pages opened from the profile drawer, the Search page's Browse tiles, and Home shortcuts.
-enum ProfileRoute: Hashable {
-    case downloads, podcasts, settings, pendingActions, trash, about
-    case discover(String)
-}
-
 struct LibraryHomeView: View {
-    static let discoverSectionKey = "catalog.discover.section"
-
     let server: SessionPresentationCoordinator.ServerSummary
     @ObservedObject var library: LibraryPresentationModel
     let playback: PlaybackController
@@ -26,33 +18,32 @@ struct LibraryHomeView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @AppStorage("library.sort") private var sort = LibrarySort.recentlyAdded
     @AppStorage("library.descending") private var descending = true
-    @AppStorage("library.grid") private var grid = false
+    @AppStorage("library.grid") private var grid = true
+    @AppStorage("library.redesign.grid") private var redesignGrid = false
     @AppStorage("downtify.language") private var language = "system"
     @AppStorage("debug.networkOverlay.enabled") private var networkOverlayEnabled = false
     @AppStorage(NetworkOperationCoordinator.limitDefaultsKey) private var networkOperationLimit = NetworkOperationCoordinator.defaultLimit
-    @State private var libraryFilter: LibraryFilter?
+    @State private var category = Category.albums
     @State private var searchText = ""
-    @State private var showingLibrarySearch = false
     @State private var showingSignOutConfirmation = false
     @State private var signOutError: LocalizedStringKey?
     @State private var tab = Tab.home
-    @State private var homePath = NavigationPath()
-    @State private var searchPath = NavigationPath()
-    @State private var libraryPath = NavigationPath()
-    @State private var showingDrawer = false
     @State private var trashTrack: LibraryTrack?
+    @State private var showingSettings = false
+    @State private var showingDrawer = false
     @State private var showingCreatePlaylist = false
     @State private var newPlaylistName = ""
-    @FocusState private var librarySearchFocused: Bool
 
-    private enum Tab { case home, search, library }
-    private enum LibraryFilter: String, CaseIterable, Identifiable {
-        case playlists = "Playlists", albums = "Albums", artists = "Artists", songs = "Songs", downloaded = "Downloaded"
-        var id: Self { self }
+    private var currentGrid: Bool { palette.redesign("library") ? redesignGrid : grid }
+    private func toggleGrid() {
+        if palette.redesign("library") { redesignGrid.toggle() } else { grid.toggle() }
     }
 
-    private var isAdmin: Bool { server.role?.lowercased() == "admin" }
-    private var displayName: String { server.username.flatMap { $0.isEmpty ? nil : $0 } ?? server.name }
+    private enum Tab { case home, library, search, discover, downloads, podcasts, adminTrash, more }
+    private enum Category: String, CaseIterable, Identifiable {
+        case all = "All", songs = "Songs", albums = "Albums", artists = "Artists", playlists = "Playlists"
+        var id: Self { self }
+    }
 
     private func actionDescription(_ action: PendingCollectionAction) -> LocalizedStringKey {
         switch action.target {
@@ -65,22 +56,103 @@ struct LibraryHomeView: View {
     }
 
     var body: some View {
-        ZStack {
-            TabView(selection: $tab) {
-                tabStack(path: $homePath, title: "Home") { homeContent }
-                    .tabItem { Label("Home", systemImage: "house.fill").accessibilityIdentifier("tab.home") }
-                    .tag(Tab.home)
-                tabStack(path: $searchPath, title: "Search") { searchContent }
-                    .tabItem { Label("Search", systemImage: "magnifyingglass").accessibilityIdentifier("tab.search") }
-                    .tag(Tab.search)
-                tabStack(path: $libraryPath, title: "Your Library") { libraryContent }
-                    .tabItem { Label("Your Library", systemImage: "books.vertical.fill").accessibilityIdentifier("tab.library") }
-                    .tag(Tab.library)
+        TabView(selection: $tab) {
+            NavigationStack {
+                browsePage(title: "Home") { homeContent }
             }
-            .tint(Color.primary)
+            .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
+            .tabItem { Label("Home", systemImage: "house") }.tag(Tab.home)
 
-            SideDrawer(isPresented: $showingDrawer) { drawerContent }
-                .allowsHitTesting(showingDrawer)
+            NavigationStack {
+                browsePage(title: "Library") { libraryContent }
+                    .searchable(text: $searchText, prompt: "Filter your library")
+            }
+            .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
+            .tabItem { Label("Library", systemImage: "books.vertical").accessibilityIdentifier("tab.library") }.tag(Tab.library)
+
+            NavigationStack {
+                browsePage(title: "Search") { searchContent }
+            }
+            .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
+            .tabItem { Label("Search", systemImage: "magnifyingglass").accessibilityIdentifier("tab.search") }.tag(Tab.search)
+
+            NavigationStack {
+                browsePage(title: "Discover") { discoveryContent }
+            }
+            .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
+            .tabItem { Label("Discover", systemImage: "sparkles").accessibilityIdentifier("tab.discover") }.tag(Tab.discover)
+
+            NavigationStack {
+                DownloadsView(connection: connection, queue: serverDownloadQueue, serverDownloads: serverDownloads,
+                              playback: playback, membership: library.membership)
+            }
+                .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
+                .tabItem { Label("Downloads", systemImage: "arrow.down.circle") }.tag(Tab.downloads)
+
+            PodcastsView(connection: connection, playback: playback)
+                .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
+                .tabItem { Label("Podcasts", systemImage: "mic") }.tag(Tab.podcasts)
+
+            if server.role?.lowercased() == "admin" {
+                NavigationStack {
+                    AdminTrashView(connection: connection, role: server.role,
+                                   pairingID: "\(server.serverID):\(server.deviceID):\(server.username ?? ""):\(server.role ?? "")")
+                }
+                .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
+                .tabItem { Label("Trash", systemImage: "trash") }.tag(Tab.adminTrash)
+            }
+
+            NavigationStack {
+                Form {
+                    Section("Pending Actions") {
+                        if let error = collections.actionError {
+                            Text(error).foregroundStyle(.red)
+                            Button("Dismiss") { collections.clearError() }
+                        }
+                        if collections.pendingActions.isEmpty {
+                            Text("No actions yet").foregroundStyle(.secondary)
+                        }
+                        ForEach(collections.pendingActions) { action in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(actionDescription(action))
+                                switch action.status {
+                                case .queued: Text("Queued").foregroundStyle(.secondary)
+                                case .sent: Text("Sent").foregroundStyle(.secondary)
+                                case .failed:
+                                    Text(action.failure ?? String(localized: "Action failed")).foregroundStyle(.red)
+                                }
+                                if action.status != .queued {
+                                    Button("Dismiss") { Task { await collections.dismissAction(action.id) } }
+                                }
+                            }
+                        }
+                    }
+                    StorageSection(model: storageModel)
+                    Section("About") {
+                        NavigationLink("About Downtify") { AboutView(version: versionText) }
+                        LabeledContent("Version", value: versionText)
+                    }
+                }
+                .navigationTitle("More")
+                .downtifyScrollEndClearance()
+            }
+            .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
+            .tabItem { Label("More", systemImage: "ellipsis").accessibilityIdentifier("tab.more") }.tag(Tab.more)
+        }
+        .toolbar(palette.theme?.navigationStyle == "drawer" ? .hidden : .visible, for: .tabBar)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if palette.theme?.navigationStyle == "drawer" { themedNavigationBar }
+        }
+        .overlay {
+            if showingDrawer && palette.theme?.navigationStyle == "drawer" { themedDrawer }
+        }
+        .onAppear { if palette.redesign("library") { category = .all } }
+        .onChange(of: palette.theme?.componentStyles?["library"]) { _, style in
+            if style == "redesign" { category = .all }
+            else if category == .all { category = .albums }
+        }
+        .onChange(of: palette.theme?.navigationStyle) { _, style in
+            if style != "drawer" { showingDrawer = false }
         }
         .task(id: catalogPresentation.session) { configureAutoplay() }
         .onChange(of: networkOperationLimit) { _, value in
@@ -99,7 +171,7 @@ struct LibraryHomeView: View {
             Button("OK", role: .cancel) { signOutError = nil }
         } message: { if let signOutError { Text(signOutError) } }
         .overlay(alignment: .topTrailing) {
-            if networkOverlayEnabled && !showingDrawer {
+            if networkOverlayEnabled && tab != .more {
                 NetworkDebugOverlayContainer(playback: playback)
                     .zIndex(100)
             }
@@ -110,6 +182,11 @@ struct LibraryHomeView: View {
                     trashTrack = nil
                     await refresh()
                 }
+            }
+        }
+        .sheet(isPresented: $showingSettings) {
+            NavigationStack {
+                SettingsView(appearance: $appearance, language: $language, networkOperationLimit: $networkOperationLimit, playback: playback)
             }
         }
         .sheet(isPresented: $showingCreatePlaylist, onDismiss: { newPlaylistName = "" }) {
@@ -144,6 +221,100 @@ struct LibraryHomeView: View {
         }
     }
 
+    private var themedNavigationBar: some View {
+        HStack(spacing: 0) {
+            themedTab("Home", symbol: "house.fill", target: .home)
+            themedTab("Search", symbol: "magnifyingglass", target: .search)
+            themedTab("Your Library", symbol: "books.vertical.fill", target: .library)
+        }
+        .padding(4)
+        .background(palette.surface, in: Capsule())
+        .padding(.horizontal, 32)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity)
+        .background(palette.background)
+    }
+
+    private func themedTab(_ title: LocalizedStringKey, symbol: String, target: Tab) -> some View {
+        Button { tab = target } label: {
+            VStack(spacing: 2) {
+                Image(systemName: symbol).font(.title3)
+                Text(title).font(.caption2.weight(.medium))
+            }
+            .foregroundStyle(tab == target ? Color.primary : Color.secondary)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .background(tab == target ? Color.primary.opacity(0.14) : Color.clear, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(tab == target ? .isSelected : [])
+    }
+
+    private var themedDrawer: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Color.black.opacity(0.55).ignoresSafeArea()
+                    .onTapGesture { showingDrawer = false }
+                    .accessibilityLabel("Close navigation menu")
+                    .accessibilityAddTraits(.isButton)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack(spacing: 12) {
+                            profileAvatar(size: 52)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(server.username ?? server.name).font(.headline).lineLimit(1)
+                                Text(server.name).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                            Button { showingDrawer = false } label: { Image(systemName: "xmark").downtifyControlTarget() }
+                                .accessibilityLabel("Close navigation menu")
+                        }
+                        .padding(.vertical, 20)
+                        Divider()
+                        drawerTab("Downloads", symbol: "arrow.down.circle", target: .downloads)
+                        drawerTab("Discover", symbol: "sparkles", target: .discover)
+                        drawerTab("Podcasts", symbol: "mic", target: .podcasts)
+                        drawerTab("Pending actions and storage", symbol: "tray", target: .more)
+                        if server.role?.lowercased() == "admin" { drawerTab("Trash", symbol: "trash", target: .adminTrash) }
+                        Divider()
+                        drawerAction("Settings", symbol: "gearshape") { showingDrawer = false; showingSettings = true }
+                        drawerAction("Refresh library", symbol: "arrow.clockwise") { showingDrawer = false; Task { await refresh() } }
+                        drawerAction("Sign out", symbol: "rectangle.portrait.and.arrow.right") {
+                            showingDrawer = false; showingSignOutConfirmation = true
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+                .frame(width: min(geometry.size.width * 0.85, 340))
+                .frame(maxHeight: .infinity)
+                .background(palette.surface.ignoresSafeArea(edges: .vertical))
+            }
+        }
+        .accessibilityAddTraits(.isModal)
+    }
+
+    private func drawerAction(_ title: LocalizedStringKey, symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol)
+                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func drawerTab(_ title: LocalizedStringKey, symbol: String, target: Tab) -> some View {
+        drawerAction(title, symbol: symbol) { tab = target; showingDrawer = false }
+    }
+
+    private func profileAvatar(size: CGFloat) -> some View {
+        let name = server.username.flatMap { $0.isEmpty ? nil : $0 } ?? server.name
+        return Text(String(name.prefix(1)).uppercased())
+            .font(.headline.bold())
+            .foregroundStyle(palette.background)
+            .frame(width: size, height: size)
+            .background(palette.accent, in: Circle())
+    }
+
     /// Autoplay continues with up to ten songs similar to the last one, resolved to library copies where they exist.
     private func configureAutoplay() {
         let catalog = catalogPresentation
@@ -166,239 +337,67 @@ struct LibraryHomeView: View {
         return build.map { "\(version) (\($0))" } ?? version
     }
 
-    // MARK: Navigation
-
-    private func tabStack<Content: View>(path: Binding<NavigationPath>, title: LocalizedStringKey,
-                                         @ViewBuilder content: () -> Content) -> some View {
-        NavigationStack(path: path) {
-            rootPage(title: title, content: content)
-                .navigationDestination(for: LibraryContext.self) { context in
-                    LibraryContextView(context: context, library: library, playback: playback,
-                                       serverDownloads: serverDownloads,
-                                       onMoveToTrash: isAdmin ? { trashTrack = $0 } : nil)
-                }
-                .navigationDestination(for: ProfileRoute.self) { destination($0) }
+    private var greeting: LocalizedStringKey {
+        switch Calendar.current.component(.hour, from: .now) {
+        case 5..<12: "Good morning"
+        case 12..<18: "Good afternoon"
+        default: "Good evening"
         }
-        .tint(DowntifyStyle.accent)
-        .playbackDock(playback: playback, library: library, serverDownloads: serverDownloads)
     }
 
-    /// Root pages draw their own header (avatar and title), so the navigation bar is hidden there.
-    private func rootPage<Content: View>(title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
+    private func browsePage<Content: View>(title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: DowntifyStyle.Space.large) {
+            VStack(alignment: tab == .library && category == .songs ? .leading : .center, spacing: DowntifyStyle.Space.regular) {
+                syncStatus
                 content()
             }
-            .padding(.horizontal, DowntifyStyle.Space.regular)
-            .padding(.top, DowntifyStyle.Space.small)
+            .padding(DowntifyStyle.Space.regular)
             .frame(maxWidth: 760)
             .frame(maxWidth: .infinity)
         }
         .downtifyScrollEndClearance()
         .scrollDismissesKeyboard(.interactively)
+        .simultaneousGesture(TapGesture().onEnded {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        })
         .refreshable { await refresh() }
         .background(palette.background.ignoresSafeArea())
-        .overlay(alignment: .top) {
-            // Solid strip under the status bar so scrolled content never runs behind the clock.
-            Color.clear
-                .frame(height: 0)
-                .background(palette.background.ignoresSafeArea(edges: .top))
-                .allowsHitTesting(false)
-        }
-        .navigationTitle(title)
-        .toolbar(.hidden, for: .navigationBar)
-    }
-
-    private func open(_ route: ProfileRoute) {
-        showingDrawer = false
-        if case .discover(let section) = route {
-            UserDefaults.standard.set(section, forKey: Self.discoverSectionKey)
-        }
-        switch tab {
-        case .home: homePath.append(route)
-        case .search: searchPath.append(route)
-        case .library: libraryPath.append(route)
-        }
-    }
-
-    @ViewBuilder
-    private func destination(_ route: ProfileRoute) -> some View {
-        switch route {
-        case .downloads:
-            DownloadsView(connection: connection, queue: serverDownloadQueue, serverDownloads: serverDownloads,
-                          playback: playback, membership: library.membership)
-        case .podcasts:
-            PodcastsView(connection: connection, playback: playback)
-        case .settings:
-            SettingsView(appearance: $appearance, language: $language, networkOperationLimit: $networkOperationLimit,
-                         playback: playback, showsDoneButton: false,
-                         account: SettingsAccount(name: displayName, server: server.name, role: server.role,
-                                                  signOut: { showingSignOutConfirmation = true }),
-                         storage: storageModel)
-                .scrollContentBackground(.hidden)
-                .background(palette.background.ignoresSafeArea())
-                .downtifyScrollEndClearance()
-        case .pendingActions:
-            pendingActionsPage
-        case .trash:
-            AdminTrashView(connection: connection, role: server.role,
-                           pairingID: "\(server.serverID):\(server.deviceID):\(server.username ?? ""):\(server.role ?? "")")
-        case .about:
-            AboutView(version: versionText, showsDoneButton: false)
-        case .discover:
-            ScrollView {
-                discoveryContent
-                    .padding(DowntifyStyle.Space.regular)
-                    .frame(maxWidth: 760)
-                    .frame(maxWidth: .infinity)
+        .navigationTitle(palette.redesign("home") && tab == .home ? greeting : title)
+        .navigationBarTitleDisplayMode(palette.theme?.headerStyle == "profile" ? .inline : .automatic)
+        .toolbarBackground(palette.background, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                if palette.theme?.navigationStyle == "drawer" {
+                    Button { showingDrawer = true } label: { profileAvatar(size: 32) }
+                        .accessibilityLabel("Open navigation menu")
+                }
             }
-            .downtifyScrollEndClearance()
-            .scrollDismissesKeyboard(.interactively)
-            .background(palette.background.ignoresSafeArea())
-            .navigationTitle("Discover")
-            .navigationBarTitleDisplayMode(.inline)
+            ToolbarItem(placement: .topBarTrailing) {
+                if palette.theme?.navigationStyle == "drawer" {
+                    Button { showingSettings = true } label: { Image(systemName: "gearshape") }
+                        .accessibilityLabel("Settings")
+                } else { accountMenu }
+            }
+        }
+        .navigationDestination(for: LibraryContext.self) { context in
+            LibraryContextView(context: context, library: library, playback: playback,
+                               serverDownloads: serverDownloads,
+                               onMoveToTrash: server.role?.lowercased() == "admin" ? { trashTrack = $0 } : nil)
         }
     }
 
-    // MARK: Headers and drawer
-
-    private var avatarButton: some View {
-        Button { showingDrawer = true } label: {
-            ProfileAvatar(name: displayName, size: 34)
-                .frame(width: DowntifyStyle.minimumControlSize, height: DowntifyStyle.minimumControlSize, alignment: .leading)
-                .contentShape(Rectangle())
+    private var accountMenu: some View {
+        Menu {
+            if let username = server.username {
+                Label("Signed in as \(username)", systemImage: "person.crop.circle")
+            }
+            Button("Settings", systemImage: "gearshape") { showingSettings = true }
+            Button("Refresh library", systemImage: "arrow.clockwise") { Task { await refresh() } }
+            Button("Sign out", role: .destructive) { showingSignOutConfirmation = true }
+        } label: {
+            Image(systemName: "person.crop.circle")
         }
-        .buttonStyle(.plain)
         .accessibilityLabel("Account options")
-        .accessibilityHint("Opens your profile, downloads and settings")
-        .accessibilityIdentifier("profile.avatar")
-    }
-
-    private func pageHeader<Trailing: View>(_ title: LocalizedStringKey, font: Font = .title2.bold(),
-                                            @ViewBuilder trailing: () -> Trailing) -> some View {
-        HStack(spacing: 10) {
-            avatarButton
-            Text(title)
-                .font(font)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 8)
-            trailing()
-        }
-        .font(.title3)
-    }
-
-    private func headerIcon(_ systemImage: String, label: LocalizedStringKey, badge: Int = 0,
-                            action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.title3)
-                .overlay(alignment: .topTrailing) {
-                    if badge > 0 {
-                        Circle().fill(DowntifyStyle.brand).frame(width: 9, height: 9).offset(x: 3, y: -2)
-                    }
-                }
-                .downtifyControlTarget()
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .accessibilityValue(badge > 0 ? String(localized: "\(badge) in progress") : "")
-    }
-
-    private var activeDeviceDownloads: Int { offlineDownloads.currentDownloads.filter(\.pending).count }
-
-    private var drawerContent: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 14) {
-                    ProfileAvatar(name: displayName, size: 56)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(verbatim: displayName).font(.title3.bold()).lineLimit(1)
-                        Label { Text(verbatim: server.name) } icon: { Image(systemName: "server.rack") }
-                            .font(.subheadline)
-                            .foregroundStyle(DowntifyStyle.secondaryText)
-                            .lineLimit(1)
-                        if isAdmin {
-                            Text("Administrator").font(.caption.weight(.semibold)).foregroundStyle(DowntifyStyle.accent)
-                        }
-                    }
-                }
-                .padding(.vertical, DowntifyStyle.Space.large)
-                .accessibilityElement(children: .combine)
-                Divider()
-                VStack(spacing: 0) {
-                    DrawerRow(title: "Downloads", systemImage: "arrow.down.circle", badge: activeDeviceDownloads) { open(.downloads) }
-                        .accessibilityIdentifier("drawer.downloads")
-                    DrawerRow(title: "Discover", systemImage: "sparkles") { open(.discover("For You")) }
-                    DrawerRow(title: "Podcasts", systemImage: "mic") { open(.podcasts) }
-                    if !collections.pendingActions.isEmpty || collections.actionError != nil {
-                        DrawerRow(title: "Pending Actions", systemImage: "clock.arrow.circlepath",
-                                  badge: collections.pendingActions.count) { open(.pendingActions) }
-                    }
-                    if isAdmin {
-                        DrawerRow(title: "Trash", systemImage: "trash") { open(.trash) }
-                    }
-                }
-                .padding(.vertical, DowntifyStyle.Space.small)
-                Divider()
-                VStack(spacing: 0) {
-                    DrawerRow(title: "Settings", systemImage: "gearshape") { open(.settings) }
-                        .accessibilityIdentifier("drawer.settings")
-                    DrawerRow(title: "Refresh library", systemImage: "arrow.clockwise") {
-                        showingDrawer = false
-                        Task { await refresh() }
-                    }
-                    DrawerRow(title: "About Downtify", systemImage: "info.circle") { open(.about) }
-                }
-                .padding(.vertical, DowntifyStyle.Space.small)
-                Divider()
-                DrawerRow(title: "Sign out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
-                    showingDrawer = false
-                    showingSignOutConfirmation = true
-                }
-                .padding(.vertical, DowntifyStyle.Space.small)
-                Text("Version \(versionText)")
-                    .font(.caption)
-                    .foregroundStyle(DowntifyStyle.secondaryText)
-                    .padding(.top, DowntifyStyle.Space.regular)
-            }
-            .padding(.horizontal, 20)
-        }
-    }
-
-    private var pendingActionsPage: some View {
-        Form {
-            Section {
-                if let error = collections.actionError {
-                    Text(error).foregroundStyle(DowntifyStyle.error)
-                    Button("Dismiss") { collections.clearError() }
-                }
-                if collections.pendingActions.isEmpty {
-                    Text("No actions yet").foregroundStyle(.secondary)
-                }
-                ForEach(collections.pendingActions) { action in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(actionDescription(action))
-                        switch action.status {
-                        case .queued: Text("Queued").foregroundStyle(.secondary)
-                        case .sent: Text("Sent").foregroundStyle(.secondary)
-                        case .failed:
-                            Text(action.failure ?? String(localized: "Action failed")).foregroundStyle(DowntifyStyle.error)
-                        }
-                        if action.status != .queued {
-                            Button("Dismiss") { Task { await collections.dismissAction(action.id) } }
-                        }
-                    }
-                }
-            } footer: {
-                Text("Likes and favorites made while the server is unreachable are sent when it is back.")
-            }
-        }
-        .scrollContentBackground(.hidden)
-        .background(palette.background.ignoresSafeArea())
-        .navigationTitle("Pending Actions")
-        .downtifyScrollEndClearance()
     }
 
     private var query: String { searchText.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -407,7 +406,6 @@ struct LibraryHomeView: View {
         guard let value, let url = URL(string: value), url.scheme?.lowercased() == "https" else { return }
         openURL(url)
     }
-
     private var likedEntry: LibraryBrowseEntry {
         LibraryBrowseEntry(id: "", context: .liked, title: String(localized: "Liked songs"), artist: "",
                            added: 0, count: collections.likedIDs?.count ?? 0,
@@ -431,27 +429,12 @@ struct LibraryHomeView: View {
         }
     }
 
-    // MARK: Home
-
-    private var greeting: LocalizedStringKey {
-        switch Calendar.current.component(.hour, from: .now) {
-        case 5..<12: "Good morning"
-        case 12..<18: "Good afternoon"
-        default: "Good evening"
-        }
-    }
-
     @ViewBuilder
     private var homeContent: some View {
-        pageHeader(greeting) {
-            headerIcon("arrow.down.circle", label: "Downloads", badge: activeDeviceDownloads) { open(.downloads) }
-            headerIcon("gearshape", label: "Settings") { open(.settings) }
-        }
-        syncStatus
         let newest = library.latestAlbums
         let recents = collections.recents.compactMap(entry)
         let fallback = (likedEntry.count > 0 ? [likedEntry] : []) + newest
-        let quick = Array((recents.isEmpty ? fallback : recents).prefix(8))
+        let jump = recents.isEmpty ? Array(fallback.prefix(12)) : recents
         let favorites = LibrarySort.alphabetical.ordered(
             (collections.playlists ?? []).filter { $0.favorite == true && $0.liked != true }.map(playlistEntry),
             descending: false
@@ -459,23 +442,26 @@ struct LibraryHomeView: View {
         let artists = Array(library.catalog.artistsByID.values
             .sorted { $0.count == $1.count ? $0.title.localizedStandardCompare($1.title) == .orderedAscending : $0.count > $1.count }
             .prefix(12))
-        if !quick.isEmpty {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                ForEach(quick) { entry in
-                    NavigationLink(value: entry.context) { QuickAccessTile(entry: entry) }
-                        .buttonStyle(.plain)
+        ForEach(palette.theme?.resolvedHomeSections ?? DowntifyTheme.standardHomeSections, id: \.self) { section in
+            switch section {
+            case "recent":
+                if !jump.isEmpty {
+                    if palette.theme?.recentStyle == "tiles" && !dynamicTypeSize.isAccessibilitySize {
+                        LibraryEntryList(entries: Array(jump.prefix(8)), grid: true, compactTiles: true)
+                            .accessibilityElement(children: .contain)
+                            .accessibilityLabel("Jump back in")
+                        if jump.count > 8 { shelf("Jump back in", entries: Array(jump.dropFirst(8))) }
+                    } else { shelf("Jump back in", entries: jump) }
                 }
+            case "new": if !newest.isEmpty { shelf("Recently added", entries: newest) }
+            case "favorites": if !favorites.isEmpty { shelf("Favorite playlists", entries: favorites) }
+            case "discover": discoverCard
+            case "artists": if artists.count > 1 { shelf("Your artists", entries: artists) }
+            case "downloaded": downloadedCard
+            default: EmptyView()
             }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Jump back in")
         }
-        if recents.count > 8 { shelf("Jump back in", entries: Array(recents.dropFirst(8))) }
-        if !newest.isEmpty { shelf("Recently added", entries: newest) }
-        discoverCard
-        if !favorites.isEmpty { shelf("Favorite playlists", entries: favorites) }
-        if artists.count > 1 { shelf("Your artists", entries: artists) }
-        offlineCard
-        if quick.isEmpty && newest.isEmpty && favorites.isEmpty {
+        if jump.isEmpty && newest.isEmpty && favorites.isEmpty {
             if library.tracks.isEmpty { emptyTracks }
             else {
                 DowntifyUnavailableView(title: "Nothing to jump back into yet", symbol: "clock",
@@ -489,272 +475,193 @@ struct LibraryHomeView: View {
     }
 
     private func shelf(_ title: LocalizedStringKey, entries: [LibraryBrowseEntry]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            DowntifySectionHeader(title: title)
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: 14) {
-                    ForEach(entries) { entry in
-                        NavigationLink(value: entry.context) { ShelfCard(entry: entry) }
-                            .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, DowntifyStyle.Space.regular)
-            }
-            .padding(.horizontal, -DowntifyStyle.Space.regular)
+        let carousel = palette.theme?.shelfLayout == "carousel" && !dynamicTypeSize.isAccessibilitySize
+        return VStack(alignment: carousel ? .leading : .center, spacing: 8) {
+            Text(title).font(.title2.bold()).accessibilityAddTraits(.isHeader)
+            LibraryEntryList(entries: entries, grid: !dynamicTypeSize.isAccessibilitySize && palette.theme?.shelfLayout != "list",
+                             carousel: carousel)
         }
     }
 
-    /// Opens Discover's personalised suggestions from Home.
+    private var homeCardShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: palette.cardCornerRadius(default: 10), style: .continuous)
+    }
+
+    /// Opens Discover's personalised suggestions. The artwork uses the theme's For You color, as the Search tile does.
     private var discoverCard: some View {
-        Button { open(.discover("For You")) } label: {
+        let hex = palette.theme?.browseColors?["For You"].flatMap { UInt32($0, radix: 16) } ?? 0x203562
+        let tile = DowntifyStyle.adaptive(light: hex, dark: hex)
+        return Button {
+            UserDefaults.standard.set("For You", forKey: "catalog.discover.section")
+            tab = .discover
+        } label: {
             HStack(spacing: 14) {
                 Image(systemName: "sparkles")
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(width: 64, height: 64)
-                    .background(LinearGradient(colors: [Color(red: 0.12, green: 0.2, blue: 0.39), Color(red: 0.55, green: 0.4, blue: 0.67)],
-                                               startPoint: .topLeading, endPoint: .bottomTrailing),
-                                in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .background(LinearGradient(colors: [tile, tile.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                in: RoundedRectangle(cornerRadius: min(palette.cardCornerRadius(default: 10), 8), style: .continuous))
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Made for you").font(.caption.weight(.semibold)).foregroundStyle(DowntifyStyle.secondaryText)
                     Text("Discover something new").font(.headline)
                     Text("Suggestions, charts and similar songs").font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                 }
-                Spacer(minLength: 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "chevron.right").font(.footnote.weight(.bold)).foregroundStyle(DowntifyStyle.secondaryText)
+                    .accessibilityHidden(true)
             }
-            .padding(10)
-            .background(palette.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .contentShape(Rectangle())
+            .padding(palette.cardPadding(default: 10))
+            .background(palette.surface, in: homeCardShape)
+            .contentShape(homeCardShape)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens Discover")
         .accessibilityIdentifier("home.discover")
     }
 
+    /// Songs saved on this device, with a button that plays them in order. Tapping the card opens Downloads.
     @ViewBuilder
-    private var offlineCard: some View {
+    private var downloadedCard: some View {
         let ready = offlineDownloads.currentDownloads.filter { $0.state == .ready }
         if !ready.isEmpty {
             HStack(spacing: 14) {
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.title)
-                    .foregroundStyle(DowntifyStyle.accent)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Downloaded to this device").font(.headline)
-                    Text(ready.count == 1 ? String(localized: "1 song") : String(localized: "\(ready.count) songs"))
-                        .font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
+                Button { tab = .downloads } label: {
+                    HStack(spacing: 14) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.title)
+                            .foregroundStyle(palette.accent)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Downloaded to this device").font(.headline)
+                            Text(ready.count == 1 ? String(localized: "1 song") : String(localized: "\(ready.count) songs"))
+                                .font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .contentShape(Rectangle())
                 }
-                Spacer(minLength: 4)
-                DowntifyPlayButton(size: 44) {
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityHint("Opens Downloads")
+                Button {
                     playback.setShuffle(false)
                     playback.replaceQueue(ready.map(\.track))
+                } label: {
+                    Image(systemName: "play.fill")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(palette.onBrand)
+                        .frame(width: 48, height: 48)
+                        .background(palette.brand, in: Circle())
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Play downloaded songs")
+                .accessibilityIdentifier("home.playDownloaded")
             }
-            .padding(12)
-            .background(palette.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .contentShape(Rectangle())
-            .onTapGesture { open(.downloads) }
+            .padding(palette.cardPadding(default: 12))
+            .background(palette.surface, in: homeCardShape)
             .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("home.downloaded")
         }
     }
 
-    // MARK: Your Library
-
     @ViewBuilder
     private var libraryContent: some View {
-        pageHeader("Your Library") {
-            headerIcon("magnifyingglass", label: "Filter your library") {
-                showingLibrarySearch.toggle()
-                librarySearchFocused = showingLibrarySearch
-                if !showingLibrarySearch { searchText = "" }
-            }
-            if collections.supportsPlaylistEditing {
-                headerIcon("plus", label: "Create Playlist") { showingCreatePlaylist = true }
-                    .disabled(collections.mutationBusy)
-            }
-        }
-        if showingLibrarySearch || !searchText.isEmpty {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(DowntifyStyle.secondaryText)
-                TextField("Filter your library", text: $searchText)
-                    .focused($librarySearchFocused)
-                    .submitLabel(.search)
-                    .autocorrectionDisabled()
-                if !searchText.isEmpty {
-                    Button { searchText = "" } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(DowntifyStyle.secondaryText)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Clear filter")
-                }
-            }
-            .padding(.horizontal, 12)
-            .frame(minHeight: 40)
-            .background(palette.elevated, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                if libraryFilter != nil {
-                    Button { libraryFilter = nil } label: {
-                        Image(systemName: "xmark")
-                            .font(.footnote.weight(.bold))
-                            .frame(width: 34, height: 34)
-                            .background(palette.elevated, in: Circle())
-                            .frame(minWidth: DowntifyStyle.minimumControlSize, minHeight: DowntifyStyle.minimumControlSize)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Show everything")
-                }
-                ForEach(LibraryFilter.allCases) { filter in
-                    DowntifyChip(title: LocalizedStringKey(filter.rawValue), isSelected: libraryFilter == filter) {
-                        libraryFilter = libraryFilter == filter ? nil : filter
+        if palette.redesign("library") {
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(Category.allCases) { option in
+                        Button { category = option } label: {
+                            Text(LocalizedStringKey(option.rawValue))
+                                .font(.subheadline.weight(.medium))
+                                .padding(.horizontal, 14).frame(minHeight: 36)
+                                .foregroundStyle(category == option ? palette.onBrand : Color.primary)
+                                .background(category == option ? palette.brand : palette.elevated, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(category == option ? .isSelected : [])
                     }
                 }
             }
-            .padding(.horizontal, DowntifyStyle.Space.regular)
-        }
-        .padding(.horizontal, -DowntifyStyle.Space.regular)
-        .padding(.top, -DowntifyStyle.Space.small)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Library category")
-        syncStatus
-        if libraryFilter != .playlists && libraryFilter != .downloaded {
-            HStack {
-                sortMenu
-                Spacer()
-                if libraryFilter != .songs && !dynamicTypeSize.isAccessibilitySize {
-                    Button { grid.toggle() } label: {
-                        Image(systemName: grid ? "list.bullet" : "square.grid.2x2").downtifyControlTarget()
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(grid ? String(localized: "Show as list") : String(localized: "Show as grid"))
-                }
+            .scrollIndicators(.hidden)
+        } else {
+        ViewThatFits(in: .horizontal) {
+            Picker("Library category", selection: $category) {
+                ForEach(Category.allCases.filter { $0 != .all }) { Text(LocalizedStringKey($0.rawValue)).tag($0) }
             }
-            .font(.subheadline.weight(.semibold))
-            .padding(.vertical, -DowntifyStyle.Space.regular)
+            .pickerStyle(.segmented)
+            .fixedSize(horizontal: true, vertical: false)
+            Picker("Library category", selection: $category) {
+                ForEach(Category.allCases.filter { $0 != .all }) { Text(LocalizedStringKey($0.rawValue)).tag($0) }
+            }
         }
-        switch libraryFilter {
-        case nil:
+        }
+        HStack {
+            if category != .playlists { sortMenu }
+            Spacer()
+            if category != .songs && !dynamicTypeSize.isAccessibilitySize {
+                Button { toggleGrid() } label: {
+                    Image(systemName: currentGrid ? "list.bullet" : "square.grid.2x2").downtifyControlTarget()
+                }
+                .accessibilityLabel(currentGrid ? String(localized: "Show as list") : String(localized: "Show as grid"))
+            }
+        }
+        switch category {
+        case .all:
             allLibraryContent
         case .songs:
             let tracks = library.songs(sort: sort, descending: descending, query: query)
             if library.tracks.isEmpty { emptyTracks }
             else if tracks.isEmpty { ContentUnavailableView.search(text: searchText) }
             else { LibraryTrackList(tracks: tracks, context: nil, playback: playback,
-                                    onMoveToTrash: isAdmin ? { trashTrack = $0 } : nil) }
+                                    onMoveToTrash: server.role?.lowercased() == "admin" ? { trashTrack = $0 } : nil) }
         case .albums:
             browseGroups(Array(library.catalog.albumsByID.values), emptyTitle: "No albums")
         case .artists:
             browseGroups(Array(library.catalog.artistsByID.values), emptyTitle: "No artists")
         case .playlists:
             playlistContent
-        case .downloaded:
-            downloadedContent
         }
     }
 
-    /// Liked Songs and pinned playlists first, then every playlist, album and artist.
     @ViewBuilder
     private var allLibraryContent: some View {
         let lists = (collections.playlists ?? []).filter { $0.liked != true }
-        let favoriteIDs = Set(lists.filter { $0.favorite == true }.map(\.id))
-        let liked = collections.likedIDs == nil ? [] : matching([likedEntry])
-        let pinned = liked + matching(lists.filter { favoriteIDs.contains($0.id) }.map(playlistEntry))
-        let playlists = matching(lists.filter { !favoriteIDs.contains($0.id) }.map(playlistEntry))
-        let rest = sort.ordered(matching(Array(library.catalog.albumsByID.values) + Array(library.catalog.artistsByID.values)),
-                                descending: descending)
-        let all = pinned + playlists + rest
-        if library.tracks.isEmpty && all.isEmpty { emptyTracks }
-        else if all.isEmpty && !query.isEmpty { ContentUnavailableView.search(text: searchText) }
-        else {
-            LibraryEntryList(entries: all, grid: grid && !dynamicTypeSize.isAccessibilitySize,
-                             pinnedIDs: Set(pinned.map(\.id)))
-        }
+        let pinned = (collections.likedIDs == nil ? [] : [likedEntry])
+            + lists.filter { $0.favorite == true }.map(playlistEntry)
+        let others = lists.filter { $0.favorite != true }.map(playlistEntry)
+        let albums = Array(library.catalog.albumsByID.values)
+        let artists = Array(library.catalog.artistsByID.values)
+        let entries = matching(pinned) + matching(others)
+            + sort.ordered(matching(albums + artists), descending: descending)
+        if entries.isEmpty && library.tracks.isEmpty { emptyTracks }
+        else if entries.isEmpty && !query.isEmpty { ContentUnavailableView.search(text: searchText) }
+        else { LibraryEntryList(entries: entries, grid: currentGrid && !dynamicTypeSize.isAccessibilitySize) }
     }
-
-    @ViewBuilder
-    private var downloadedContent: some View {
-        let ready = offlineDownloads.currentDownloads.filter { $0.state == .ready }.map(\.track)
-        let tracks = query.isEmpty ? ready : LibraryTrackOrdering.matching(ready, query: query)
-        Button { open(.downloads) } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "arrow.down.circle.fill").font(.title2).foregroundStyle(DowntifyStyle.accent)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Manage downloads").font(.headline)
-                    Text("Device storage and server requests").font(.subheadline).foregroundStyle(DowntifyStyle.secondaryText)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.footnote.weight(.bold)).foregroundStyle(DowntifyStyle.secondaryText)
-            }
-            .padding(12)
-            .background(palette.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        if tracks.isEmpty {
-            DowntifyUnavailableView(title: "Nothing downloaded yet", symbol: "arrow.down.circle",
-                                    message: Text("Use the download button on an album or playlist to listen offline."))
-        } else {
-            LibraryTrackList(tracks: tracks, context: nil, playback: playback,
-                             onMoveToTrash: isAdmin ? { trashTrack = $0 } : nil)
-        }
-    }
-
-    // MARK: Search
 
     @ViewBuilder
     private var searchContent: some View {
-        pageHeader("Search", font: .title.bold()) { EmptyView() }
         CatalogSearchContainer(catalog: catalogPresentation, library: library, playback: playback,
                                serverDownloads: serverDownloads,
                                libraryState: { catalogLibraryState(for: $0) },
                                onAddToDevice: { addCatalogSongToDevice($0) },
                                deviceState: { catalogDeviceState(for: $0) },
-                               browse: AnyView(browseGrid),
+                               onBrowse: { destination in
+                                   switch destination {
+                                   case "Downloads": tab = .downloads
+                                   case "Podcasts": tab = .podcasts
+                                   default:
+                                       UserDefaults.standard.set(destination, forKey: "catalog.discover.section")
+                                       tab = .discover
+                                   }
+                               },
                                loadSuggestions: loadSearchSuggestions)
     }
 
-    private var browseGrid: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Browse all").font(.title3.bold()).accessibilityAddTraits(.isHeader)
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                browseTile("For You", symbol: "sparkles", color: Color(red: 0.12, green: 0.2, blue: 0.39), id: "foryou") {
-                    open(.discover("For You"))
-                }
-                browseTile("Charts", symbol: "chart.line.uptrend.xyaxis", color: Color(red: 0.88, green: 0.2, blue: 0), id: "charts") {
-                    open(.discover("Charts"))
-                }
-                browseTile("Finder", symbol: "sparkle.magnifyingglass", color: Color(red: 0.15, green: 0.52, blue: 0.42), id: "finder") {
-                    open(.discover("Finder"))
-                }
-                browseTile("Similar", symbol: "waveform.path", color: Color(red: 0.55, green: 0.4, blue: 0.67), id: "similar") {
-                    open(.discover("Similar"))
-                }
-                if collections.likedIDs != nil {
-                    browseTile("Liked songs", symbol: "heart.fill", color: Color(red: 0.27, green: 0.04, blue: 0.96), id: "liked") {
-                        searchPath.append(LibraryContext.liked)
-                    }
-                }
-                browseTile("Podcasts", symbol: "mic.fill", color: Color(red: 0, green: 0.39, blue: 0.31), id: "podcasts") {
-                    open(.podcasts)
-                }
-                browseTile("Downloads", symbol: "arrow.down.circle.fill", color: Color(red: 0.73, green: 0.36, blue: 0.03), id: "downloads") {
-                    open(.downloads)
-                }
-                browseTile("Recently added", symbol: "clock.fill", color: Color(red: 0.91, green: 0.07, blue: 0.36), id: "recent") {
-                    libraryFilter = .albums
-                    sort = .recentlyAdded
-                    descending = true
-                    tab = .library
-                }
-            }
-        }
-    }
-
-    /// Charts and Discover suggestions for the shelves under Browse; skips anything already loaded.
+    /// Charts and Discover collections feed the suggestion shelves under Search's Browse grid.
     private func loadSearchSuggestions() {
         let catalog = catalogPresentation
         switch catalog.chartsState {
@@ -771,13 +678,6 @@ struct LibraryHomeView: View {
                                  shown: [])
         default: break
         }
-    }
-
-    private func browseTile(_ title: LocalizedStringKey, symbol: String, color: Color, id: String,
-                            action: @escaping () -> Void) -> some View {
-        Button(action: action) { BrowseTile(title: title, symbol: symbol, color: color) }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("browse.\(id)")
     }
 
     private func libraryTrack(forCatalogSong song: CatalogSong) -> LibraryTrack? {
@@ -855,9 +755,7 @@ struct LibraryHomeView: View {
                 Text("Descending").tag(true)
             }
         } label: {
-            Label(sort.label, systemImage: "arrow.up.arrow.down")
-                .foregroundStyle(Color.primary)
-                .padding(.vertical, 10)
+            Label(sort.label, systemImage: "arrow.up.arrow.down").padding(.vertical, 10)
         }
         .accessibilityLabel("Library sort, \(sort.label)")
     }
@@ -870,7 +768,7 @@ struct LibraryHomeView: View {
         else if filtered.isEmpty { ContentUnavailableView(emptyTitle, systemImage: "music.note") }
         else {
             LibraryEntryList(entries: sort.ordered(filtered, descending: descending),
-                             grid: grid && !dynamicTypeSize.isAccessibilitySize)
+                             grid: currentGrid && !dynamicTypeSize.isAccessibilitySize)
         }
     }
 
@@ -883,18 +781,9 @@ struct LibraryHomeView: View {
     private var playlistContent: some View {
         collectionStatus(collections.playlistState, cached: collections.playlists != nil, title: "Playlists could not be refreshed.")
         if collections.supportsPlaylistEditing {
-            Button { showingCreatePlaylist = true } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "plus")
-                        .font(.title2)
-                        .frame(width: 60, height: 60)
-                        .background(palette.elevated, in: RoundedRectangle(cornerRadius: 4))
-                    Text("Create Playlist").font(.body.weight(.semibold))
-                    Spacer()
-                }
-                .contentShape(Rectangle())
+            Button("Create Playlist", systemImage: "plus") {
+                showingCreatePlaylist = true
             }
-            .buttonStyle(.plain)
             .disabled(collections.mutationBusy)
             .accessibilityHint("Create a new manual playlist")
         }
@@ -908,14 +797,14 @@ struct LibraryHomeView: View {
         let liked = collections.likedIDs == nil ? [] : matching([likedEntry])
         let favoriteIDs = Set(lists.filter { $0.favorite == true }.map(\.id))
         let pinned = own.filter { favoriteIDs.contains($0.id) } + liked + own.filter { !favoriteIDs.contains($0.id) }
-        let useGrid = grid && !dynamicTypeSize.isAccessibilitySize
-        if !pinned.isEmpty { LibraryEntryList(entries: pinned, grid: useGrid, pinnedIDs: favoriteIDs.union([""])) }
+        let useGrid = currentGrid && !dynamicTypeSize.isAccessibilitySize
+        if !pinned.isEmpty { LibraryEntryList(entries: pinned, grid: useGrid) }
         if !shared.isEmpty {
-            Text("Shared with me").font(.title3.bold()).accessibilityAddTraits(.isHeader)
+            Text("Shared with me").font(.headline).accessibilityAddTraits(.isHeader)
             LibraryEntryList(entries: shared, grid: useGrid)
         }
         if !others.isEmpty {
-            Text("Public playlists").font(.title3.bold()).accessibilityAddTraits(.isHeader)
+            Text("Public playlists").font(.headline).accessibilityAddTraits(.isHeader)
             LibraryEntryList(entries: others, grid: useGrid)
         }
         if pinned.isEmpty && shared.isEmpty && others.isEmpty && collections.playlistState == .ready {
@@ -930,28 +819,23 @@ struct LibraryHomeView: View {
     @ViewBuilder
     private func collectionStatus(_ state: LibraryCollectionsModel.State, cached: Bool, title: LocalizedStringKey) -> some View {
         if state == .loading && !cached {
-            ProgressView("Loading playlists and likes…").frame(maxWidth: .infinity)
+            ProgressView("Loading playlists and likes…")
         } else if state == .unavailable {
-            HStack {
-                Label(title, systemImage: "exclamationmark.arrow.triangle.2.circlepath")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                Spacer()
-                Button("Retry") { Task { await collections.refresh() } }
-            }
+            Label(title, systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                .font(.subheadline).foregroundStyle(.secondary)
+            Button("Retry") { Task { await collections.refresh() } }
         }
     }
 
     @ViewBuilder
     private var syncStatus: some View {
-        if library.state == .refreshing { ProgressView("Refreshing library…").frame(maxWidth: .infinity) }
+        if library.state == .refreshing { ProgressView("Refreshing library…") }
         if !library.tracks.isEmpty {
             switch library.state {
             case .cachedError(let message), .storageFailure(let message):
-                VStack(alignment: .leading, spacing: 2) {
-                    Label(LocalizedStringKey(message), systemImage: "exclamationmark.arrow.triangle.2.circlepath")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    Text("Showing saved music.").font(.caption).foregroundStyle(.secondary)
-                }
+                Label(LocalizedStringKey(message), systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Text("Showing saved music.").font(.caption).foregroundStyle(.secondary)
             default: EmptyView()
             }
         }
@@ -1123,37 +1007,100 @@ struct NetworkDebugOverlay: View {
 }
 
 private struct LibraryEntryList: View {
+    @Environment(\.downtifyPalette) private var palette
     let entries: [LibraryBrowseEntry]
     let grid: Bool
-    var pinnedIDs: Set<String> = []
-    @EnvironmentObject private var downloads: OfflineDownloads
-    @EnvironmentObject private var collections: LibraryCollectionsModel
+    var carousel = false
+    var compactTiles = false
 
     var body: some View {
-        if grid {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 12, alignment: .top)], spacing: 18) {
-                ForEach(entries, id: \.context) { entry in
+        if compactTiles {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                ForEach(entries) { entry in
                     NavigationLink(value: entry.context) {
-                        VStack(alignment: entry.isArtist ? .center : .leading, spacing: 6) {
-                            LibraryEntryArtwork(entry: entry, size: 104)
-                            Text(entry.title).font(.footnote.weight(.semibold)).lineLimit(2)
-                            Text(entry.kindSubtitle).font(.caption).foregroundStyle(DowntifyStyle.secondaryText).lineLimit(1)
+                        HStack(spacing: 8) {
+                            artwork(entry, size: 52)
+                            Text(entry.title).font(.subheadline.weight(.semibold)).lineLimit(2)
+                            Spacer(minLength: 0)
                         }
-                        .multilineTextAlignment(entry.isArtist ? .center : .leading)
-                        .frame(maxWidth: .infinity, alignment: entry.isArtist ? .center : .leading)
+                        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                        .background(palette.surface, in: RoundedRectangle(cornerRadius: 6))
                         .contentShape(Rectangle())
-                        .accessibilityElement(children: .combine)
                     }
                     .buttonStyle(.plain)
                 }
             }
-        } else {
-            let onDevice = Set(downloads.currentDownloads.filter { $0.state == .ready }.map(\.track.id))
-            LazyVStack(alignment: .leading, spacing: 8) {
-                ForEach(entries, id: \.context) { entry in
+        } else if carousel {
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: 12) {
+                    ForEach(entries) { entry in
+                        NavigationLink(value: entry.context) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                artwork(entry, size: 142)
+                                Text(entry.title).font(.headline).lineLimit(2)
+                                Text(subtitle(entry)).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                            }
+                            .frame(width: 142, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+        } else if grid {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: palette.theme.map { CGFloat($0.albumGridMinimum) } ?? 142), spacing: 12)], spacing: 12) {
+                ForEach(entries) { entry in
                     NavigationLink(value: entry.context) {
-                        LibraryListRow(entry: entry, isPinned: pinnedIDs.contains(entry.id),
-                                       isOnDevice: entry.count > 0 && isFullyOnDevice(entry, onDevice: onDevice))
+                        VStack(alignment: .center, spacing: 6) {
+                            artwork(entry, size: 108)
+                            Text(entry.title).font(.headline).lineLimit(2)
+                            Text(subtitle(entry)).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                            Spacer(minLength: 0)
+                        }
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, minHeight: 178, alignment: .top)
+                        .padding(10)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        } else if palette.redesign("library") {
+            LazyVStack(spacing: 0) {
+                ForEach(entries) { entry in
+                    NavigationLink(value: entry.context) {
+                        HStack(spacing: 12) {
+                            artwork(entry, size: 54)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(entry.title).font(.body.weight(.semibold)).lineLimit(1)
+                                Text(subtitle(entry)).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                }
+            }
+        } else {
+            LazyVStack(spacing: 0) {
+                ForEach(entries) { entry in
+                    NavigationLink(value: entry.context) {
+                        VStack(spacing: 6) {
+                            artwork(entry, size: 54)
+                            Text(entry.title).font(.headline)
+                            Text(subtitle(entry)).font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                        .frame(maxWidth: .infinity)
+                        .overlay(alignment: .trailing) {
+                            Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary).accessibilityHidden(true)
+                        }
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -1161,18 +1108,28 @@ private struct LibraryEntryList: View {
         }
     }
 
-    /// Playlists and Liked Songs whose every song is saved on this device show the green download mark.
-    private func isFullyOnDevice(_ entry: LibraryBrowseEntry, onDevice: Set<String>) -> Bool {
-        guard !onDevice.isEmpty else { return false }
-        switch entry.context {
-        case .playlist(let name):
-            guard let ids = collections.playlist(named: name)?.trackIDs, !ids.isEmpty else { return false }
-            return ids.allSatisfy(onDevice.contains)
-        case .liked:
-            guard let ids = collections.likedIDs, !ids.isEmpty else { return false }
-            return ids.allSatisfy(onDevice.contains)
-        case .album, .artist:
-            return false
+    private func subtitle(_ entry: LibraryBrowseEntry) -> String {
+        if !entry.artist.isEmpty { return entry.artist }
+        return entry.count == 1 ? String(localized: "1 song") : String(localized: "\(entry.count) songs")
+    }
+
+    @ViewBuilder
+    private func artwork(_ entry: LibraryBrowseEntry, size: CGFloat) -> some View {
+        if entry.artwork != nil || entry.playlistCover?.isEmpty == false {
+            TrackArtwork(track: entry.artwork, size: size, playlistCover: entry.playlistCover)
+        } else {
+            let symbol: String = switch entry.context {
+            case .artist: "music.mic"
+            case .album: "opticaldisc"
+            case .playlist: "music.note.list"
+            case .liked: "heart.fill"
+            }
+            Image(systemName: symbol)
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .frame(width: size, height: size)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+                .accessibilityHidden(true)
         }
     }
 }
@@ -1186,12 +1143,32 @@ private struct LibraryContextView: View {
     @EnvironmentObject private var collections: LibraryCollectionsModel
     @EnvironmentObject private var catalog: CatalogPresentationModel
     @EnvironmentObject private var downloads: OfflineDownloads
+    @EnvironmentObject private var artworkLoader: ArtworkLoader
     @Environment(\.downtifyPalette) private var palette
+    @State private var artworkTint: Color?
     @State private var confirmingDownload = false
     @State private var downloadMessage: LocalizedStringKey?
     @State private var playlistSheet: PlaylistEditingSheet?
     @State private var playlistNameDraft = ""
     @State private var selectedTrackIDs: Set<String> = []
+
+    private func collectionHero(_ tracks: [LibraryTrack]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            TrackArtwork(track: tracks.first(where: \.hasCover), size: 220, playlistCover: playlist?.cover)
+                .frame(maxWidth: .infinity)
+                .accessibilityHidden(true)
+            Text(title).font(.title.bold()).accessibilityAddTraits(.isHeader)
+            if case .album(let id) = context, let album = library.catalog.albumsByID[id], !album.artist.isEmpty {
+                if let artistID = tracks.first?.artistID, library.catalog.artistsByID[artistID] != nil {
+                    NavigationLink(album.artist, value: LibraryContext.artist(artistID)).font(.subheadline.weight(.semibold))
+                } else { Text(album.artist).font(.subheadline.weight(.semibold)) }
+            } else if let owner = playlist?.owner, !owner.isEmpty {
+                Text(owner).font(.subheadline.weight(.semibold))
+            }
+            Text("\(tracks.count) songs").font(.subheadline).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
     private var playlist: LibraryPlaylist? {
         guard case .playlist(let name) = context else { return nil }
@@ -1207,71 +1184,61 @@ private struct LibraryContextView: View {
         }
     }
 
-    @State private var tint: Color?
-    @State private var showsBarTitle = false
-
-    private var isAlbum: Bool { if case .album = context { true } else { false } }
-    private var isArtist: Bool { if case .artist = context { true } else { false } }
-
     var body: some View {
         let tracks = library.catalog.tracks(in: context, likedIDs: collections.likedIDs ?? [], playlist: playlist)
         ScrollView {
-            VStack(alignment: .leading, spacing: DowntifyStyle.Space.regular) {
-                header(tracks)
+            VStack(alignment: .center, spacing: DowntifyStyle.Space.regular) {
+                if palette.redesign("collection") {
+                    collectionHero(tracks)
+                }
+                if !palette.redesign("collection"), let playlist, playlist.mine == false, let owner = playlist.owner, !owner.isEmpty {
+                    Text("By \(owner)").foregroundStyle(.secondary)
+                }
+                if !palette.redesign("collection"), case .album(let id) = context, let album = library.catalog.albumsByID[id], !album.artist.isEmpty {
+                    if let artistID = tracks.first?.artistID, library.catalog.artistsByID[artistID] != nil {
+                        NavigationLink(album.artist, value: LibraryContext.artist(artistID))
+                    } else {
+                        Text(album.artist).foregroundStyle(.secondary)
+                    }
+                }
+                if !palette.redesign("collection"), let cover = tracks.first(where: \.hasCover), playlist?.cover?.isEmpty != false {
+                    TrackArtwork(track: cover, size: 160)
+                } else if !palette.redesign("collection"), let cover = playlist?.cover, !cover.isEmpty {
+                    TrackArtwork(track: tracks.first(where: \.hasCover), size: 160, playlistCover: cover)
+                }
                 actions(tracks)
                 if let downloadMessage { Text(downloadMessage).font(.subheadline).foregroundStyle(.secondary) }
                 PlaylistMutationFeedbackRow()
                 status(tracks)
-                if !tracks.isEmpty {
-                    if isArtist {
-                        Text("Popular").font(.title2.bold()).accessibilityAddTraits(.isHeader)
-                    }
-                    LibraryTrackList(tracks: tracks, context: context, playback: playback,
-                                     onMoveToTrash: onMoveToTrash, showsArtwork: !isAlbum)
-                } else if let error = collections.actionError {
-                    Text(error).foregroundStyle(.secondary)
-                    Button("Dismiss") { collections.clearError() }
-                }
                 if case .artist(let id) = context {
                     let albums = library.catalog.albums(for: id)
-                    if !albums.isEmpty {
-                        Text("Albums").font(.title2.bold()).accessibilityAddTraits(.isHeader)
-                            .padding(.top, DowntifyStyle.Space.small)
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            LazyHStack(alignment: .top, spacing: 14) {
-                                ForEach(albums) { album in
-                                    NavigationLink(value: album.context) { ShelfCard(entry: album, size: 140) }
-                                        .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.horizontal, DowntifyStyle.Space.regular)
-                        }
-                        .padding(.horizontal, -DowntifyStyle.Space.regular)
-                    }
                     if catalog.externalCatalogAvailable, let artist = library.catalog.artistsByID[id] {
                         NavigationLink {
                             ArtistCatalogAlbumsView(artist: artist.title, library: library,
                                                     serverDownloads: serverDownloads, catalog: catalog)
                         } label: {
                             Label("Find more albums", systemImage: "plus.circle")
-                                .font(.subheadline.weight(.semibold))
-                                .padding(.horizontal, 16)
-                                .frame(minHeight: 36)
-                                .overlay(Capsule().strokeBorder(DowntifyStyle.secondaryText, lineWidth: 1))
-                                .frame(minHeight: DowntifyStyle.minimumControlSize)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.bordered)
+                    }
+                    if !albums.isEmpty {
+                        Text("Albums").font(.title2.bold()).accessibilityAddTraits(.isHeader)
+                        LibraryEntryList(entries: albums, grid: false)
                     }
                 }
+                if !tracks.isEmpty {
+                    Text("Songs").font(.title2.bold()).accessibilityAddTraits(.isHeader)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    LibraryTrackList(tracks: tracks, context: context, playback: playback,
+                                     onMoveToTrash: onMoveToTrash)
+                } else if let error = collections.actionError {
+                    Text(error).foregroundStyle(.secondary)
+                    Button("Dismiss") { collections.clearError() }
+                }
             }
-            .padding(.horizontal, DowntifyStyle.Space.regular)
+            .padding(DowntifyStyle.Space.regular)
             .frame(maxWidth: 760)
             .frame(maxWidth: .infinity)
-        }
-        .coordinateSpace(name: "collection")
-        .onPreferenceChange(CollectionHeaderBottomKey.self) { bottom in
-            let shows = bottom < 40
-            if shows != showsBarTitle { withAnimation(.easeInOut(duration: 0.2)) { showsBarTitle = shows } }
         }
         .downtifyScrollEndClearance()
         .refreshable {
@@ -1279,24 +1246,49 @@ private struct LibraryContextView: View {
             async let lists: Void = collections.refresh()
             _ = await (music, lists)
         }
-        .background(alignment: .top) {
-            LinearGradient(colors: [(tint ?? palette.elevated).opacity(0.95), palette.background],
-                           startPoint: .top, endPoint: .bottom)
-                .frame(height: 440)
-                .ignoresSafeArea(edges: .top)
-        }
-        .background(palette.background.ignoresSafeArea())
         .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(showsBarTitle ? .visible : .hidden, for: .navigationBar)
-        .toolbarBackground(tint ?? palette.background, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(verbatim: title).font(.headline).lineLimit(1).opacity(showsBarTitle ? 1 : 0)
-                    .accessibilityHidden(!showsBarTitle)
+        .background {
+            if palette.redesign("collection") {
+                LinearGradient(colors: [artworkTint ?? palette.elevated, palette.background, palette.background],
+                               startPoint: .top, endPoint: .bottom).ignoresSafeArea()
+            } else { palette.background.ignoresSafeArea() }
+        }
+        .task(id: "\(tracks.first(where: \.hasCover)?.id ?? ""):\(palette.redesign("collection"))") {
+            artworkTint = nil
+            if palette.redesign("collection"), let cover = tracks.first(where: \.hasCover),
+               let image = await artworkLoader.image(for: cover, size: 150), !Task.isCancelled {
+                artworkTint = ArtworkThemeTint.color(from: image)
             }
         }
-        .artworkTint(for: tracks.first(where: \.hasCover), into: $tint)
+        .toolbar {
+            if canEditTracks || canRenamePlaylist {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        if canRenamePlaylist {
+                            Button("Rename Playlist", systemImage: "pencil") {
+                                playlistNameDraft = playlist?.name ?? ""
+                                playlistSheet = .rename
+                            }
+                        }
+                        if canEditTracks {
+                            Button("Add Tracks", systemImage: "plus") {
+                                selectedTrackIDs = []
+                                playlistSheet = .addTracks
+                            }
+                            Button("Remove Track Occurrence", systemImage: "minus.circle") {
+                                playlistSheet = .removeOccurrence
+                            }
+                            Button("Reorder Tracks", systemImage: "arrow.up.arrow.down") {
+                                playlistSheet = .reorder
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "pencil.and.list")
+                    }
+                    .accessibilityLabel("Edit playlist")
+                }
+            }
+        }
         .sheet(item: $playlistSheet) { sheet in
             if let playlist {
                 switch sheet {
@@ -1387,178 +1379,68 @@ private struct LibraryContextView: View {
         }
     }
 
-    @ViewBuilder
-    private func header(_ tracks: [LibraryTrack]) -> some View {
-        let size: CGFloat = isArtist ? 200 : 232
-        VStack(alignment: .leading, spacing: 8) {
-            Group {
-                if case .liked = context {
-                    LikedSongsArtwork(size: size)
-                } else if let cover = playlist?.cover, !cover.isEmpty {
-                    TrackArtwork(track: tracks.first(where: \.hasCover), size: size, playlistCover: cover)
-                } else if let cover = tracks.first(where: \.hasCover) {
-                    TrackArtwork(track: cover, size: size)
-                        .clipShape(isArtist ? AnyShape(Circle()) : AnyShape(Rectangle()))
-                } else {
-                    Image(systemName: isArtist ? "music.mic" : "music.note.list")
-                        .font(.system(size: size * 0.3))
-                        .foregroundStyle(DowntifyStyle.secondaryText)
-                        .frame(width: size, height: size)
-                        .background(palette.elevated, in: isArtist ? AnyShape(Circle()) : AnyShape(Rectangle()))
-                }
-            }
-            .shadow(color: .black.opacity(0.45), radius: 18, y: 10)
-            .frame(maxWidth: .infinity)
-            .padding(.top, DowntifyStyle.Space.small)
-            .padding(.bottom, DowntifyStyle.Space.small)
-            .accessibilityHidden(true)
-
-            Text(verbatim: title)
-                .font(isArtist ? .largeTitle.bold() : .title.bold())
-                .lineLimit(3)
-                .accessibilityAddTraits(.isHeader)
-                .background(GeometryReader { proxy in
-                    Color.clear.preference(key: CollectionHeaderBottomKey.self,
-                                           value: proxy.frame(in: .named("collection")).maxY)
-                })
-            byline(tracks)
-            Text(verbatim: metadata(tracks))
-                .font(.subheadline)
-                .foregroundStyle(DowntifyStyle.secondaryText)
-        }
-    }
-
-    @ViewBuilder
-    private func byline(_ tracks: [LibraryTrack]) -> some View {
-        if case .album(let id) = context, let album = library.catalog.albumsByID[id], !album.artist.isEmpty {
-            HStack(spacing: 8) {
-                Image(systemName: "person.crop.circle.fill").foregroundStyle(DowntifyStyle.secondaryText)
-                if let artistID = tracks.first?.artistID, library.catalog.artistsByID[artistID] != nil {
-                    NavigationLink(value: LibraryContext.artist(artistID)) {
-                        Text(verbatim: album.artist).font(.subheadline.weight(.bold)).foregroundStyle(Color.primary)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    Text(verbatim: album.artist).font(.subheadline.weight(.bold))
-                }
-            }
-        } else if let playlist, playlist.mine == false, let owner = playlist.owner, !owner.isEmpty {
-            Text("By \(owner)").font(.subheadline.weight(.bold))
-        }
-    }
-
-    private func metadata(_ tracks: [LibraryTrack]) -> String {
-        let kind: String = switch context {
-        case .album: String(localized: "Album")
-        case .artist: String(localized: "Artist")
-        case .playlist, .liked: String(localized: "Playlist")
-        }
-        var parts = [kind]
-        if isAlbum, let year = tracks.first(where: { !$0.year.isEmpty })?.year { parts.append(String(year.prefix(4))) }
-        if !tracks.isEmpty {
-            parts.append(tracks.count == 1 ? String(localized: "1 song") : String(localized: "\(tracks.count) songs"))
-            let minutes = Int(tracks.reduce(0) { $0 + max(0, $1.duration) } / 60)
-            if minutes > 0 {
-                parts.append(minutes >= 60 ? String(localized: "\(minutes / 60) hr \(minutes % 60) min")
-                                           : String(localized: "\(minutes) min"))
-            }
-        }
-        return parts.joined(separator: " · ")
-    }
-
     private func actions(_ tracks: [LibraryTrack]) -> some View {
-        let onDevice = Set(downloads.currentDownloads.filter { $0.state == .ready }.map(\.track.id))
-        let allOnDevice = !tracks.isEmpty && tracks.allSatisfy { onDevice.contains($0.id) }
-        return HStack(spacing: 18) {
+        HStack {
+            if !tracks.isEmpty && !palette.redesign("collection") {
+                Button("Play", systemImage: "play.fill") {
+                    collections.record(context)
+                    playback.setShuffle(false)
+                    playback.replaceQueue(tracks)
+                }
+                .buttonStyle(.borderedProminent)
+                Button {
+                    collections.record(context)
+                    playback.replaceQueue(tracks, startingAt: Int.random(in: tracks.indices))
+                    playback.setShuffle(true)
+                } label: {
+                    Image(systemName: "shuffle").downtifyControlTarget()
+                }
+                .accessibilityLabel("Shuffle songs")
+            }
             if let playlist, playlist.favorite != nil {
                 let favorite = collections.effectiveFavorite(playlist)
                 Button {
                     Task { await collections.toggleFavorite(playlist.name) }
                 } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: favorite ? "pin.circle.fill" : "pin.circle")
-                            .font(.title)
-                            .foregroundStyle(favorite ? DowntifyStyle.accent : DowntifyStyle.secondaryText)
+                        Image(systemName: favorite ? "star.fill" : "star").downtifyControlTarget()
                         if collections.hasPendingFavorite(playlist.name) {
                             Text("Queued").font(.caption)
                         }
                     }
-                    .downtifyControlTarget()
                 }
-                .buttonStyle(.plain)
                 .disabled(collections.mutationBusy)
                 .accessibilityLabel(favorite ? String(localized: "Remove playlist from favorites") : String(localized: "Favorite playlist"))
                 .accessibilityValue(collections.hasPendingFavorite(playlist.name) ? String(localized: "Queued") : "")
             }
             if !tracks.isEmpty {
-                Button { if !allOnDevice { confirmingDownload = true } } label: {
-                    Image(systemName: allOnDevice ? "arrow.down.circle.fill" : "arrow.down.circle")
-                        .font(.title)
-                        .foregroundStyle(allOnDevice ? DowntifyStyle.accent : DowntifyStyle.secondaryText)
-                        .downtifyControlTarget()
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(allOnDevice ? String(localized: "Downloaded to this device") : String(localized: "Add Songs to Device"))
                 Menu {
                     Button("Add songs to queue", systemImage: "text.append") { playback.append(tracks) }
                     Button(String(localized: "Add Songs to Device"), systemImage: "arrow.down.to.line.circle") { confirmingDownload = true }
-                    if canRenamePlaylist || canEditTracks {
-                        Section("Edit playlist") {
-                            if canRenamePlaylist {
-                                Button("Rename Playlist", systemImage: "pencil") {
-                                    playlistNameDraft = playlist?.name ?? ""
-                                    playlistSheet = .rename
-                                }
-                            }
-                            if canEditTracks {
-                                Button("Add Tracks", systemImage: "plus") {
-                                    selectedTrackIDs = []
-                                    playlistSheet = .addTracks
-                                }
-                                Button("Remove Track Occurrence", systemImage: "minus.circle") {
-                                    playlistSheet = .removeOccurrence
-                                }
-                                Button("Reorder Tracks", systemImage: "arrow.up.arrow.down") {
-                                    playlistSheet = .reorder
-                                }
-                            }
-                        }
-                    }
                 } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(DowntifyStyle.secondaryText)
-                        .downtifyControlTarget()
+                    Image(systemName: "ellipsis.circle").downtifyControlTarget()
                 }
                 .accessibilityLabel("Collection actions")
             }
-            Spacer(minLength: 0)
-            if !tracks.isEmpty {
+            if !tracks.isEmpty && palette.redesign("collection") {
+                Spacer()
                 Button {
                     collections.record(context)
                     playback.replaceQueue(tracks, startingAt: Int.random(in: tracks.indices))
                     playback.setShuffle(true)
-                } label: {
-                    Image(systemName: "shuffle")
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(DowntifyStyle.secondaryText)
-                        .downtifyControlTarget()
-                }
-                .buttonStyle(.plain)
+                } label: { Image(systemName: "shuffle").font(.title3).downtifyControlTarget() }
                 .accessibilityLabel("Shuffle songs")
-                NowPlayingReader { nowPlaying in
-                    let isCurrent = tracks.contains(where: nowPlaying.isCurrent)
-                    DowntifyPlayButton(isPlaying: isCurrent && nowPlaying.isPlaying) {
-                        if isCurrent {
-                            playback.togglePlayback()
-                        } else {
-                            collections.record(context)
-                            playback.setShuffle(false)
-                            playback.replaceQueue(tracks)
-                        }
-                    }
-                    .accessibilityIdentifier("collection.play")
+                Button {
+                    collections.record(context)
+                    playback.setShuffle(false)
+                    playback.replaceQueue(tracks)
+                } label: {
+                    Image(systemName: "play.fill").font(.title3.bold())
+                        .foregroundStyle(palette.onBrand)
+                        .frame(width: 56, height: 56)
+                        .background(palette.brand, in: Circle())
                 }
+                .accessibilityLabel("Play")
             }
         }
     }
@@ -1660,11 +1542,6 @@ private struct ArtistCatalogAlbumsView: View {
     }
 }
 
-private struct CollectionHeaderBottomKey: PreferenceKey {
-    static let defaultValue: CGFloat = .infinity
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = min(value, nextValue()) }
-}
-
 private enum PlaylistEditingSheet: String, Identifiable {
     case rename, addTracks, removeOccurrence, reorder
     var id: String { rawValue }
@@ -1721,6 +1598,7 @@ private struct PlaylistTrackSelectionSheet: View {
 }
 
 private struct ArtistCatalogAlbumView: View {
+    @Environment(\.downtifyPalette) private var palette
     let album: CatalogAlbum
     @ObservedObject var library: LibraryPresentationModel
     @ObservedObject var serverDownloads: ServerDownloadPresentationModel
@@ -1765,7 +1643,7 @@ private struct ArtistCatalogAlbumView: View {
                             HStack(alignment: .firstTextBaseline, spacing: 6) {
                                 if isCurrent { NowPlayingBadge(isPlaying: nowPlaying.isPlaying) }
                                 Text(song.title)
-                                    .foregroundStyle(isCurrent ? AnyShapeStyle(DowntifyStyle.accent) : AnyShapeStyle(.primary))
+                                    .foregroundStyle(isCurrent ? AnyShapeStyle(palette.accent) : AnyShapeStyle(.primary))
                             }
                             .accessibilityElement(children: .combine)
                             .downtifyCurrentRowAccessibility(isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying)
@@ -2087,13 +1965,16 @@ private struct LibraryTrackList: View {
     let context: LibraryContext?
     let playback: PlaybackController
     var onMoveToTrash: ((LibraryTrack) -> Void)? = nil
-    /// Album pages leave artwork off each row, as every song shares the album cover.
-    var showsArtwork = true
     @EnvironmentObject private var collections: LibraryCollectionsModel
     @EnvironmentObject private var downloads: OfflineDownloads
     @Environment(\.downtifyPalette) private var palette
     @State private var downloadMessage: LocalizedStringKey?
     @State private var playlistTrack: LibraryTrack?
+
+    private var isAlbumContext: Bool {
+        if case .album = context { return true }
+        return false
+    }
 
     private var canAddToPlaylists: Bool {
         !EditablePlaylists.sorted(collections.playlists, supportsEditing: collections.supportsPlaylistEditing).isEmpty
@@ -2125,8 +2006,7 @@ private struct LibraryTrackList: View {
                             playback.replaceQueue(tracks, startingAt: index)
                         } label: {
                             TrackRow(track: track, isCurrent: isCurrent, isPlaying: nowPlaying.isPlaying,
-                                     showsArtwork: showsArtwork,
-                                     isOnDevice: downloadByID[track.id]?.state == .ready)
+                                     showsArtwork: !(palette.redesign("collection") && isAlbumContext))
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(Text(track.accessibleMetadata))
@@ -2162,14 +2042,14 @@ private struct LibraryTrackList: View {
                         }
                         downloadAction(track, record: downloadByID[track.id])
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 0) {
                             if liked {
-                                Image(systemName: "heart.fill").font(.footnote).foregroundStyle(DowntifyStyle.accent)
+                                Image(systemName: "heart.fill").font(.caption).foregroundStyle(palette.accent)
                             }
                             if collections.hasPendingLike(track.id) {
                                 Image(systemName: "clock").font(.caption).accessibilityLabel("Queued")
                             }
-                            Image(systemName: "ellipsis").foregroundStyle(DowntifyStyle.secondaryText)
+                            Image(systemName: "ellipsis")
                         }
                         .downtifyControlTarget()
                     }
@@ -2177,8 +2057,10 @@ private struct LibraryTrackList: View {
                     .accessibilityIdentifier("library.menu.\(track.id)")
                     .accessibilityValue(liked ? Text("Liked") : Text(""))
                 }
+                if index < tracks.count - 1 { Divider().padding(.leading, 80) }
             }
         }
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
         .sheet(item: $playlistTrack) { track in
             AddToPlaylistSheet(track: track) { title in
                 downloadMessage = "Added to \(title)"
@@ -2230,8 +2112,8 @@ private struct CatalogSearchContainer: View {
     let libraryState: (CatalogSong) -> ServerDownloadActionState
     let onAddToDevice: (CatalogSong) -> Void
     let deviceState: (CatalogSong) -> DeviceSaveState
-    var browse: AnyView? = nil
-    var loadSuggestions: () -> Void = {}
+    let onBrowse: (String) -> Void
+    let loadSuggestions: () -> Void
 
     var body: some View {
         CatalogSearchView(catalog: catalog, library: library, playback: playback,
@@ -2244,9 +2126,7 @@ private struct CatalogSearchContainer: View {
                           onDownload: { song in Task { await serverDownloads.request(song: song) } },
                           downloadState: libraryState,
                           onAddToDevice: onAddToDevice,
-                          deviceState: deviceState,
-                          browse: browse,
-                          loadSuggestions: loadSuggestions)
+                          deviceState: deviceState, onBrowse: onBrowse, loadSuggestions: loadSuggestions)
     }
 }
 

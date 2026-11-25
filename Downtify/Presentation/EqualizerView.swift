@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Six-band equalizer with a draggable curve and presets, in the style of familiar streaming apps.
+/// Every color, the card shape and the font follow the runtime theme (see docs/RUNTIME_THEMES.md).
 struct EqualizerView: View {
     @ObservedObject var playback: PlaybackController
     var showsDoneButton = false
@@ -23,7 +24,7 @@ struct EqualizerView: View {
                             .font(.footnote).foregroundStyle(DowntifyStyle.secondaryText)
                     }
                 }
-                .tint(DowntifyStyle.brand)
+                .tint(palette.brand)
                 .accessibilityIdentifier("equalizer.toggle")
 
                 EqualizerGraph(gains: equalizer.gains, enabled: equalizer.enabled) { band, gain in
@@ -33,8 +34,9 @@ struct EqualizerView: View {
                     playback.setEqualizer(updated)
                 }
                 .frame(height: 260)
-                .padding(DowntifyStyle.Space.regular)
-                .background(palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(palette.cardPadding(default: DowntifyStyle.Space.regular))
+                .background(palette.surface,
+                            in: RoundedRectangle(cornerRadius: palette.cardCornerRadius(default: 12), style: .continuous))
 
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Presets").font(.title3.bold()).accessibilityAddTraits(.isHeader)
@@ -49,12 +51,12 @@ struct EqualizerView: View {
                             HStack {
                                 Text(LocalizedStringKey(preset.name))
                                     .foregroundStyle(equalizer.preset == preset && equalizer.enabled
-                                                     ? AnyShapeStyle(DowntifyStyle.accent) : AnyShapeStyle(.primary))
+                                                     ? AnyShapeStyle(palette.equalizerAccent) : AnyShapeStyle(.primary))
                                 Spacer()
                                 if equalizer.preset == preset {
                                     Image(systemName: "checkmark")
                                         .font(.body.weight(.semibold))
-                                        .foregroundStyle(DowntifyStyle.accent)
+                                        .foregroundStyle(palette.equalizerAccent)
                                 }
                             }
                             .frame(minHeight: 48)
@@ -95,6 +97,7 @@ struct EqualizerGraph: View {
     let gains: [Double]
     let enabled: Bool
     let onChange: (Int, Double) -> Void
+    @Environment(\.downtifyPalette) private var palette
     @State private var activeBand: Int?
 
     private static let labels = ["60Hz", "150Hz", "400Hz", "1kHz", "2.4kHz", "15kHz"]
@@ -111,7 +114,8 @@ struct EqualizerGraph: View {
                 let x = leading + (proxy.size.width - leading - trailing) * CGFloat(band) / CGFloat(max(gains.count - 1, 1))
                 return CGPoint(x: x, y: y(for: gains[band], height: plotHeight))
             }
-            let color = enabled ? DowntifyStyle.brand : DowntifyStyle.secondaryText
+            let color = enabled ? palette.equalizerAccent : palette.equalizerGrid
+            let grid = palette.equalizerGrid
             ZStack(alignment: .topLeading) {
                 ForEach([maxGain, 0, -maxGain], id: \.self) { gain in
                     let lineY = y(for: gain, height: plotHeight)
@@ -119,11 +123,11 @@ struct EqualizerGraph: View {
                         path.move(to: CGPoint(x: 0, y: lineY))
                         path.addLine(to: CGPoint(x: proxy.size.width, y: lineY))
                     }
-                    .stroke(DowntifyStyle.secondaryText.opacity(gain == 0 ? 0.45 : 0.2),
+                    .stroke(grid.opacity(gain == 0 ? 0.45 : 0.2),
                             style: StrokeStyle(lineWidth: 1, dash: gain == 0 ? [] : [4, 4]))
                     Text(verbatim: gain > 0 ? "+\(Int(gain)) dB" : "\(Int(gain)) dB")
                         .font(.caption2)
-                        .foregroundStyle(DowntifyStyle.secondaryText)
+                        .foregroundStyle(grid)
                         .position(x: 22, y: lineY + (gain > 0 ? 9 : -9))
                 }
                 curve(points, closeTo: plotHeight, width: proxy.size.width)
@@ -131,22 +135,24 @@ struct EqualizerGraph: View {
                 curve(points, closeTo: nil, width: proxy.size.width)
                     .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
                 ForEach(points.indices, id: \.self) { band in
+                    // A ring in the card color keeps the handle distinct from a curve of the same color.
                     Circle()
-                        .fill(Color.white)
+                        .fill(enabled ? palette.equalizerHandle : grid)
+                        .overlay(Circle().strokeBorder(palette.surface, lineWidth: 2))
                         .frame(width: activeBand == band ? 22 : 16, height: activeBand == band ? 22 : 16)
-                        .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
+                        .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
                         .position(points[band])
                     if activeBand == band {
                         Text(verbatim: gainText(gains[band]))
                             .font(.caption.weight(.bold).monospacedDigit())
                             .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(Color.black.opacity(0.75), in: Capsule())
-                            .foregroundStyle(.white)
+                            .background(palette.elevated, in: Capsule())
+                            .foregroundStyle(.primary)
                             .position(x: points[band].x, y: max(10, points[band].y - 24))
                     }
                     Text(verbatim: Self.labels[band])
                         .font(.caption2.weight(.medium))
-                        .foregroundStyle(DowntifyStyle.secondaryText)
+                        .foregroundStyle(grid)
                         .position(x: points[band].x, y: plotHeight + labelHeight / 2 + 2)
                 }
             }

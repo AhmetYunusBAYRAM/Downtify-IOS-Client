@@ -10,14 +10,12 @@ final class SimilarUITests: XCTestCase {
         DowntifyUITestSupport.element(app, "similar.row.similar-p\(page)-\(index)")
     }
 
-    /// Opens Search > Browse > Similar and runs a search from the fixture seed.
+    /// Opens Discover > Similar and runs a search from the fixture seed.
     private func search(_ app: XCUIApplication, artist: String = "Radiohead", track: String = "Karma Police") {
         XCTAssertNotNil(DowntifyUITestSupport.waitForState(app, timeout: 30) { $0.sessionActive && $0.libraryTrackCount == 2 })
-        let searchTab = DowntifyUITestSupport.tab(app, "tab.search", index: 1)
-        XCTAssertTrue(searchTab.waitForExistence(timeout: 15), "Search tab not visible")
-        searchTab.tap()
-        let similar = DowntifyUITestSupport.element(app, "browse.similar")
-        XCTAssertTrue(similar.waitForExistence(timeout: 15), "Similar tile missing")
+        DowntifyUITestSupport.element(app, "tab.discover").tap()
+        let similar = app.segmentedControls.buttons["Similar"].firstMatch
+        XCTAssertTrue(similar.waitForExistence(timeout: 15), "Similar section missing")
         similar.tap()
         let artistField = app.textFields["Similar artist"].firstMatch
         XCTAssertTrue(artistField.waitForExistence(timeout: 10))
