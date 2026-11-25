@@ -402,6 +402,63 @@ final class PlaybackTests: XCTestCase {
         XCTAssertEqual(fixture.remote.metadata?.position, 100)
     }
 
+    func testEqualizerFiltersShapeTheCurveAtEachBand() {
+        let rate = 44_100.0
+        let flat = BiquadCoefficients(shape: .peaking, frequency: 1_000, gainDB: 0, sampleRate: rate)
+        XCTAssertEqual(flat, .identity, "a band at 0 dB is skipped")
+        let peak = BiquadCoefficients(shape: .peaking, frequency: 1_000, gainDB: 6, sampleRate: rate)
+        XCTAssertEqual(peak.magnitudeDB(at: 1_000, sampleRate: rate), 6, accuracy: 0.05)
+        XCTAssertEqual(peak.magnitudeDB(at: 60, sampleRate: rate), 0, accuracy: 0.5)
+        let bass = BiquadCoefficients(shape: .lowShelf, frequency: 60, gainDB: -6, sampleRate: rate)
+        XCTAssertEqual(bass.magnitudeDB(at: 20, sampleRate: rate), -6, accuracy: 0.6)
+        XCTAssertEqual(bass.magnitudeDB(at: 5_000, sampleRate: rate), 0, accuracy: 0.1)
+        let treble = BiquadCoefficients(shape: .highShelf, frequency: 15_000, gainDB: 6, sampleRate: rate)
+        XCTAssertEqual(treble.magnitudeDB(at: 20_000, sampleRate: rate), 6, accuracy: 1)
+        XCTAssertEqual(treble.magnitudeDB(at: 200, sampleRate: rate), 0, accuracy: 0.1)
+    }
+
+    /// A boosted 1 kHz band makes a 1 kHz tone louder; a cut makes it quieter.
+    func testEqualizerFilterBankChangesToneLoudness() {
+        func rms(gain: Double) -> Double {
+            var equalizer = PlaybackEqualizer()
+            equalizer.enabled = true
+            equalizer.gains = [0, 0, 0, gain, 0, 0]
+            let bank = EqualizerFilterBank(sampleRate: 44_100)
+            bank.configure(equalizer, version: 1)
+            var samples = (0..<44_100).map { Float(sin(2 * Double.pi * 1_000 * Double($0) / 44_100)) * 0.25 }
+            samples.withUnsafeMutableBufferPointer { bank.process($0, channels: 1, firstChannel: 0) }
+            let tail = samples.suffix(22_050)
+            return sqrt(tail.reduce(0) { $0 + Double($1 * $1) } / Double(tail.count))
+        }
+        let flat = 0.25 / sqrt(2)
+        // Boosting includes 3 dB of automatic headroom, so +6 dB nets about +3 dB.
+        XCTAssertEqual(20 * log10(rms(gain: 6) / flat), 3, accuracy: 0.3)
+        XCTAssertEqual(20 * log10(rms(gain: -6) / flat), -6, accuracy: 0.3)
+    }
+
+    @MainActor
+    func testEqualizerPresetsAndPersistence() {
+        var equalizer = PlaybackEqualizer()
+        XCTAssertFalse(equalizer.enabled)
+        equalizer.apply(.bassBooster)
+        XCTAssertEqual(equalizer.preset, .bassBooster)
+        equalizer.setGain(20, at: 2)
+        XCTAssertEqual(equalizer.gains[2], 12, "gains are clamped to 12 dB")
+        XCTAssertNil(equalizer.preset, "moving a band makes the curve custom")
+        equalizer.setGain(2, at: 2)
+        XCTAssertEqual(equalizer.preset, .bassBooster, "returning to the preset's values selects it again")
+        XCTAssertEqual(Set(EqualizerPreset.allCases.map(\.gains.count)), [6])
+
+        let name = "DowntifyTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let store = PlaybackStateStore(defaults: defaults)
+        XCTAssertEqual(store.loadEqualizer(), PlaybackEqualizer())
+        equalizer.enabled = true
+        store.saveEqualizer(equalizer)
+        XCTAssertEqual(PlaybackStateStore(defaults: defaults).loadEqualizer(), equalizer)
+    }
+
     @MainActor
     func testOfflinePlaybackAdvancesFromCachedLibrarySongToCachedCatalogSongWithoutRequests() async throws {
         let session = deviceSession()

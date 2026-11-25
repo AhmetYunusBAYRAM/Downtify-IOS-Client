@@ -31,6 +31,14 @@ struct SettingsView: View {
                 ))
                 Text("When off, the current song keeps its quality when possible. The next song uses the new network’s quality.")
                     .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                NavigationLink {
+                    EqualizerView(playback: playback)
+                } label: {
+                    LabeledContent("Equalizer") {
+                        Text(LocalizedStringKey(!playback.equalizer.enabled ? "Off" : playback.equalizer.preset?.name ?? "Custom"))
+                    }
+                }
+                .accessibilityIdentifier("settings.equalizer")
             } header: {
                 Text("Playback")
             }

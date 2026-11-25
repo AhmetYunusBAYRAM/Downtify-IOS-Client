@@ -16,12 +16,14 @@ protocol PlaybackEngining: AnyObject {
     func play()
     func pause()
     func seek(to position: TimeInterval)
+    func setEqualizer(_ equalizer: PlaybackEqualizer)
     func reset()
     func resetMediaServices()
     func setNormalization(_ normalization: PlaybackNormalization)
 }
 
 extension PlaybackEngining {
+    func setEqualizer(_ equalizer: PlaybackEqualizer) {}
     func setNormalization(_ normalization: PlaybackNormalization) {}
 }
 
@@ -43,6 +45,9 @@ final class AVPlaybackEngine: PlaybackEngining {
     private var normalizationTask: Task<Void, Never>?
     private var measurement: PlaybackLevelMeasurement?
     private var normalizationTrack: AVAssetTrack?
+    private var equalizer = PlaybackEqualizer()
+    /// Shared with every tap, so moving a band takes effect at once.
+    private let equalizerSettings = EqualizerSettings()
     private var currentStream: PlaybackStream?
 
     init() {
@@ -133,23 +138,46 @@ final class AVPlaybackEngine: PlaybackEngining {
         normalizeIfNeeded()
     }
 
+    func setEqualizer(_ equalizer: PlaybackEqualizer) {
+        let toggled = equalizer.enabled != self.equalizer.enabled
+        self.equalizer = equalizer
+        equalizerSettings.update(equalizer)
+        if toggled { normalizeIfNeeded() }
+    }
+
+    /// Installs one audio tap for the equalizer and loudness normalization, or removes it when both are off.
     private func normalizeIfNeeded() {
         guard let item = player.currentItem, let stream = currentStream else { return }
-        if normalization == .off {
+        let normalize = normalization != .off
+        guard normalize || equalizer.enabled else {
             item.audioMix = nil
             return
         }
-        if let measurement, let normalizationTrack {
-            item.audioMix = measurement.audioMix(for: normalizationTrack, normalization: normalization)
-            return
+        if let normalizationTrack {
+            let gain: Float = normalize ? measurement?.gain(for: normalization) ?? 1 : 1
+            item.audioMix = PlaybackAudioTap.audioMix(for: normalizationTrack, gain: gain,
+                                                      equalizer: equalizer.enabled ? equalizerSettings : nil)
+            if !normalize || measurement != nil { return }
         }
         guard normalizationTask == nil else { return }
         normalizationTask = Task(priority: .utility) { [weak self] in
-            let track = try? await item.asset.loadTracks(withMediaType: .audio).first
+            var track = self?.normalizationTrack
+            if track == nil { track = try? await item.asset.loadTracks(withMediaType: .audio).first }
             guard let self, !Task.isCancelled, self.player.currentItem == item else { return }
             guard let track else {
                 self.normalizationTask = nil
                 return
+            }
+            let firstLoad = self.normalizationTrack == nil
+            self.normalizationTrack = track
+            guard self.normalization != .off, self.measurement == nil else {
+                self.normalizationTask = nil
+                if firstLoad { self.normalizeIfNeeded() }
+                return
+            }
+            // Equalizer first, at unit gain, while loudness is measured.
+            if firstLoad, self.equalizer.enabled {
+                item.audioMix = PlaybackAudioTap.audioMix(for: track, gain: 1, equalizer: self.equalizerSettings)
             }
             let measurementTask = Task.detached(priority: .utility) {
                 try? await PlaybackLevelMeasurement.measure(stream)
@@ -163,7 +191,6 @@ final class AVPlaybackEngine: PlaybackEngining {
             self.normalizationTask = nil
             guard let measurement else { return }
             self.measurement = measurement
-            self.normalizationTrack = track
             self.normalizeIfNeeded()
         }
     }

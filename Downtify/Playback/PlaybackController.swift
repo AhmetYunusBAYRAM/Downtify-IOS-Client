@@ -34,6 +34,7 @@ final class PlaybackController: ObservableObject {
     private let remote: any PlaybackRemoteControlling
     private let store: any PlaybackStateStoring
     private let networkMonitor: any PlaybackNetworkMonitoring
+    @Published private(set) var equalizer: PlaybackEqualizer
     @Published private(set) var buffering: PlaybackBuffering
     @Published private(set) var normalization: PlaybackNormalization
 
@@ -110,9 +111,11 @@ final class PlaybackController: ObservableObject {
         self.podcasts = podcasts
         qualityPreferences = store.loadQualities()
         immediateQualitySwitch = store.loadImmediateQualitySwitch()
+        equalizer = store.loadEqualizer()
         buffering = store.loadBuffering()
         normalization = store.loadNormalization()
         engine.setNormalization(normalization)
+        engine.setEqualizer(equalizer)
 
         engine.onEvent = { [weak self] event in self?.receive(event) }
         audioSession.onEvent = { [weak self] event in self?.receive(event) }
@@ -472,6 +475,12 @@ final class PlaybackController: ObservableObject {
         if let cache { Task { await cache.resize(to: preference.byteLimit) } }
         cancelPrefetch()
         prefetchUpcoming()
+    }
+
+    func setEqualizer(_ equalizer: PlaybackEqualizer) {
+        self.equalizer = equalizer
+        store.saveEqualizer(equalizer)
+        engine.setEqualizer(equalizer)
     }
 
     func setNormalization(_ preference: PlaybackNormalization) {
